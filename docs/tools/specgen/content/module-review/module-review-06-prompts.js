@@ -246,9 +246,9 @@ If the spec is ambiguous, stop and ask. No Co-Authored-By trailers. Summarize ch
 
 Context: module-review-04-contracts.docx sections 2, 3, 4, 7.1 and 9;
 module-review-05-process.docx flows F1, F4, F9, F11, F12 (storage of notifications only;
-Telegram sending comes in phase 5), F13, F15. Proposed Core endpoints (04 section 9, P1-P3)
-may not exist yet: implement the client against the proposed shape and a Core double in
-tests/doubles/core.py.
+Telegram sending comes in phase 5), F13, F15. Core endpoints and fields are final in
+docs/core/core-04-contracts.docx (adopted changes listed in 04 section 9: C8-C11, C15-C17,
+C23); build a Core double in tests/doubles/core.py that follows them.
 
 Goal:
 - Bearer verification with hmac.compare_digest against MODULE_CORE_TOKEN on all /v1 and
@@ -257,13 +257,16 @@ Goal:
 - POST /v1/jobs idempotent on job_id (INSERT ... ON CONFLICT DO NOTHING), round computation,
   HeadObject check deferred to phase 5 behind an interface.
 - GET /v1/jobs/{id}, POST /v1/jobs/{id}/cancel with the status mapping of 04 section 2.5.
-- POST /v1/notify with dedupe_key (sha256 of canonical JSON).
+- POST /v1/notify idempotent on notification_id (202 accepted also for duplicates).
 - /admin/v1/keys, /admin/v1/reviewers, /admin/v1/summaries (summary run is a stub that
   returns 202 and records a row). Key generation: "rvk_" + secrets.token_urlsafe(24),
   store sha256 only, return the plaintext once. Never log the key.
 - clients/core.py (httpx, traceparent and X-Production-Id headers) and workers/core_outbox.py
   with the backoff of 05 F9; result rows are written in the same transaction as the decision.
-- Settings: load from the Core at start, cache in bot_state, apply higher versions from jobs.
+- Settings: GET /internal/v1/modules/self/settings at start and every settings_poll_interval
+  with If-None-Match (304 = unchanged), cache in bot_state, apply higher versions from jobs.
+- Credential reads: no job header for access: module credentials, X-Job-Id for job-bound
+  ones; a 403 makes /ready report the ref.
 
 Done when: tests/contract validate every request and response against the canonical
 shapes in docs/tools/specgen/AUTHORING.md section 4 and 04; repeated job -> one row;
@@ -321,7 +324,7 @@ Goal:
   3 000-character idea text.
 - Delivery F5: contact sheet, changes (revise), then video with caption and keyboard.
   Upload once (advisory lock per job), re-send by file_id; above telegram.upload_limit_mb
-  send cover + link. The limit is a setting because Telegram may change it.
+  send upstream.video.preview when present (it is at most 45 MiB), else cover + link. The limit is a setting because Telegram may change it.
 - Callback data "rv1:<action>:<nonce>" (bot/callback_data.py), nonce from
   secrets.token_urlsafe(12); all checks of FR-REV-041 in domain/decisions.py, which has
   no aiogram imports so it is unit-testable.
@@ -336,7 +339,7 @@ between leaves a review nobody can decide.
 
 Done when: e2e with fake Telegram + MinIO testcontainer: approve; reject with too-short then
 valid reason; two reviewers deciding concurrently for 1 000 randomized trials -> exactly
-one decision and one result each; 51 MB video -> link mode; re-sent card from /pending makes
+one decision and one result each; 60 MB video with preview -> preview mode, without preview -> link mode; re-sent card from /pending makes
 the old card inert. ruff, mypy, pytest pass.
 
 Ambiguity: stop and ask. No Co-Authored-By trailers. Summarize changes.`],
@@ -351,7 +354,8 @@ Goal:
 - workers/scheduler.py with an injectable clock: reminders (after, repeat_every, max,
   quiet hours in settings.timezone), link refresh, deadlines -> expired, prompt expiry,
   /newkey message deletion, cleanup of processed_updates and key_attempts, ratio gauges.
-- Notify: render notify.published / failed / partial and reply under each card of the
+- Notify: choose notify.published / partial / failed / dry_run by the notification status,
+  lines by publication status (skipped, error_detail for admins), and reply under each card of the
   approved review; observers get a new message.
 - Startup recovery (05 section 6): heartbeat and down_since, delivery reconciliation,
   Core reconciliation via GET /internal/v1/productions/{id}, running summaries older than
