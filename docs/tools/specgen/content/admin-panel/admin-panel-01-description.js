@@ -25,7 +25,7 @@ module.exports = {
 ['table', ['Capability (screen)', 'admin', 'reviewer', 'observer'], [
   ['Overview, productions (read), production detail, video playback', 'yes', 'yes', 'yes'],
   ['Ideas: list and view', 'yes', 'yes', 'yes'],
-  ['Ideas: create, edit, queue', 'yes', 'yes', 'no'],
+  ['Ideas: create, edit, queue, unqueue', 'yes', 'yes', 'no'],
   ['Ideas: delete', 'yes', 'no', 'no'],
   ['Productions: retry stage, cancel', 'yes', 'no', 'no'],
   ['Channels, platform accounts, routing, pipelines', 'yes', 'no', 'no'],
@@ -44,7 +44,7 @@ module.exports = {
   ['Productions', '`/productions`, `/productions/:id`', 'list with filters; detail with timeline, jobs, video, contact sheet, checks, review rounds, publications'],
   ['Channels', '`/channels`, `/channels/:id`', 'brand and channels, channel settings, platform accounts'],
   ['Routing', '`/routing`', 'language → channel rules (stage 1: `en` → `itim`)'],
-  ['Pipelines', '`/pipelines`, `/pipelines/:id`', 'ordered stages with timeout and attempts'],
+  ['Pipelines', '`/pipelines`, `/pipelines/:id`', 'ordered stages with timeout, attempts, revise target and rounds'],
   ['Modules', '`/modules`, `/modules/:id`, `/modules/:id/settings`, `/modules/:id/settings/history`', 'registry, register / activate / disable, health, settings form, history, diff, rollback'],
   ['Credentials', '`/credentials`', 'metadata of stored secrets; create, replace, delete'],
   ['Review access', '`/review-access`', 'Telegram access keys and bound reviewers'],
@@ -56,7 +56,7 @@ module.exports = {
 ['table', ['Term', 'Meaning in the panel'], [
   ['Idea', 'A one-line text written by the owner, with priority and notes. In stage 1 its language is always the core default (`en`) and is shown read-only.'],
   ['Production', 'One pipeline run for one idea; its `id` is also the trace id shown in error references.'],
-  ['Variant', 'One language version of a production. Stage 1 always has exactly one (`en`); the panel shows it as "the video" and keeps the variant id internally.'],
+  ['Variant', 'One language version of a production. Stage 1 always has exactly one (`en`); the panel shows it as "the video" and keeps the variant id internally. A variant that waits for a person is `needs_attention` (the production stays `running`).'],
   ['Job', 'One module call for a production or variant, with attempts, progress, settings version, cost and errors.'],
   ['Review round', 'One approve / reject cycle in Telegram; a rejection reason starts a new round with a corrected video.'],
   ['Publication', 'One post of a variant to one platform account, with link and status.'],
@@ -72,7 +72,7 @@ module.exports = {
 ['h1', '7. Scope'],
 ['table', ['Stage 1', 'Later'], [[
   'All screens listed in section 5\nEnglish UI, English content; one channel `itim` active\nPolling for live state (no websocket)\nDesktop first (1280 px and wider), readable on tablet and phone for overview and production detail\nLight and dark theme\nPlaywright e2e suite against a mocked admin-api',
-  'Localization: when the `localize` stage returns, the idea form gains a language list, routing gains per-idea overrides and the production detail shows one video per language; the variant-aware data layer already supports it\nApprove / reject from the panel\nServer-sent events instead of polling\nReview summaries screen (admin-api endpoints already exist)\nParallel modules per stage and merge strategies in the pipeline editor\nYouTube and TikTok account types; reach analytics\nUI translation',
+  'Localization: when the `localize` stage returns, the idea form gains a language list, routing gains per-idea overrides and the production detail shows one video per language; the variant-aware data layer already supports it\nApprove / reject from the panel; variant skip, extra review rounds and job cancel (core supports them, admin-api does not expose them in stage 1)\nScreens for module-video runs, prompt versions and golden runs (`/api/v1/video/runs`, `/video/prompts`, `/video/golden`)\nServer-sent events instead of polling\nReview summaries screen (admin-api endpoints already exist)\nParallel modules per stage and merge strategies in the pipeline editor\nYouTube and TikTok account types; reach analytics\nUI translation',
 ]], [1, 1]],
 ['h1', '8. Design principles'],
 ['ul', [
@@ -87,7 +87,6 @@ module.exports = {
 ['ul', [
   'Is the panel reachable only from a private network or VPN, or from the internet behind the reverse proxy? It affects the default session lifetime and whether a stricter IP allowlist is wanted (admin-api setting).',
   'Does the MinIO public endpoint (needed for Instagram anyway) also serve the browser, or should admin-api stream artifacts same-origin? The spec assumes presigned URLs on the public endpoint; the alternative only changes the media origin in the CSP.',
-  'Should reviewers (panel role) be allowed to cancel their own queued ideas? The spec allows editing and queueing only.',
 ]],
   ],
 };
