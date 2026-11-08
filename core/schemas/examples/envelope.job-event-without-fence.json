@@ -1,0 +1,15 @@
+{
+  "message_id": "0193b2c4-0000-7000-8000-000000000008",
+  "type": "job.failed",
+  "schema_version": 1,
+  "occurred_at": "2026-11-08T16:40:00Z",
+  "producer": "module:video-claude",
+  "production_id": "0193a1b0-0000-7000-8000-000000000001",
+  "job": {
+    "job_id": "0193a1c2-0000-7000-8000-000000000003"
+  },
+  "payload": {
+    "class": "transient",
+    "message": "x"
+  }
+}

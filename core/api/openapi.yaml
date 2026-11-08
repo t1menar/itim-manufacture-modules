@@ -1,0 +1,127 @@
+openapi: 3.1.0
+info:
+  title: Manufacture core internal API (initial, module-facing subset)
+  version: 0.1.0
+  description: |
+    Machine-readable subset of docs/core/core-04-contracts.docx (source:
+    docs/tools/specgen/content/core/core-04-contracts.js). This file is NOT complete:
+    it covers the unauthenticated probes (section 1.1), module callbacks (section 3)
+    and module reads and writes on core (section 4). The admin-api endpoints of
+    section 2 are listed in core/api/README.md as a remaining checklist.
+    core-04 stays authoritative until this file covers it fully.
+servers:
+  - url: http://core:8080
+security:
+  - bearer: []
+paths:
+  /health:
+    get:
+      security: []
+      operationId: health
+      responses:
+        '200': {description: process is alive, content: {application/json: {schema: {type: object, required: [status], properties: {status: {const: ok}}}}}}
+  /ready:
+    get:
+      security: []
+      operationId: ready
+      responses:
+        '200': {description: ready}
+        '503': {$ref: '#/components/responses/Problem'}
+  /internal/v1/jobs/{job_id}/progress:
+    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}]
+    post:
+      operationId: jobProgress
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '../schemas/progress.json'}}}}
+      responses:
+        '200': {description: accepted, content: {application/json: {schema: {type: object, required: [cancel_requested], properties: {cancel_requested: {type: boolean}}}}}}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /internal/v1/jobs/{job_id}/result:
+    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}]
+    post:
+      operationId: jobResult
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '../schemas/result.json'}}}}
+      responses:
+        '200': {description: accepted (also for an identical repeat), content: {application/json: {schema: {type: object, properties: {status: {const: accepted}}}}}}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {description: 'job_terminal or job_not_current', $ref: '#/components/responses/Problem'}
+        '422': {description: 'output_invalid; the job stays live until its deadline', $ref: '#/components/responses/Problem'}
+  /internal/v1/jobs/{job_id}/fail:
+    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}]
+    post:
+      operationId: jobFail
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '../schemas/fail.json'}}}}
+      responses:
+        '200': {description: accepted, content: {application/json: {schema: {type: object, properties: {status: {const: accepted}, will_retry: {type: boolean}}}}}}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /internal/v1/credentials/{ref}:
+    parameters:
+      - {name: ref, in: path, required: true, schema: {type: string, pattern: '^cred:[a-z0-9][a-z0-9-]{1,59}$'}}
+    get:
+      operationId: readCredential
+      description: Allowed per core-04 section 4.1; every attempt is logged. The value is never logged by core or module.
+      parameters:
+        - {name: X-Job-Id, in: header, required: false, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: secret, content: {application/json: {schema: {type: object, required: [ref, kind, value], properties: {ref: {type: string}, kind: {type: string}, value: {type: string}, expires_at: {type: [string, 'null'], format: date-time}}}}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: refreshCredential
+      description: Only the owner_module may write (token refresh).
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [value], properties: {value: {type: string}, expires_at: {type: [string, 'null'], format: date-time}}}}}}
+      responses:
+        '200': {description: stored, content: {application/json: {schema: {type: object, required: [ref, rev], properties: {ref: {type: string}, expires_at: {type: [string, 'null']}, rev: {type: integer}}}}}}
+        '403': {$ref: '#/components/responses/Problem'}
+  /internal/v1/productions/{production_id}:
+    parameters:
+      - {name: production_id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: moduleReadProduction
+      responses:
+        '200': {description: production summary for a module that has or had a job in it, content: {application/json: {schema: {type: object, required: [id, status, language, variants]}}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /internal/v1/artifacts/presign:
+    post:
+      operationId: modulePresign
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [ref, ttl_s], properties: {ref: {type: string, pattern: '^s3://manufacture/'}, ttl_s: {type: integer, minimum: 60}, public: {type: boolean, default: false}}}}}}
+      responses:
+        '200': {description: signed URL, content: {application/json: {schema: {type: object, required: [url, expires_at], properties: {url: {type: string, format: uri}, expires_at: {type: string, format: date-time}}}}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /internal/v1/modules/self/settings:
+    get:
+      operationId: moduleOwnSettings
+      parameters:
+        - {name: If-None-Match, in: header, required: false, schema: {type: string}}
+      responses:
+        '200': {description: current settings, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {type: object, required: [module_id, version, values, valid]}}}}
+        '304': {description: not modified}
+        '403': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, description: 'module token mft_... (admin-api token mfa_... is rejected with 403 on these routes)'}
+  parameters:
+    JobId: {name: job_id, in: path, required: true, schema: {type: string, format: uuid}}
+    ProductionId: {name: X-Production-Id, in: header, required: false, schema: {type: string, format: uuid}}
+  responses:
+    Problem:
+      description: RFC 9457 problem; code from core-04 section 10
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code]
+            properties:
+              type: {type: string, pattern: '^urn:manufacture:problem:'}
+              title: {type: string}
+              status: {type: integer}
+              code: {type: string}
+              detail: {type: string}
+              errors: {type: array, items: {type: object, required: [pointer, message], properties: {pointer: {type: string}, message: {type: string}}}}

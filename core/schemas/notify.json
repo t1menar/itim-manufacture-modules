@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "notify.json",
+  "type": "object",
+  "required": [
+    "notification_id",
+    "production_id",
+    "variant_id",
+    "language",
+    "status",
+    "channel",
+    "publications"
+  ],
+  "properties": {
+    "notification_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "production_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "variant_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "language": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "published",
+        "partial",
+        "failed",
+        "dry_run"
+      ]
+    },
+    "channel": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "language"
+      ]
+    },
+    "publications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "platform",
+          "platform_account_id",
+          "status"
+        ],
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "platform_account_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_post_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "failed",
+              "skipped"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_detail": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "validation": {
+            "type": "object"
+          },
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "proposed C38"
+          }
+        },
+        "if": {
+          "properties": {
+            "status": {
+              "const": "published"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "external_post_id",
+            "url",
+            "published_at"
+          ],
+          "properties": {
+            "external_post_id": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "published_at": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

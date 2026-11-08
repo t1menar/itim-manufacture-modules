@@ -1,0 +1,23 @@
+name: contracts
+on:
+  pull_request:
+    paths: ['core/api/**', 'core/schemas/**', 'docs/tools/**', '.github/workflows/contracts.yml']
+  push:
+    branches: [main]
+    paths: ['core/api/**', 'core/schemas/**', 'docs/tools/**', '.github/workflows/contracts.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Contract schemas, examples and OpenAPI
+        working-directory: docs/tools/contractcheck
+        run: npm ci && npm test
+      - name: Spec sources build
+        working-directory: docs/tools/specgen
+        run: npm ci && npm run build

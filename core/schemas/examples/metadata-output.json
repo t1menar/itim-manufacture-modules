@@ -1,0 +1,28 @@
+{
+  "metadata": {
+    "title": "What CREATE DATABASE really does",
+    "description": "A walk through the PostgreSQL source.",
+    "topics": [
+      "postgres"
+    ],
+    "platforms": {
+      "instagram": {
+        "caption": "What CREATE DATABASE really does",
+        "hashtags": [
+          "#postgres"
+        ],
+        "fields": {}
+      }
+    }
+  },
+  "provenance": {
+    "prompts": [
+      {
+        "prompt_id": "metadata.caption",
+        "version": 3,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "model": "example-model"
+  }
+}

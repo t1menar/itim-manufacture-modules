@@ -64,7 +64,7 @@ Read `content/overview.js` (system overview) and the `core` documents (`content/
 
 ## 4. Canonical cross-service contract
 
-These shapes are a summary. `core-04-contracts` is authoritative and defines them in full, including accepted changes C1–C28; other services refer to them and must not change them. If a service needs something extra, add it as an optional field and list it under "Proposed contract changes" in its 04 document.
+These shapes are a summary. `core-04-contracts` is authoritative and defines them in full, including accepted changes C1–C28 and the proposed changes C29–C40 (§17, not yet accepted); other services refer to them and must not change them. If a service needs something extra, add it as an optional field and list it under "Proposed contract changes" in its 04 document.
 
 **Transport.** HTTP/1.1 JSON, UTF-8, internal network only (except admin-api behind the reverse proxy). Errors: RFC 9457 `application/problem+json` with `type`, `title`, `status`, `detail`, `code`. Timestamps RFC 3339 UTC. IDs: UUID v7 strings (ideas: integer).
 

@@ -4,6 +4,7 @@ module.exports = {
   meta: { title: 'admin-panel — Description', subtitle: 'What the web client is and why · React + TypeScript',
     doc: 'admin-panel-01-description', version: '0.2', status: 'Draft', date: '2026-11-08' },
   blocks: [
+['note', '**Deferred from the MVP (D13, accepted 2026-11-08).** This specification is kept for a later stage; admin-api implements the full API without a web client in the MVP.'],
 ['h1', '1. Purpose'],
 ['p', '`admin-panel` is the web client in which the owner and a few helpers configure and watch Manufacture. It is a static single-page application (React + TypeScript) served next to admin-api by the same reverse proxy. Its only backend is **admin-api**: every value it shows and every change it makes goes through `/api/v1`. It holds no business rules, no secrets and no state that is not also on the server.'],
 ['p', 'Stage 1 of Manufacture is **English only**: an idea becomes one English video, it is reviewed in Telegram and published to the Instagram account of **iTim** (`itim`). The panel is where that whole chain is set up (credentials, modules, channel, routing, review access) and where each production is followed from idea to published post.'],

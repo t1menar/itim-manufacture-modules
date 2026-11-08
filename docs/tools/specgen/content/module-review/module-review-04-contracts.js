@@ -412,7 +412,7 @@ module.exports = {
   ['C8', '`notification_id` and `status` (`published`, `partial`, `failed`, `dry_run`) on `POST /v1/notify`', 'dedupe; template choice (§3, 05 F12)'],
   ['C9', '`input.review_round` on review jobs (was P4)', 'round on the card and in the output'],
   ['C10 / C20', 'credentials with `access: module` readable outside a job; job-bound reads carry `X-Job-Id` (was P2, adopted with the per-credential flag)', 'bot token and Anthropic key must be `access: module`'],
-  ['C11 / C24', 'core admin proxy `/internal/v1/modules/{id}/admin/{path}` with the module token and `X-Admin-Actor` (was P3)', 'only caller of `/admin/v1/*`'],
+  ['C11 / C24', 'core admin proxy `/internal/v1/modules/{id}/admin/v1/{path}` with the module token and `X-Admin-Actor` (was P3)', 'only caller of `/admin/v1/*`'],
   ['C15', '`GET /internal/v1/modules/self/settings` with version ETag (was P1)', 'settings at start and every 60 s'],
   ['C16', 'optional `handle` on publications, filled by core when missing (was P5)', 'notice lines'],
   ['C17', 'at most one live job per variant and stage (was P6)', 'never two open review requests for one video'],
