@@ -178,8 +178,8 @@ Done when: tests cover not due, due, expired, facebook_login, refresh 500 with v
 
 - Targets from input.channels[].platform_accounts[] (04 section 2.3, proposed change C1); skip platforms not enabled; no_targets.
 - Posts by (variant_id, platform_account_id); reuse published posts; resume from persisted state; container reuse rule of 05 section 5.2; the commit of state publishing before media_publish; reconciliation on PublishOutcomeUnknown and on startup.
-- Dry run levels validate and container; output as in 04 section 5.2 with status failed and error "dry_run: not published" (C3 not yet accepted).
-- Result vs fail rules of FR-PUB-053, details per account, retry_after for quota.
+- Dry run levels validate and container; output as in 04 section 5.2 with status skipped, dry_run true and the validation report (core-04 C19); failed entries carry error_detail (core-04 C18).
+- Result vs fail rules of FR-PUB-053, details per account. Quota exhaustion is class transient with retry_after and is never retried inside the job, because the Core retries only transient failures, at retry_after capped at 48 h (core-04 C21); reporting it as fatal would stop publishing until an admin acts.
 - Progress callbacks of 05 section 2 step 5.
 - Cancellation and deadline guard; SIGTERM handling of 05 section 8; recovery of 05 section 9 on startup.
 

@@ -57,7 +57,7 @@ module.exports = {
   ['P3', 'Never call `media_publish` twice for one post without reconciliation', 'a lost response does not mean the post is missing; a duplicate Reel is worse than a delayed one'],
   ['P4', 'Public endpoint reachability is checked before each container and reported in `/ready` as a non-blocking check', 'a hard `/ready` failure would make the Core pause dispatch, and the public URL can only be obtained during a job'],
   ['P8', 'Presigned URLs come from the Core (`POST /internal/v1/artifacts/presign`, core-04 C12); the module has no MinIO credentials', 'the public endpoint is configured once in the Core; fewer secrets in the module'],
-  ['P5', 'Daily quota exhaustion is a fatal failure with a retry hint, not a transient one', 'retrying inside the 30 min job timeout cannot succeed; an admin re-runs the stage later'],
+  ['P5', 'Daily quota exhaustion is a `transient` failure with `retry_after`, never retried inside the job', 'retrying inside the 30 min job timeout cannot succeed; the Core honours `retry_after` for transient failures only (core-04 C21, capped at 48 h) and never retries `fatal`'],
   ['P6', 'Every platform limit, API version, timeout and error-class override is a setting', 'Meta changes limits and versions; changing them must not need a release'],
   ['P7', 'No LLM calls in stage 1', 'captions and hashtags are produced by module-video and approved together with the video by the reviewer'],
 ], [0.4, 3, 3]],
@@ -65,8 +65,7 @@ module.exports = {
 ['ul', [
   'Which Instagram login path will the owner use: Business Login for Instagram (no Facebook Page needed, token refresh supported) or Facebook Login for Business (Page-linked account, Page token)? The default in this spec is Instagram Login.',
   'Where is the public MinIO endpoint exposed (reverse proxy with TLS on a VPS, tunnel from a home server)? Without it no Reel can be published in stage 1.',
-  'Tokens are refreshed only during publish jobs. If no video is published for about 50 days the token may expire. core-04 C10 allows `access = module` credentials; should the Instagram credential use it so a daily background refresher can run outside jobs (04 §8, C5)?',
-  'A dry run is reported as `status: failed` publications, which the Core turns into `needs_attention` with a notification (core-04 §8.3). Is that acceptable for test runs until the `skipped` status (04 §8, C3) is added?',
+  'Tokens are refreshed only during publish jobs. If no video is published for about 50 days the token may expire. core-04 C20 gives the Instagram credential `access = module`; when should a daily background refresher that uses it be added (stage 1 refreshes only during jobs)?',
   'Is `share_to_feed` wanted for `itim` (default `true`)?',
 ]],
   ],
