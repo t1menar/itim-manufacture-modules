@@ -30,8 +30,9 @@ Every other `/internal/…` route answers `501 not_implemented` (problem+json).
   an unroutable return or nack is a failure with exponential backoff (1 s … 5 min) and `dead` after N attempts.
   `message_id` is fixed at enqueue and reused on every resend; an expired lease of a crashed relay is taken over.
 - **Inbox consumer** (`core.job-events`): inbox row + state change in one transaction, ack only after commit,
-  duplicates acked without effect, poison messages dead-lettered at once, handler errors requeued with a delay and
-  bounded by the quorum `x-delivery-limit` → `.dlq`.
+  duplicates acked without effect, poison messages dead-lettered at once, handler errors requeued with a growing delay and
+  dead-lettered to `.dlq` after `MaxAttempts` (counted by the consumer, since RabbitMQ 4 does not count
+  nack-requeue toward `x-delivery-limit`; crash redeliveries are bounded by `x-delivery-limit` too).
 - **Engine**: start production → variants → first job; job events `progress/succeeded/failed` advance the snapshot,
   retry transient failures in the same chain, `needs_attention` / `failed` otherwise; production/idea completion.
   Fence grows only on `Takeover`; events with an old fence or from a foreign producer are recorded `stale`/`conflict`.

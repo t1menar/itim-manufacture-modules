@@ -293,6 +293,7 @@ func TestFailingHandlerIsBoundedAndDeadLettered(t *testing.T) {
 	e.moduleEvent("vidmod", "job.progress", job, fence, map[string]any{"percent": 1})
 	var calls atomic.Int32
 	c := e.consumer()
+	c.MaxAttempts = 3
 	c.Handler = func(context.Context, pgx.Tx, messaging.Envelope) (string, error) {
 		calls.Add(1)
 		return "", errors.New("database says no")
@@ -300,8 +301,8 @@ func TestFailingHandlerIsBoundedAndDeadLettered(t *testing.T) {
 	if err := e.consumeUntil(c, func() bool { return e.queueLen(e.topo.CoreEvents()+".dlq") == 1 }); err != nil {
 		t.Fatal(err)
 	}
-	if n := calls.Load(); n < 2 || n > 4 {
-		t.Fatalf("handler calls = %d; delivery limit 2 should bound retries", n)
+	if n := calls.Load(); n != 3 {
+		t.Fatalf("handler calls = %d; MaxAttempts 3 must bound retries", n)
 	}
 	if n := e.count(`SELECT count(*) FROM inbox`); n != 0 {
 		t.Fatal("failed message left inbox row")

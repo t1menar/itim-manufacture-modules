@@ -36,7 +36,12 @@ type Consumer struct {
 	Queue    string
 	Handler  Handler
 	Prefetch int
-	Log      *slog.Logger
+	// MaxAttempts bounds handler failures per message before it is dead-lettered. RabbitMQ 4
+	// does not count nack-requeue toward x-delivery-limit, so the consumer counts failures itself
+	// (in memory; crash redeliveries are still counted by the broker's x-delivery-count).
+	MaxAttempts int
+	failures    map[string]int
+	Log         *slog.Logger
 	// RetryDelay grows with the delivery count before a requeue, so a failing message
 	// cannot spin in a hot loop.
 	RetryDelay func(deliveryCount int64) time.Duration
@@ -59,6 +64,10 @@ func (c *Consumer) setDefaults() {
 	if c.Log == nil {
 		c.Log = slog.Default()
 	}
+	if c.MaxAttempts == 0 {
+		c.MaxAttempts = 5
+	}
+	c.failures = map[string]int{}
 	if c.RetryDelay == nil {
 		c.RetryDelay = func(n int64) time.Duration { return min(time.Duration(n+1)*200*time.Millisecond, 5*time.Second) }
 	}
@@ -166,11 +175,19 @@ func (c *Consumer) handle(ctx context.Context, d amqp.Delivery) error {
 		return err
 	}
 	if err != nil {
-		n := deliveryCount(d)
+		key := env.MessageID.String()
+		c.failures[key]++
+		n := max(int64(c.failures[key]), deliveryCount(d)+1)
+		if n >= int64(c.MaxAttempts) {
+			delete(c.failures, key)
+			c.Log.Error("message failed too often; dead-lettered", "message_id", env.MessageID, "attempts", n, "err", err)
+			return d.Nack(false, false)
+		}
 		time.Sleep(c.RetryDelay(n))
 		c.Log.Warn("message processing failed; requeue", "message_id", env.MessageID, "delivery_count", n, "err", err)
 		return d.Nack(false, true)
 	}
+	delete(c.failures, env.MessageID.String())
 	if duplicate {
 		c.Log.Info("duplicate message acked without effect", "message_id", env.MessageID)
 	}
