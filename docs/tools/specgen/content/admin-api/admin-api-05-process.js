@@ -135,19 +135,19 @@ module.exports = {
 ['table', ['Class', 'Default', 'Used by', 'Retry'], [
   ['`read`', '5 s', 'all GETs to the core', 'once, after 100–300 ms jitter, only on connect error, `502`, `503` before any byte of response'],
   ['`write`', '15 s', 'POST / PUT / PATCH / DELETE to the core', 'never (the core may have applied it); the panel may resend with the same `Idempotency-Key`'],
-  ['`register`', '30 s', '`POST /modules`, `POST /modules/{id}/refresh-info`, `GET /modules/{id}/health`', 'never'],
+  ['`register`', '30 s', '`POST /modules`, `POST /modules/{id}/refresh`, `GET /modules/{id}/health?live=true`', 'never'],
   ['`module_admin`', '10 s', 'relay calls', 'GET once as `read`; writes never'],
 ], [1, 0.8, 2.6, 2.6]],
 ['p', 'The server-side request deadline is the class timeout + 2 s; Caddy\'s `read_timeout` (60 s) is above every class. When the client disconnects, the context is cancelled and the upstream call aborted; the audit row is completed with outcome `unknown` for writes (the core may or may not have applied the change).'],
 ['h2', '6.3 Error mapping'],
 ['table', ['Upstream result', 'Public response', 'Audit outcome', 'Notes'], [
   ['2xx', 'same status, filtered body', '`success`', '`201`/`202`/`204` preserved'],
-  ['400, 404, 409, 412, 422 problem from core', 'same status and `code`; `detail` passed if present; `errors[]` pointers passed', '`failed`', 'core is the owner of business rules'],
+  ['400, 404, 409, 412, 422 problem from core', 'same status and `code`, except the renames of 04 §7.1; `detail` and `errors[]` pointers passed', '`failed`', 'core is the owner of business rules'],
   ['401 or 403 from core', '`502 upstream_error`', '`failed`', 'means `ADMIN_CORE_TOKEN` is wrong or lacks rights; log `error`, metric kind `auth`, alert'],
   ['429 from core', '`503 upstream_unavailable` with core `Retry-After`', '`failed`', 'not the user\'s rate limit'],
   ['500, 502 from core', '`502 upstream_error`', '`failed`', 'core detail logged, not shown'],
   ['503 from core', '`503 upstream_unavailable`, `Retry-After: 5`', '`failed`', ''],
-  ['core relay `502 module_unreachable`', '`502 module_unreachable`', '`failed`', 'module down; panel shows module health link'],
+  ['core proxy `502 module_unreachable`', '`502 module_unreachable`', '`failed`', 'module down; panel shows module health link'],
   ['relay 4xx from module', 'same status and `code` (module problem passed through)', '`failed`', 'e.g. `404` unknown key'],
   ['connection refused / DNS / reset before response', '`503 upstream_unavailable`, `Retry-After: 5`', '`failed`', 'GET retried once first'],
   ['timeout (context deadline)', '`504 upstream_timeout`', 'reads `failed`; writes `unknown`', 'write may have happened'],
@@ -158,7 +158,7 @@ module.exports = {
 ['ol', [
   'Resolve the active module for the stage (`review` or `video`) from the 30 s cache; on miss call `GET /internal/v1/stages` and `GET /internal/v1/modules/{id}`.',
   'Check that the path template (`/admin/v1/keys`) is in `admin_endpoints`; else `409 module_capability_missing` without calling. Translate public field names to the module\'s (04 §6.1: `expires_in` → `ttl`, status `unused` → `active`).',
-  'Call `/internal/v1/modules/{module_id}/admin/v1/…` with `ADMIN_CORE_TOKEN`, `X-Admin-Actor: <user id>` and class `module_admin`; map per §6.3. On `409 module_not_available` from the core (module deactivated meanwhile), invalidate the cache and return the problem.',
+  'Call `/internal/v1/modules/{module_id}/admin/v1/…` with `ADMIN_CORE_TOKEN`, `X-Admin-Actor: <user id>` and class `module_admin`; map per §6.3. On `404 not_found` from the core proxy (path no longer listed, or module deactivated meanwhile), invalidate the cache and return `409 module_capability_missing`.',
   'Responses are decoded into the public types of 04 §6 and translated back (`deep_link` → `start_link`, `active` → `unused`); the one-time `key` passes only on `POST /review/keys`. Module codes are mapped as in 04 §6.1.',
 ]],
 

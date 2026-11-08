@@ -155,6 +155,7 @@ Done when:
 - internal/settings: embedded JSON Schema of 04 section 10, validation with defaults, refresh loop, settings_cache table, schema publication, immediate refresh after PUT /admin-settings (05 section 9). Replace the static snapshot from phase 3.
 - /admin-settings endpoints map to /internal/v1/modules/admin-api/settings...; /modules/core/settings works through the module settings endpoints.
 - /artifacts/presign checks the s3://manufacture/ prefix before forwarding.
+- Use the core's names exactly (docs/core/core-04-contracts.docx section 2): variant statuses producing/revising, job status dispatching, module health up, job request/output, pipeline timeout_s and non-null merge. Rename core codes only as listed in admin-api-04 section 7.1. Remove the core allowed actions that admin-api does not expose (routing, skip:, extra_rounds:).
 
 Why: the core owns every business rule; admin-api must forward faithfully, never invent state, and never leak internal fields.
 

@@ -15,7 +15,7 @@ module.exports = {
   ['Base', '`https://<public host>/api/v1`, same origin as the panel. JSON UTF-8. Request bodies require `Content-Type: application/json`.'],
   ['Source of truth', '`admin-api/api/openapi.yaml` (OpenAPI 3.0.3). This document defines its content; the admin-panel contracts (admin-panel-04 §13, P1–P14) are included here.'],
   ['IDs', 'UUID v7 strings; ideas are integers; brands, channels, stages, pipelines and modules have text ids (`itim`, `video`, `default-v1`, `video-claude`).'],
-  ['Time', 'RFC 3339 UTC, e.g. `2026-11-08T14:03:00Z`. Durations as Go duration strings (`30m`, `168h`).'],
+  ['Time', 'RFC 3339 UTC, e.g. `2026-11-08T14:03:00Z`. Durations in core resources are integer seconds with a `_s` suffix (`timeout_s`, as in core-04 §1.1); admin-api\'s own settings and review key `expires_in` use duration strings (`30m`, `24h`).'],
   ['Pagination', 'Query `limit` (1–200, default 50) and `cursor` (opaque string from the previous page). Response `{"items": [...], "next_cursor": "…" or null}`. No total counts; `/overview` gives counters.'],
   ['Sorting', 'Query `sort` with one field, `-` prefix for descending; allowed values per endpoint; default `-created_at`.'],
   ['Filtering', 'Query parameters named after fields (`status=running`); several values comma-separated (`status=running,failed`); time range `from` (inclusive) / `to` (exclusive) on the list\'s main timestamp; free text `q`.'],
@@ -83,7 +83,7 @@ module.exports = {
   ['POST / PATCH / DELETE', '`/routing-rules`, `/routing-rules/{id}`', '`config.write`', '`routing_rule.create` / `.update` / `.delete`', 'same'],
   ['GET', '`/ideas`, `/ideas/{id}`', '`ideas.read`', '—', 'GET `/internal/v1/ideas[/{id}]`'],
   ['POST / PATCH', '`/ideas`, `/ideas/{id}`', '`ideas.write`', '`idea.create` / `.update`', 'same'],
-  ['POST', '`/ideas/{id}/queue`', '`ideas.write`', '`idea.queue`', 'POST `/internal/v1/ideas/{id}/queue`'],
+  ['POST', '`/ideas/{id}/queue`, `/ideas/{id}/unqueue`', '`ideas.write`', '`idea.queue` / `.unqueue`', 'POST `/internal/v1/ideas/{id}/queue` / `unqueue`'],
   ['DELETE', '`/ideas/{id}`', '`ideas.delete`', '`idea.delete`', 'DELETE `/internal/v1/ideas/{id}`'],
   ['GET', '`/productions`, `/productions/{id}`, `/productions/{id}/events`, `/productions/{id}/jobs`', '`productions.read`', '—', 'GET same under `/internal/v1`'],
   ['POST', '`/productions/{id}/retry`', '`productions.control`', '`production.retry`', 'POST `/internal/v1/productions/{id}/retry`'],
@@ -94,17 +94,17 @@ module.exports = {
   ['GET', '`/pipelines`, `/pipelines/{id}`', '`config.read`', '—', 'GET `/internal/v1/pipelines[/{id}]`'],
   ['POST / PATCH', '`/pipelines`, `/pipelines/{id}`', '`config.write`', '`pipeline.create` / `.update`', 'same'],
   ['PUT', '`/pipelines/{id}/stages`', '`config.write`', '`pipeline.stages_replace`', 'PUT `/internal/v1/pipelines/{id}/stages`'],
-  ['GET', '`/modules`, `/modules/{id}`, `/modules/{id}/info`, `/modules/{id}/health`', '`config.read`', '—', 'GET same under `/internal/v1` (`info`, `health` call the module live; class `register`)'],
+  ['GET', '`/modules`, `/modules/{id}`, `/modules/{id}/info`, `/modules/{id}/health`', '`config.read`', '—', 'GET same under `/internal/v1` (`health?live=true` probes the module now; class `register`)'],
   ['POST', '`/modules`', '`modules.write`', '`module.register`', 'POST `/internal/v1/modules` (class `register`)'],
   ['PATCH / DELETE', '`/modules/{id}`', '`modules.write`', '`module.update` / `.delete`', 'same'],
-  ['POST', '`/modules/{id}/activate`', '`modules.write`', '`module.activate`', 'POST `/internal/v1/modules/{id}/activate`'],
+  ['POST', '`/modules/{id}/activate`, `/modules/{id}/deactivate`, `/modules/{id}/refresh`', '`modules.write`', '`module.activate` / `.deactivate` / `.refresh`', 'POST same under `/internal/v1/modules/{id}`'],
   ['POST', '`/modules/{id}/token`', '`modules.token` ⇑', '`module.token_rotate`', 'POST `/internal/v1/modules/{id}/token`'],
   ['GET', '`/modules/{id}/settings`, `…/schema`, `…/versions`', '`config.read`', '—', 'GET `/internal/v1/modules/{id}/settings…` (`{id}` may be `core`)'],
   ['PUT', '`/modules/{id}/settings`', '`settings.write`', '`module.settings.update`', 'PUT `/internal/v1/modules/{id}/settings`'],
-  ['POST', '`/modules/{id}/settings/rollback/{v}`', '`settings.write`', '`module.settings.rollback`', 'POST same under `/internal/v1`'],
+  ['POST', '`/modules/{id}/settings/rollback/{v}`', '`settings.write`', '`module.settings.rollback`', 'POST `/internal/v1/modules/{id}/settings/rollback` with `{version, comment}`'],
   ['GET', '`/admin-settings`, `/admin-settings/schema`, `/admin-settings/versions`', '`config.read`', '—', 'GET `/internal/v1/modules/admin-api/settings…`'],
-  ['PUT / POST', '`/admin-settings`, `/admin-settings/rollback/{v}`', '`settings.write`', '`admin.settings.update` / `.rollback`', 'PUT / POST `/internal/v1/modules/admin-api/settings…`'],
-  ['GET', '`/credentials`, `/credentials/{id}`', '`credentials.read`', '`credential.read_meta`', 'GET `/internal/v1/credentials`, `/{id}/meta`'],
+  ['PUT / POST', '`/admin-settings`, `/admin-settings/rollback/{v}`', '`settings.write`', '`admin.settings.update` / `.rollback`', 'PUT `/internal/v1/modules/admin-api/settings`; rollback as above'],
+  ['GET', '`/credentials`, `/credentials/{id}`', '`credentials.read`', '`credential.read_meta`', 'GET `/internal/v1/credentials[/{id}]`'],
   ['POST', '`/credentials`', '`credentials.write` ⇑', '`credential.create`', 'POST `/internal/v1/credentials`'],
   ['PUT', '`/credentials/{id}`', '`credentials.write` ⇑', '`credential.replace_value`', 'PUT `/internal/v1/credentials/{id}/value`'],
   ['PATCH / DELETE', '`/credentials/{id}`', '`credentials.write` ⇑', '`credential.update` / `.delete`', 'PATCH / DELETE `/internal/v1/credentials/{id}`'],
@@ -253,28 +253,33 @@ POST   /api/v1/routing-rules  {"language": "en", "channel_id": "itim", "priority
   ['**`text`**', 'string 10–500, no line breaks', 'the one-line idea'],
   ['**`priority`**', 'integer 0–100, default 50', 'higher first'],
   ['**`notes`**', 'string ≤ 2000 or null', 'free text for the video module'],
-  ['`language`', 'string, read-only', 'set by the core from `default_language` (`en`); never accepted in requests'],
+  ['`language`', 'string, read-only', 'core value, or core setting `default_language` (`en`) when the core stores null; never accepted in requests'],
   ['`status`', 'enum `new`|`queued`|`in_production`|`done`|`failed`|`cancelled`', 'read-only'],
-  ['`last_production_id`', 'uuid|null', 'read-only'],
-  ['`allowed_actions`', 'array of `edit`, `queue`, `delete`', 'core state rules ∩ caller permissions'],
+  ['`latest_production_id`', 'uuid|null', 'read-only'],
+  ['`failure`', '`{code, message}`|null', 'read-only'],
+  ['`allowed_actions`', 'array of `edit`, `queue`, `unqueue`, `delete`', 'core state rules ∩ caller permissions; core action `routing` is removed (not exposed)'],
   ['`productions`', 'array `{id, status, started_at, finished_at}`', 'only in `GET /ideas/{id}`'],
   ['`created_by`, `created_at`, `updated_at`', '', 'read-only'],
 ], [1.6, 2.6, 2.3]],
-['p', 'Filters: `status`, `q` (text, notes), `from`, `to` (created_at); sort `created_at`, `priority`. `PATCH` only in status `new` (core `409 conflict` otherwise). `DELETE` needs `ideas.delete` (admin only) and is allowed only while the idea has no productions (core `409 conflict`). `POST /ideas/{id}/queue` moves `new` → `queued`. There are no language fields and no per-idea routing in stage 1.'],
+['p', 'Filters: `status`, `q` (text, notes), `from`, `to` (created_at); sort `created_at`, `priority`. `PATCH` text only in status `new` or `queued`, priority and notes always (core `409 invalid_state` otherwise). `DELETE` needs `ideas.delete` (admin only) and is allowed only in `new`, `queued` or `cancelled` without productions (core `409 in_use` / `invalid_state`). `POST /ideas/{id}/queue` moves `new`/`failed`/`cancelled` → `queued`; `unqueue` moves `queued` → `new`. The public limits (text 10–500, priority 0–100 default 50, notes ≤ 2000) are a stricter subset of the core\'s; admin-api sends `priority: 50` when the client omits it.'],
+['note', 'The core keeps an optional idea `language`, `pipeline_id` and per-idea routing overrides (core-04 §2.5–2.6) for later localization. admin-api deliberately does not expose them in stage 1: no request field, no endpoint, and the `routing` allowed action is filtered out. Exposing them later is an additive change.'],
 ['code', `POST /api/v1/ideas  {"text": "How CREATE DATABASE copies the template in PostgreSQL", "priority": 70, "notes": null}
 -> 201 {"id": 42, "text": "…", "language": "en", "priority": 70, "notes": null, "status": "new",
-        "last_production_id": null, "allowed_actions": ["edit", "queue", "delete"], "created_by": "owner@example.com", …}`],
+        "latest_production_id": null, "failure": null, "allowed_actions": ["edit", "queue", "delete"], "created_by": "owner@example.com", …}`],
 ['h2', '5.3 Productions and jobs'],
-['code', `GET /api/v1/productions?status=running,needs_attention&idea_id=42&channel_id=itim&from=…&to=…
+['code', `GET /api/v1/productions?status=running&variant_status=needs_attention&idea_id=42&channel_id=itim&from=…&to=…
 -> {"items": [ProductionSummary], "next_cursor": …}
 ProductionSummary = {"id", "idea": {"id", "text"}, "status", "stage", "channel_ids": ["itim"], "started_at", "finished_at", "cost_usd"}
 
 GET /api/v1/productions/{id}  -> ProductionDetail = ProductionSummary + {
   "pipeline_id": "default-v1", "current_position": 2, "trace_id": "0193…",
-  "allowed_actions": ["retry:video", "cancel"],
+  "allowed_actions": ["retry:video", "cancel"], "language": "en",
+  "totals": {"cost_usd": 1.84, "tokens_in": 120000, "tokens_out": 8000}, "live_jobs": [JobSummary], "failure": null,
   "provenance": {"commit": "…", "settings_versions": {"video-claude": 7}, "prompt_versions": {…}},
   "variants": [{                                   // exactly one in stage 1
-    "id": "0193…", "language": "en", "status": "in_review", "review_round": 2,
+    "id": "0193…", "language": "en", "status": "in_review", "stage_id": "review", "position": 2,
+    "review_round": 2, "max_rounds": 3, "channels": ["itim"],
+    "attention": null,   // {reason: max_rounds|blocked|timeout|publish_partial|retries_exhausted, job_id, message, retry_after?}
     "video": {"ref": "s3://manufacture/<pid>/video/2/final.mp4", "sha256": "…", "duration_s": 58.4,
               "size": 18234112, "width": 1080, "height": 1920, "fps": 30},
     "cover": {"ref": "s3://…"}, "contact_sheet": {"ref": "s3://…"},
@@ -284,17 +289,19 @@ GET /api/v1/productions/{id}  -> ProductionDetail = ProductionSummary + {
     "review_rounds": [{"round": 1, "decision": "rejected", "reason": "…",
                        "reviewer": {"telegram_user_id": 123, "username": "tim"}, "decided_at": "…"}],
     "publications": [{"platform": "instagram", "platform_account_id": "…", "account_handle": "itim",
-                      "external_post_id": "…", "url": "https://…", "published_at": "…", "status": "published", "error": null}]}]}
+                      "external_post_id": "…", "url": "https://…", "published_at": "…", "status": "published", "error": null,
+                      "error_detail": null, "dry_run": false}]}]}
 
 GET /api/v1/productions/{id}/events?after=1234&limit=200   -> {"items": [{"id": 1235, "type": "job.succeeded", "at": "…", "payload": {…}}], "next_cursor": …}  (ascending)
 GET /api/v1/productions/{id}/jobs                           -> {"items": [Job], …}
-GET /api/v1/jobs/{id}  -> Job = {"id", "production_id", "stage", "variant_id", "module_id", "attempt", "status",
-     "progress": {"percent", "step", "message"}, "settings_version", "started_at", "finished_at", "deadline",
+GET /api/v1/jobs/{id}  -> Job = {"id", "production_id", "variant_id", "stage_id", "module_id", "position", "attempt", "try",
+     "max_attempts", "mode", "round", "status", "progress": {"percent", "step", "message", "at"}, "settings_version",
+     "module_version", "run_after", "deadline", "dispatched_at", "started_at", "finished_at",
      "metrics": {"cost_usd", "tokens_in", "tokens_out"}, "error": {"class", "message"} | null,
-     "input": {…}, "result": {…}, "artifacts": [{"ref", "sha256", "size", "kind"}]}
+     "request": {…}, "output": {…}, "artifacts": [{"ref", "sha256", "size", "kind"}]}     // request, output, artifacts: detail only
 POST /api/v1/productions/{id}/retry   {"stage": "video", "variant_id": null}  -> 202 {"job_id": "…"}
-POST /api/v1/productions/{id}/cancel  {"reason": "duplicate idea"}           -> 202 {ProductionDetail}`],
-['p', 'The variant fields come from the canonical `video`, `review` and `publish` stage outputs as stored by the core; `account_handle` is joined by the core. Job `input` and `result` contain credential references (`cred:…`), never values. `allowed_actions` entries `retry:<stage>` and `cancel` are removed for callers without `productions.control`. Status values: production `running`, `needs_attention`, `done`, `failed`, `cancelled`; variant `pending`, `in_video`, `in_review`, `approved`, `publishing`, `published`, `skipped`, `needs_attention`, `failed`, `cancelled`; job `queued`, `dispatched`, `running`, `succeeded`, `failed`, `timed_out`, `cancelled`. Unknown values are passed through as strings.'],
+POST /api/v1/productions/{id}/cancel  {"reason": "duplicate idea"}           -> 200 {ProductionDetail}`],
+['p', 'The variant fields come from the canonical `video`, `review` and `publish` stage outputs as stored by the core; `account_handle` is joined by the core. Job `request` and `output` contain credential references (`cred:…`), never values. `allowed_actions` entries `retry:<stage>` and `cancel` are removed for callers without `productions.control`; the core actions `skip:<variant_id>` and `extra_rounds:<variant_id>` are removed for everyone, because admin-api does not expose them in stage 1 (later). Status values (core-04 §2.7, §2.9): production `running`, `done`, `failed`, `cancelled` (a production stays `running` while a variant needs attention); variant `pending`, `producing`, `in_review`, `revising`, `approved`, `publishing`, `published`, `skipped`, `failed`, `needs_attention`, `cancelled`; job `queued`, `dispatching`, `dispatched`, `running`, `succeeded`, `failed`, `timed_out`, `cancelled`. Unknown values are passed through as strings.'],
 ['h2', '5.4 Artifacts'],
 ['code', `GET /api/v1/artifacts/presign?ref=s3://manufacture/0193…/video/2/final.mp4&disposition=inline|attachment
 -> 200 {"url": "https://minio.example.com/manufacture/…?X-Amz-…", "expires_at": "2026-11-08T14:18:00Z"}
@@ -304,36 +311,44 @@ POST /api/v1/productions/{id}/cancel  {"reason": "duplicate idea"}           -> 
 ['code', `GET /api/v1/stages -> {"items": [{"id": "video", "name": "Video", "scope": "production", "active_module_id": "video-claude"}, …]}
 GET /api/v1/pipelines/default-v1
 -> {"id": "default-v1", "name": "Default v1", "is_default": true, "version": 3,
-    "stages": [{"position": 1, "stage_id": "video", "scope": "production", "timeout": "90m", "max_attempts": 2, "mode": "single", "merge": null}, …]}
-PATCH /api/v1/pipelines/default-v1   {"name": "…", "is_default": true}  -> 200 {Pipeline}
+    "enabled": true,
+    "stages": [{"position": 1, "stage_id": "video", "timeout_s": 5400, "max_attempts": 2, "mode": "single", "merge": "first_success",
+                "revise_target": null, "max_rounds": null, "notify_stage": null}, …]}
+PATCH /api/v1/pipelines/default-v1   {"name"?, "is_default"?, "enabled"?}  -> 200 {Pipeline}
 PUT /api/v1/pipelines/default-v1/stages
 {"base_version": 3,
- "stages": [{"stage_id": "video",   "timeout": "90m",  "max_attempts": 2, "mode": "single", "merge": null},
-            {"stage_id": "review",  "timeout": "168h", "max_attempts": 1, "mode": "single", "merge": null},
-            {"stage_id": "publish", "timeout": "30m",  "max_attempts": 3, "mode": "single", "merge": null}]}
+ "stages": [{"position": 1, "stage_id": "video",   "timeout_s": 5400,   "max_attempts": 2, "mode": "single", "merge": "first_success"},
+            {"position": 2, "stage_id": "review",  "timeout_s": 604800, "max_attempts": 1, "mode": "single", "merge": "first_success",
+             "revise_target": "video", "max_rounds": null},
+            {"position": 3, "stage_id": "publish", "timeout_s": 1800,   "max_attempts": 3, "mode": "single", "merge": "first_success",
+             "notify_stage": "review"}]}
 -> 200 {Pipeline, "version": 4}    409 version_conflict | 422 validation_failed (invalid order)`],
-['p', '`mode` accepts only `single` in stage 1 (`parallel` and `merge` are reserved; the core rejects them).'],
+['p', '`timeout_s` is an integer (10–2 592 000). `mode` accepts only `single` in stage 1 (`parallel` → `422 not_supported`). `merge` is never null: `first_success` (default, sent by admin-api when omitted), `all`, `vote` or `module:<id>`, reserved for parallel mode. `revise_target`, `max_rounds`, `notify_stage` as core-04 §2.11.'],
 ['h2', '5.6 Modules'],
 ['code', `POST /api/v1/modules
 {"id": "publish-social", "name": "Publish (social)", "stage": "publish", "endpoint": "http://module-publish:8080", "enabled": true}
--> 201 {"module": {Module}, "token": "mft_…"}          // token shown once; set as MODULE_CORE_TOKEN of the module
-   409 conflict | 422 module_info_invalid | 502 module_unreachable
+-> 201 {Module, "token": "mft_…"}          // token shown once; set as MODULE_CORE_TOKEN of the module
+   409 conflict | 422 module_contract_unsupported | 422 module_stage_mismatch | 502 module_unreachable
 
-Module = {"id", "name", "stage", "endpoint", "version", "contract", "enabled", "active",
-          "health": "ok|degraded|down|unknown", "last_seen_at", "admin_endpoints": ["/admin/v1/keys"],
-          "stats_24h": {"succeeded": 3, "failed": 0}, "created_at", "updated_at"}
+Module = {"id", "name", "stage_id", "endpoint", "version", "contract", "enabled", "active",
+          "health": "unknown|up|degraded|down|unauthorized",
+          "health_detail": {"reason", "health_status", "ready_status", "auth_probe", "latency_ms", "checked_at"},
+          "settings_version", "settings_valid", "token_prefix", "last_seen_at", "info_refreshed_at",
+          "admin_endpoints": ["/admin/v1/keys"], "stats_24h": {"succeeded": 3, "failed": 0, "timed_out": 0}, "created_at", "updated_at"}
 
-POST /api/v1/modules/{id}/activate  -> 200 {"module": {Module}, "deactivated": "review-old" | null}
-PATCH /api/v1/modules/{id}  {"name"?, "endpoint"?, "enabled"?}  -> 200 {Module}   409 module_active (disable the active one)
-DELETE /api/v1/modules/{id}  -> 204   409 module_active
-POST /api/v1/modules/{id}/token  {}   -> 200 {"token": "mft_…"}   (old token invalid at once)
-GET  /api/v1/modules/{id}/health     -> 200 {"status": "ok|degraded|down", "latency_ms": 12, "checked_at": "…", "message": null}
-GET  /api/v1/modules/{id}/info       -> 200 {canonical /info body}`],
+POST /api/v1/modules/{id}/activate  {"replace": false}  -> 200 {"module": {Module}, "deactivated": "review-old" | null}
+   409 active_module_exists (send replace: true) | 409 module_not_ready | 422 validation_failed (settings invalid)
+POST /api/v1/modules/{id}/deactivate  -> 200 {Module}       POST /api/v1/modules/{id}/refresh  -> 200 {Module}  (re-read /info)
+PATCH /api/v1/modules/{id}  {"name"?, "endpoint"?, "enabled"?}  -> 200 {Module}
+DELETE /api/v1/modules/{id}  -> 204   409 module_active (core in_use: active or used by a job; disable instead)
+POST /api/v1/modules/{id}/token  {}   -> 200 {"token": "mft_…", "token_prefix": "mft_ab12", "prev_token_expires_at": "…"}   (old token valid for the core grace period)
+GET  /api/v1/modules/{id}/health?live=true -> 200 {"health": "up|degraded|down|unauthorized|unknown", "reason": null, "latency_ms": 12, "checked_at": "…"}
+GET  /api/v1/modules/{id}/info       -> 200 {stored canonical /info body}`],
 ['p', 'Token fields are never stored or logged by admin-api and are masked in audit rows.'],
 ['h2', '5.7 Module, core and admin-api settings'],
 ['code', `GET /api/v1/modules/video-claude/settings
--> 200 SettingsVersion = {"module_id": "video-claude", "version": 7, "values": {…}, "author": "owner@example.com",
-        "comment": "…", "created_at": "…", "is_current": true,
+-> 200 SettingsVersion = {"module_id": "video-claude", "version": 7, "values": {…}, "valid": true, "author": "user:0192…",
+        "author_email": "owner@example.com", "comment": "…", "rolled_back_from": null, "created_at": "…", "is_current": true,
         "validation_errors": [{"pointer": "/render/timeout", "message": "…"}]}   // non-empty after a schema change
 GET /api/v1/modules/video-claude/settings/schema   -> 200 {JSON Schema 2020-12}
 PUT /api/v1/modules/video-claude/settings  {"base_version": 7, "values": {…}, "comment": "longer render timeout"}
@@ -341,27 +356,28 @@ PUT /api/v1/modules/video-claude/settings  {"base_version": 7, "values": {…}, 
    409 version_conflict {"current_version": 8, "author": "…", "saved_at": "…"} | 422 validation_failed (errors[] with pointers)
 GET /api/v1/modules/video-claude/settings/versions?limit=20  -> {"items": [SettingsVersion], …}   (values included)
 POST /api/v1/modules/video-claude/settings/rollback/5  {"comment": "back to 5"}  -> 201 {SettingsVersion, "version": 9}`],
-['p', 'The core\'s own settings use module id `core` on the same endpoints. admin-api\'s own settings use `/admin-settings`, `/admin-settings/schema`, `/admin-settings/versions`, `/admin-settings/rollback/{v}` with the same shapes (`module_id` = `admin-api`); after a successful save admin-api refreshes its snapshot at once.'],
+['p', 'Public `POST …/rollback/{v}` is sent to the core as `POST /internal/v1/modules/{id}/settings/rollback {version: v, comment}`; core `settings_version_conflict` is published as `version_conflict`, `settings_invalid` as `validation_failed`. The core\'s own settings use module id `core` on the same endpoints. admin-api\'s own settings use `/admin-settings`, `/admin-settings/schema`, `/admin-settings/versions`, `/admin-settings/rollback/{v}` with the same shapes (`module_id` = `admin-api`); after a successful save admin-api refreshes its snapshot at once.'],
 ['h2', '5.8 Credentials'],
 ['code', `GET /api/v1/credentials?kind=oauth_token&q=insta
 -> {"items": [CredentialMeta], "next_cursor": null}
 CredentialMeta = {"id": "0192…", "name": "instagram-itim", "ref": "cred:instagram-itim", "kind": "oauth_token",
                   "last4": "x9Qa", "expires_at": "2027-01-05T00:00:00Z", "allowed_modules": ["publish-social"],
-                  "created_at": "…", "updated_at": "…", "last_used_at": "…"}
+                  "access": "job", "owner_module": "publish-social", "rotated_at": "…", "created_at": "…", "updated_at": "…", "last_used_at": "…"}
 POST  /api/v1/credentials  {"name": "anthropic-main", "kind": "api_key", "value": "<secret>", "expires_at": null, "allowed_modules": ["video-claude"]}
 -> 201 {CredentialMeta}
 PUT   /api/v1/credentials/{id}  {"value": "<secret>", "expires_at": "2027-01-05T00:00:00Z"}  -> 200 {CredentialMeta}
-PATCH /api/v1/credentials/{id}  {"allowed_modules": [...], "expires_at": …}  -> 200 {CredentialMeta}
+PATCH /api/v1/credentials/{id}  {"name"?, "access"?, "allowed_modules"?, "owner_module"?, "expires_at"?}  -> 200 {CredentialMeta}
 DELETE /api/v1/credentials/{id} -> 204
-   409 credential_in_use {"references": [{"type": "platform_account", "id": "…"}, {"type": "module_settings", "id": "video-claude"}]}`],
-['p', '`name` is a slug of 2–64 characters. `kind` ∈ `api_key`, `oauth_token`, `bot_token`, `password`. `value` is `writeOnly` and `x-secret`, 1–16 384 bytes; no response contains it, and admin-api does not decode a field named `value` from any credential response.'],
+   409 credential_in_use {"references": [{"kind": "platform_account", "id": "…", "name": "itim"}, {"kind": "settings", "id": "video-claude", "name": "…"}]}`],
+['p', '`name` is a slug of 2–64 characters. `kind` ∈ `api_key`, `oauth_token`, `bot_token`, `password`, `s3_keys`, `generic`; `access` ∈ `job`, `module` (core-04 §4.1). Access log items are `{principal, job_id, action, outcome, at}`. `value` is `writeOnly` and `x-secret`, 1–16 384 bytes; no response contains it, and admin-api does not decode a field named `value` from any credential response.'],
 ['h2', '5.9 Overview'],
 ['code', `GET /api/v1/overview
--> 200 {"counts": {"ideas_queued": 3, "productions_running": 1, "waiting_review": 1, "published_today": 2, "failed_24h": 0},
+-> 200 {"counts": {"ideas_queued": 3, "productions_running": 1, "waiting_review": 1, "published_today": 2, "failed_24h": 0,
+                   "needs_attention": 0, "jobs_queued": 0},
         "active": [{"production_id": "…", "idea": {"id": 42, "text": "…"}, "status": "running", "stage": "video",
                     "progress": {"percent": 40, "step": "render"}, "started_at": "…"}],
         "waiting_review": [{"production_id": "…", "variant_id": "…", "idea_text": "…", "round": 2, "since": "…"}],
-        "modules": [{"stage": "video", "module_id": "video-claude", "health": "ok", "last_seen_at": "…"}],
+        "modules": [{"stage": "video", "module_id": "video-claude", "health": "up", "version": "0.1.0", "last_seen_at": "…"}],
         "alerts": [{"kind": "credential_expiring", "severity": "warning", "message": "…",
                     "resource": "credential", "resource_id": "…", "at": "…"}],
         "publications_today": [{"production_id": "…", "platform": "instagram", "account_handle": "itim",
@@ -413,11 +429,11 @@ GET  /api/v1/video/golden/{id} -> {"id", "status", "results": [{"idea", "status"
   ['403', '`forbidden`, `csrf_invalid`, `totp_setup_required`, `reauth_required`, `account_disabled`', 'permission, CSRF / Origin, enrolment pending, step-up'],
   ['404', '`not_found`', 'resource does not exist (local or upstream)'],
   ['405 / 415', '`method_not_allowed`, `unsupported_media_type`', ''],
-  ['409', '`conflict`, `email_taken`, `last_admin`, `setup_not_available`, `version_conflict`, `module_active`, `credential_in_use`, `module_not_available`, `module_capability_missing`', 'state conflicts; no active module for the stage; module lacks the admin endpoint'],
+  ['409', '`conflict`, `invalid_state`, `email_taken`, `last_admin`, `setup_not_available`, `version_conflict`, `module_active`, `active_module_exists`, `module_not_ready`, `credential_in_use`, `module_not_available`, `module_capability_missing`', 'state conflicts; no active module for the stage; module lacks the admin endpoint'],
   ['410', '`token_used`, `token_expired`', 'setup or invitation link'],
   ['412', '`precondition_failed`', '`If-Match` mismatch'],
   ['413', '`payload_too_large`', 'body over `max_body_bytes`'],
-  ['422', '`validation_failed`, `cannot_modify_self`, `module_info_invalid`', 'schema or business validation with `errors[]`; password codes in `errors[].code`: `password_too_short`, `password_too_common`, `password_matches_identity`'],
+  ['422', '`validation_failed`, `cannot_modify_self`, `not_supported`, `module_contract_unsupported`, `module_stage_mismatch`, `idempotency_key_reused`', 'schema or business validation with `errors[]`; password codes in `errors[].code`: `password_too_short`, `password_too_common`, `password_matches_identity`'],
   ['429', '`rate_limited`, `login_locked`', 'with `Retry-After`'],
   ['500', '`internal`', 'bug; details only in logs'],
   ['502', '`upstream_error`, `module_unreachable`', 'core answered 5xx, 401/403 to admin-api, or an undecodable body; module unreachable from the core relay'],
@@ -425,6 +441,17 @@ GET  /api/v1/video/golden/{id} -> {"id", "status", "results": [{"idea", "status"
   ['504', '`upstream_timeout`', 'upstream exceeded its timeout class'],
 ], [0.8, 3, 2.8]],
 
+['h2', '7.1 Core codes published under another name'],
+['table', ['Core code (core-04 §10)', 'Public code'], [
+  ['`already_exists`, `in_use` (except module delete)', '`409 conflict`'],
+  ['`in_use` on module delete', '`409 module_active`'],
+  ['`settings_version_conflict`; `version_mismatch` on `PUT /pipelines/{id}/stages`', '`409 version_conflict`'],
+  ['`version_mismatch` on `If-Match`', '`412 precondition_failed`'],
+  ['`unknown_field`, `settings_invalid`, `channel_settings_invalid`, `schema_invalid`, `pipeline_invalid`', '`422 validation_failed` (core `errors[]` kept; core code in `detail`)'],
+  ['`unauthorized`, `forbidden` (admin-api token problem)', '`502 upstream_error`'],
+  ['`unavailable`', '`503 upstream_unavailable`'],
+  ['all other client codes', 'unchanged'],
+], [3.5, 3]],
 ['h1', '8. Internal endpoints (not routed by the proxy)'],
 ['table', ['Endpoint', 'Response'], [
   ['`GET /health`', '`200 {"status": "ok"}`; `503` while draining'],
@@ -435,24 +462,23 @@ GET  /api/v1/video/golden/{id} -> {"id", "status", "results": [{"idea", "status"
 ['h1', '9. Consumed interfaces'],
 ['h2', '9.1 Core internal API'],
 ['p', 'Base `ADMIN_CORE_URL` + `/internal/v1`. Headers on every call: `Authorization: Bearer <ADMIN_CORE_TOKEN>`, `traceparent`, `X-Request-Id`, `X-Admin-Actor: <user id>` and `X-Admin-Actor-Email: <e-mail>` (absent for system calls such as settings refresh), `X-Production-Id` for production, job and artifact calls, `Idempotency-Key` and `If-Match` when the client sent them. The core answers RFC 9457 problems with the same `code` vocabulary for client errors.'],
-['table', ['Core endpoint', 'Used by', 'Status'], [
-  ['`GET|POST /brands`, `GET|PATCH /brands/{id}`', 'brands', 'draft core §8'],
-  ['`GET|POST /channels`, `GET|PATCH|DELETE /channels/{id}`', 'channels', 'draft core §8'],
-  ['`GET /channels/settings-schema`; `accounts_count` in Channel', 'channel settings form', 'proposed C1'],
-  ['`GET|POST /platform-accounts`, `GET|PATCH|DELETE /platform-accounts/{id}`', 'accounts', 'draft core §8'],
-  ['`GET|POST /routing-rules`, `PATCH|DELETE /routing-rules/{id}`', 'routing', 'draft core §8'],
-  ['`GET|POST /ideas`, `GET|PATCH|DELETE /ideas/{id}`, `POST /ideas/{id}/queue`; `allowed_actions`, `productions` in idea detail', 'ideas', 'draft core §8; additions C1'],
-  ['`GET /productions`, `GET /productions/{id}` (embedded variant data, `allowed_actions`), `…/events?after=`, `…/jobs`, `POST …/retry {stage, variant_id}`, `POST …/cancel`', 'productions', 'draft core §8; additions C1'],
-  ['`GET /jobs/{id}`', 'job detail', 'proposed C1'],
-  ['`GET /artifacts/presign?ref=&disposition=`', 'artifacts', 'proposed C1'],
-  ['`GET /stages` (with `active_module_id`), `GET|POST /pipelines`, `GET|PATCH /pipelines/{id}`, `PUT /pipelines/{id}/stages` with `base_version`', 'stages, pipelines', 'draft core §8; additions C1'],
-  ['`GET|POST /modules`, `GET|PATCH|DELETE /modules/{id}`, `POST …/activate` (`deactivated`), `GET …/health`, `GET …/info`, `POST …/token`; `stats_24h`', 'modules', 'draft core §8; additions C1'],
-  ['`GET|PUT /modules/{id}/settings` (`validation_errors`, `base_version`), `GET …/schema`, `GET …/versions`, `POST …/rollback/{v}` (`comment`), for `{id}` = any module, `core`, `admin-api`; `PUT /modules/admin-api/settings/schema`', 'module, core and admin-api settings', 'draft core §8; owner `admin-api` and schema PUT proposed C2'],
-  ['`GET|POST /credentials`, `GET /credentials/{id}/meta`, `PUT /credentials/{id}/value`, `PATCH|DELETE /credentials/{id}` (`credential_in_use`); `ref`, `last_used_at`', 'credentials', 'draft core §8; additions C1'],
-  ['`GET /overview`', 'overview', 'proposed C1'],
-  ['`ANY /modules/{id}/admin/{path}`', 'module admin relay', 'proposed C3'],
-  ['`GET /health`', 'readiness detail', 'core standard'],
-], [3.6, 1.3, 1.6]],
+['table', ['Core endpoint (all under `/internal/v1`)', 'Used by', 'core-04'], [
+  ['`GET|POST /brands`, `GET|PATCH /brands/{id}`', 'brands', '§2.1'],
+  ['`GET|POST /channels`, `GET|PATCH|DELETE /channels/{id}`, `GET /channels/settings-schema`', 'channels', '§2.2'],
+  ['`GET|POST /platform-accounts`, `GET|PATCH|DELETE /platform-accounts/{id}`', 'accounts', '§2.3'],
+  ['`GET|POST /routing-rules`, `PATCH|DELETE /routing-rules/{id}`', 'routing', '§2.4'],
+  ['`GET|POST /ideas`, `GET|PATCH|DELETE /ideas/{id}`, `POST /ideas/{id}/queue`, `POST /ideas/{id}/unqueue`', 'ideas (idea routing overrides §2.5 not used in stage 1)', '§2.6'],
+  ['`GET /productions`, `GET /productions/{id}`, `…/events?after=`, `…/jobs`, `POST …/retry {stage, variant_id}` → `202 {job_id}`, `POST …/cancel`', 'productions (variant retry and skip not used in stage 1)', '§2.7, §2.8'],
+  ['`GET /jobs/{id}`', 'job detail', '§2.9'],
+  ['`GET /stages` (with `active_module_id`)', 'stages, module proxy resolution', '§2.10'],
+  ['`GET|POST /pipelines`, `GET|PATCH /pipelines/{id}`, `PUT /pipelines/{id}/stages {stages, base_version}`', 'pipelines', '§2.11'],
+  ['`GET|POST /modules`, `GET|PATCH|DELETE /modules/{id}`, `POST …/activate|deactivate|refresh|token`, `GET …/info`, `GET …/health?live=`', 'modules', '§2.12'],
+  ['`ANY /modules/{id}/admin/v1/{path}`', 'module admin proxy (8 s core-side timeout)', '§2.12'],
+  ['`GET|PUT /modules/{owner}/settings`, `GET …/schema`, `GET …/versions[/{v}]`, `POST …/rollback {version, comment}` for any module, `core`, `admin-api`; `PUT /modules/admin-api/settings/schema`', 'module, core and admin-api settings', '§2.13, §2.14'],
+  ['`GET|POST /credentials`, `GET|PATCH|DELETE /credentials/{id}`, `PUT /credentials/{id}/value`', 'credentials', '§2.15'],
+  ['`GET /artifacts/presign?ref=&disposition=`, `GET /overview`', 'artifacts, overview', '§2.16'],
+  ['`GET /health`', 'readiness detail', '§5'],
+], [3.6, 1.6, 0.8]],
 ['h2', '9.2 Core relay to module admin endpoints'],
 ['ol', [
   'admin-api resolves the active module of the stage from `GET /internal/v1/stages` (`active_module_id`) and `GET /internal/v1/modules/{id}` (`admin_endpoints`), cached 30 s. No active module → `409 module_not_available`; path not listed → `409 module_capability_missing`.',
@@ -515,25 +541,26 @@ GET  /api/v1/video/golden/{id} -> {"id", "status", "results": [{"idea", "status"
 ['p', 'TOTP is required for every role and is not a setting. `public_origin` has a placeholder default; until it is set, unsafe requests fail the Origin check, so it is set at first deployment (05 §2).'],
 
 ['h1', '11. Proposed contract changes'],
-['h2', '11.1 To the core and modules'],
-['table', ['#', 'Proposal', 'Affects', 'Why'], [
-  ['C1', 'Core internal API additions needed by the panel: `GET /jobs/{id}`, `GET /artifacts/presign` (`disposition`), `GET /overview` (shape of §5.9), `GET /channels/settings-schema`, `Channel.accounts_count`, `GET|PATCH /pipelines/{id}` with `version` and `base_version` on `PUT …/stages`, `GET /modules/{id}/info`, `POST /modules/{id}/token`, `Module.stats_24h`, activate response `deactivated`, `validation_errors` and `base_version` on settings, rollback body `comment`, `PUT /credentials/{id}/value`, `CredentialMeta.ref` and `last_used_at`, `409 credential_in_use` with `references`, `Idea.allowed_actions` and `productions`, `ProductionDetail` with embedded variant data, `account_handle` and `allowed_actions`, events `?after=`, retry body `{stage, variant_id}` → `{job_id}`, `GET /stages` with `active_module_id`', 'core-04', 'carried from admin-panel-04 §13 P5–P11, P14; admin-api passes them through'],
-  ['C2', 'Settings endpoints `/internal/v1/modules/{id}/settings…` also serve owner `admin-api` (as for `core`), plus `PUT /internal/v1/modules/admin-api/settings/schema` to register its schema', 'core-04', 'system rule: admin-api settings live in the core'],
-  ['C3', 'Core proxy `ANY /internal/v1/modules/{id}/admin/{path}` (agreed with module-review, its P3): admin-api uses `ADMIN_CORE_TOKEN`; the core checks `admin_endpoints` from `/info`, forwards with the module token and passes `X-Admin-Actor`', 'core-04, module-review-04, module-video-04', 'modules verify one caller (the core); admin-api holds no module secrets. The core must keep module tokens recoverable (encrypted) to send them, not only hashed'],
-  ['C4', 'Header `X-Admin-Actor: <user id>` (as agreed with module-review) plus optional `X-Admin-Actor-Email` on admin-api → core calls; the core uses them as `author` of settings versions and `created_by` of ideas and passes `X-Admin-Actor` on through the module proxy', 'core-04', 'authorship without the core knowing panel users'],
-  ['C5', 'module-review `POST /admin/v1/keys` returns `deep_link` (published by admin-api as `start_link`); module-video `/admin/v1/runs`, `/prompts`, `/golden` reached through the core proxy (answers module-video PC5)', 'module-review-04, module-video-04', 'panel P12; one way for admin-api to reach every module'],
-  ['C6', 'Optional `Idempotency-Key` on core `POST` creates, deduplicated 24 h', 'core-04', 'safe resubmits from the panel'],
-  ['C7', 'Problem `type` URIs `urn:manufacture:problem:<code>` for all services; codes of §7 shared where they apply', 'all 04 documents', 'stable identifiers without a domain'],
-  ['C8', 'Bootstrap env for admin-api extended with `ADMIN_MASTER_KEY` (optional `ADMIN_MASTER_KEY_PREVIOUS`) and standard `OTEL_*` variables', 'AUTHORING §3', 'TOTP secrets must be encrypted at rest by admin-api'],
-  ['C9', 'Core lists use the conventions of §1 (`limit`, `cursor`, `next_cursor`, `from`/`to`) so admin-api passes cursors through unchanged', 'core-04', 'no re-paging in admin-api'],
-], [0.4, 3.4, 1.2, 2]],
+['h2', '11.1 To the core and modules (resolved)'],
+['p', 'All admin-api proposals are resolved. The core adopted them in core-04 §14 under its own numbers; admin-api keeps its numbering for reference.'],
+['table', ['#', 'Proposal', 'Resolution'], [
+  ['C1', 'core internal API additions needed by the panel (job detail, presign `disposition`, overview, channel settings schema, `accounts_count`, pipeline `version`/`base_version`, `stats_24h`, `deactivated`, `validation_errors`, rollback `comment`, `PUT /credentials/{id}/value`, `ref`, `last_used_at`, `credential_in_use` with `references`, idea `allowed_actions` and `productions`, embedded variant data, `account_handle`, events `?after=`, retry `{stage, variant_id}` → `{job_id}`, `active_module_id`)', 'resolved: core C25 (core-04 §2)'],
+  ['C2', 'settings of `core` and `admin-api` on `/modules/{owner}/settings…`, `PUT /modules/admin-api/settings/schema`', 'resolved: core C26 (§2.14)'],
+  ['C3', 'core proxy to module admin endpoints', 'resolved: core C11 (and C24); path `/internal/v1/modules/{id}/admin/v1/{path}`, 8 s core-side timeout (§2.12)'],
+  ['C4', '`X-Admin-Actor` and `X-Admin-Actor-Email`', 'resolved: core C14 (§1.3)'],
+  ['C5', 'module-review `deep_link`; module-video admin endpoints through the proxy', 'resolved without a core change: module-review returns `deep_link`; module-video uses C11'],
+  ['C6', '`Idempotency-Key` on core creates', 'resolved: core §1.6'],
+  ['C7', 'problem type `urn:manufacture:problem:<code>`', 'resolved: core C27 (§1.4)'],
+  ['C8', 'admin-api bootstrap env `ADMIN_MASTER_KEY`, `OTEL_*`', 'outside the core; to be added to AUTHORING §3 by the owner'],
+  ['C9', 'shared list conventions', 'resolved: core C28 (§1.5)'],
+], [0.4, 4, 2.1]],
 ['h2', '11.2 Admin-panel proposals P1–P14'],
 ['table', ['Panel item', 'Resolution in this document'], [
   ['P1', 'accepted: `POST /auth/setup`, `POST /auth/invite/accept` (both start a pending session), `POST /auth/totp/setup/confirm`, `invite_url` in `POST /users`'],
   ['P2', 'accepted: `/auth/me` shape of §4.2, `POST /auth/session/touch`, `X-Background: 1`'],
   ['P3', 'accepted: `GET|DELETE /auth/sessions`, `POST /auth/password`, `POST /users/{id}/totp/reset`'],
   ['P4', 'accepted: codes of §7 use the panel\'s names (`invalid_code`, `csrf_invalid`, `login_locked`, `totp_required` as 401); `errors[].pointer`'],
-  ['P5–P11, P14', 'accepted and forwarded to the core as C1; admin-api passes the fields through and filters `allowed_actions` by permission'],
+  ['P5–P11, P14', 'accepted; provided by the core (C25) under the core\'s names (§5); admin-api passes the fields through and filters `allowed_actions` by permission'],
   ['P10', 'accepted: `/admin-settings`; core settings stay on `/modules/core/settings` as the panel expects'],
   ['P12', 'accepted: module-review returns `deep_link`, admin-api publishes it as `start_link`'],
   ['P13', 'accepted: `POST /client-errors`, metric `admin_panel_client_errors_total{kind}` with a bounded `kind` list'],
