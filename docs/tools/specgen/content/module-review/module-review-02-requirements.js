@@ -39,7 +39,7 @@ module.exports = {
 ['h2', '2.3 Review card and delivery'],
 ['table', H, [
   ['FR-REV-030', 'For each job the bot MUST deliver a card to every active reviewer whose role is in `review.card_roles` (default `admin`, `reviewer`).', 'every decider sees the video', 'two reviewers + one observer → two cards'],
-  ['FR-REV-031', 'The card MUST contain: round, channel name, language, idea id and text, duration, resolution, file size, self-check summary, previous rejection reason (rounds > 1), production short id, deadline, and a URL button to the original file.', 'the reviewer decides from the card alone', 'snapshot test of rendered card in both languages'],
+  ['FR-REV-031', 'The card MUST contain: round, channel name, language, idea id and text, duration, resolution, file size, self-check summary, previous rejection reason (rounds > 1), production short id, deadline, and a URL button to the original file.', 'the reviewer decides from the card alone', 'snapshot test of the rendered card (`en`)'],
   ['FR-REV-032', 'The contact sheet MUST be sent as a photo before the video; in revise rounds the "what changed" text (`upstream.video.changes`) MUST be sent before the video.', 'buttons stay on the last message of the card', 'message order in the fake Telegram server'],
   ['FR-REV-033', 'If the video size is at most `telegram.upload_limit_mb` (50, verify against current documentation) the bot MUST send it with `sendVideo`; otherwise, if `upstream.video.preview` exists and fits the limit, it MUST send the preview with `sendVideo` and say that it is a preview; otherwise it MUST send the cover photo with the card and a presigned link and state that the file is over the limit.', 'Bot API upload limit; module-video provides a preview of at most 45 MiB (core C23)', 'size 49 MB → video; 60 MB with preview → preview + preview note; 60 MB without preview → cover + link'],
   ['FR-REV-034', 'After the first successful upload the bot MUST send the video to further reviewers by `file_id`.', 'one upload per job', 'storage `GetObject` called once for three reviewers'],
@@ -71,7 +71,7 @@ module.exports = {
 ], W],
 ['h2', '2.6 Settings, language, restart'],
 ['table', H, [
-  ['FR-REV-060', 'Every user-visible text MUST come from locale files `en` and `ru`; the bot language is the setting `language` (default `ru`), overridable per user with `/lang en|ru`.', 'owner reads Russian; no texts in code', 'test: both locale files have identical keys and placeholders'],
+  ['FR-REV-060', 'Every user-visible text MUST come from one locale file, `en.toml`, looked up by key; no user-visible text in code.', 'stage 1 is English only, including the bot; another interface language can be added later as a second locale file without code changes', 'test: every key used in code exists in `en.toml` and every placeholder is filled'],
   ['FR-REV-061', 'The module MUST NOT read any environment variable except `REVIEW_DATABASE_URL`, `REVIEW_LISTEN_ADDR`, `MODULE_CORE_URL`, `MODULE_CORE_TOKEN` (plus standard `OTEL_*` exporter variables).', 'no hard-coded configuration', 'static check of `os.environ` usage'],
   ['FR-REV-062', 'The module MUST poll `GET /internal/v1/modules/self/settings` every `settings_poll_interval` (60s) with `If-None-Match`, and MUST apply a newer settings version received that way or with a job without restart; long-polling parameters MAY require a poller restart done internally.', 'settings are edited in the panel', 'change `reminders.after`, next reminder uses it'],
   ['FR-REV-063', 'After a restart the bot MUST process updates received while it was down (no `drop_pending_updates`), MUST NOT apply any update twice, MUST re-send undelivered cards and flush both outboxes.', 'no lost press, no lost decision', 'kill -9 between decision and callback → callback sent after restart, once'],
@@ -109,7 +109,7 @@ module.exports = {
   ['NFR-REV-041', 'Operability: resources', '≤ 256 MiB RAM, ≤ 0.5 CPU steady; temp disk ≤ 2 × upload limit', 'container stats in staging'],
   ['NFR-REV-042', 'Operability: migrations', 'forward-only Alembic, applied by `review migrate` before `serve`; zero-downtime not required (single replica)', 'CI runs migrate on empty DB and on previous release DB'],
   ['NFR-REV-050', 'Maintainability: code quality', '`ruff` clean, `mypy --strict` on `src/`, test coverage ≥ 85 % lines on `domain/` and `api/`', 'CI'],
-  ['NFR-REV-051', 'Maintainability: texts', 'locale parity test; no user-visible literal in Python code', 'CI test + lint rule'],
+  ['NFR-REV-051', 'Maintainability: texts', 'locale key test; no user-visible literal in Python code', 'CI test + lint rule'],
   ['NFR-REV-060', 'Compatibility: contract', '`contract: 1`; unknown fields in job input ignored; new optional output fields only', 'contract tests with extra fields'],
   ['NFR-REV-061', 'Compatibility: external limits', 'every Telegram and S3 limit is a setting marked "verify against current documentation"', 'settings schema review'],
   ['NFR-REV-070', 'Cost: weekly summary', '≤ 0.50 USD per run for 300 reasons with the default model', '`review_summary_cost_usd_total`'],

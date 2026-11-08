@@ -116,7 +116,7 @@ module.exports = {
 ['ol', [
   'A higher `settings.version` arrives with a job or from the watcher (poll every `settings_poll_interval` with `If-None-Match`; 304 means unchanged). Validate against the schema; invalid → keep the current version, log error, metric unchanged (the Core already validated, so this indicates a schema mismatch).',
   'Swap the immutable settings object atomically; workers read it at each iteration.',
-  'If `telegram.bot_credential` or the credential value changed → restart the poller (F16 steps 3–5). If `language` changed → refresh `setMyCommands` for users without a personal language.',
+  'If `telegram.bot_credential` or the credential value changed → restart the poller (§6 step 3).',
 ]],
 ['h2', 'F16. Weekly rejection summary'],
 ['ol', [
@@ -197,7 +197,6 @@ module.exports = {
   ['Telegram user deletes the card', 'decision via `/pending` → Show (new card)'],
   ['Same job resent by the Core', 'idempotent on `job_id`; the Core guarantees at most one live review job per variant (core C17)'],
   ['Key sent inside a forwarded message or with spaces', 'trimmed; forwarded messages are accepted only if text matches the key regex exactly'],
-  ['Bot language changes while a prompt is open', 'later messages use the new language; already sent texts are not edited'],
   ['Reason contains HTML or prompt-like text', 'escaped in Telegram; passed verbatim as data to Core and Claude'],
 ], [2.4, 4]],
   ],
