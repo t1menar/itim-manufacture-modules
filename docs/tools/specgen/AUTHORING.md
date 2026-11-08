@@ -49,7 +49,7 @@ Use only straight ASCII quotes inside JS strings or escape them (`\'`).
 
 ## 3. System facts every spec must agree with
 
-Read `content/overview.js` (system overview) and `content/_v0.1/*.js` (first-draft service specs) before writing.
+Read `content/overview.js` (system overview) and the `core` documents (`content/core/*.js`, especially `core-04-contracts.js`) before writing.
 
 - Monorepo `github.com/t1menar/manufacture`; one top-level folder per service; specs in English.
 - **Stage 1 is English only — top priority.** Every video is produced in English; there is no localization step, no translated copies, no master/localized distinction. The channel is called **iTim** (channel id `itim`, brand id `itim`, language `en`) — it replaces every earlier name ("Under the Hood", `uth-en`, `uth-ru`); it is the only channel in stage 1. A Russian-language channel and localization are deferred: they return later as a separate `localize` stage and module. Keep the `language` field and the variant concept in data and contracts (exactly one variant per production in stage 1, language from the core setting `default_language: en`) so localization can return without schema changes, but do not design or describe localization behaviour beyond one "later" note. Channels, routing (language → channel), platform accounts live in the core database and are edited in the admin panel.
@@ -57,14 +57,14 @@ Read `content/overview.js` (system overview) and `content/_v0.1/*.js` (first-dra
 - Module ids: `video-claude` (stage `video`), `review-telegram` (stage `review`), `publish-social` (stage `publish`, Instagram Reels first; YouTube, TikTok adapters later).
 - Languages: Go for `core` and `admin-api`; Python 3.12+ for modules; React + TypeScript for `admin-panel`.
 - PostgreSQL 17, one database + role per service (`core`, `admin`, `video`, `review`, `publish`); MinIO for files at `s3://manufacture/<production_id>/<stage>/<attempt>/…`.
-- No hard-coded configuration: a service reads only bootstrap env vars (own DB URL, listen address, core URL and token for modules, master key for core). Everything else is settings stored and versioned in the **core** database and sent with every job as a snapshot. Platform API base URLs may be hard-coded.
+- No hard-coded configuration: a service reads only bootstrap env vars (own DB URL, listen address, core URL and token for modules, master key for core; admin-api also has `ADMIN_MASTER_KEY` for TOTP secrets and `ADMIN_CORE_TOKEN`). Everything else is settings stored and versioned in the **core** database and sent with every job as a snapshot. Platform API base URLs may be hard-coded.
 - Credentials are stored encrypted (AES-256-GCM) in the core database; modules fetch them by reference during a job; Vault later.
 - Open fonts only (Inter, JetBrains Mono). Instagram is the primary platform. Docker Compose deployment in stage 1.
 - Observability: Prometheus metrics at `/metrics` (prefix = service code in lower case: `core_`, `admin_`, `video_`, `review_`, `publish_`), JSON logs to Loki, OpenTelemetry traces. `production_id` is the trace correlation id, present in logs and spans, never a metric label.
 
 ## 4. Canonical cross-service contract
 
-These shapes are authoritative. `core-04-contracts` defines them in full; other services refer to them and must not change them. If a service needs something extra, add it as an optional field and list it under "Proposed contract changes" in its 04 document.
+These shapes are a summary. `core-04-contracts` is authoritative and defines them in full, including accepted changes C1–C28; other services refer to them and must not change them. If a service needs something extra, add it as an optional field and list it under "Proposed contract changes" in its 04 document.
 
 **Transport.** HTTP/1.1 JSON, UTF-8, internal network only (except admin-api behind the reverse proxy). Errors: RFC 9457 `application/problem+json` with `type`, `title`, `status`, `detail`, `code`. Timestamps RFC 3339 UTC. IDs: UUID v7 strings (ideas: integer).
 
@@ -78,7 +78,7 @@ These shapes are authoritative. `core-04-contracts` defines them in full; other 
 ```json
 {"name": "Video (Claude Code + renderer)", "version": "0.1.0", "contract": 1,
  "stages": ["video"], "settings_schema": {}, "input_schema": {}, "output_schema": {},
- "admin_endpoints": ["/admin/v1/glossary"]}
+ "admin_endpoints": ["/admin/v1/runs", "/admin/v1/prompts", "/admin/v1/golden"]}
 ```
 
 **Job request** (core → module, `POST /v1/jobs`, answer `202 {"job_id": "...", "status": "accepted"}`; repeated job_id = idempotent, return current state):

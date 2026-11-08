@@ -20,7 +20,7 @@ Each service folder holds six documents, named `<service>-0N-<name>.docx`:
 | `core/` | pipeline engine and module registry (Go) |
 | `admin-api/` | administrative gateway (Go) |
 | `admin-panel/` | web client (React + TypeScript) |
-| `module-video/` | stage `video`: idea → master video → localized copies (Python) |
+| `module-video/` | stage `video`: idea → research → script → capture → rendered English video (Python) |
 | `module-review/` | stage `review`: Telegram review bot (Python) |
 | `module-publish/` | stage `publish`: Instagram Reels and later platforms (Python) |
 
