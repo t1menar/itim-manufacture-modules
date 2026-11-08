@@ -198,7 +198,7 @@ defaults: base 30 s, factor 2, max 1800 s, jitter 0.2  ->  ~30 s, ~60 s, ~120 s,
 ['table', ['Action', 'Effect (one transaction, then best-effort module calls)'], [
   ['cancel production', 'production and idea `cancelled`; variants non-terminal → `cancelled`; queued jobs → `cancelled`; sent jobs → `cancelled` + `cancel_requested`, then `POST /v1/jobs/{id}/cancel`; their later callbacks get `409 job_not_current`'],
   ['cancel job', 'that job `cancelled`; its scope `needs_attention` (`cancelled_by_admin`)'],
-  ['retry production / variant', 'production `running`, idea `in_production`; for each `failed`/`needs_attention` variant (or the failed production-scope stage) a new chain at its current position; for `max_rounds` with `extra_rounds` see §9'],
+  ['retry production / variant', '`{stage, variant_id}` → `202 {job_id}`: production `running`, idea `in_production`; a new chain for that scope at `stage` (the stage offered in `allowed_actions`: the variant\'s current position, or the failed production-scope stage); for `max_rounds` with `extra_rounds` see §9'],
   ['skip variant', 'variant `skipped`, live jobs cancelled; production completion evaluated'],
   ['queue / unqueue idea', 'status change; `NOTIFY core_ideas`'],
 ], [1.6, 5]],

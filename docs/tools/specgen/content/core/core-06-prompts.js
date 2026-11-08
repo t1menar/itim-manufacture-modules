@@ -120,7 +120,7 @@ Produce:
   rules and resolve, idea routing, ideas, productions and variant actions, events, jobs, stages,
   pipelines, modules incl. admin proxy, module settings, core settings, credentials, artifacts
   presign, overview).
-- Middlewares: auth (401/403), X-Actor capture, Idempotency-Key store and replay
+- Middlewares: auth (401/403), X-Admin-Actor / X-Admin-Actor-Email capture, Idempotency-Key store and replay
   (Idempotent-Replayed header, 422 idempotency_key_reused), If-Match/ETag, cursor pagination,
   unknown_field rejection for admin writes.
 - api/openapi.yaml (3.1) describing every route, request and response; a test that loads it with
