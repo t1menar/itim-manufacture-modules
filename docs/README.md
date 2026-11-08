@@ -12,4 +12,4 @@ Specifications for the Manufacture system (Under the Hood channels). All specs a
 | `module-review/module-review.docx` | Telegram review bot (Python) |
 | `module-publish/module-publish.docx` | Publishing to Instagram Reels and future platforms (Python) |
 
-Each folder has the same name as the service repository in `~/projects/manufacture/`.
+Each folder has the same name as the service folder at the root of this repository (`github.com/t1menar/manufacture`).
