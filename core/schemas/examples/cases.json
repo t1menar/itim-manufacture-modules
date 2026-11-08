@@ -1,0 +1,45 @@
+{
+  "description": "schema -> example -> expected validity; checked by docs/tools/contractcheck",
+  "cases": [
+    {
+      "schema": "job-request.json",
+      "example": "job-request.revise.json",
+      "valid": true
+    },
+    {
+      "schema": "stage-review-output.json",
+      "example": "review-output.approved.json",
+      "valid": true
+    },
+    {
+      "schema": "stage-review-output.json",
+      "example": "review-output.rejected-whitespace.json",
+      "valid": false
+    },
+    {
+      "schema": "stage-publish-output.json",
+      "example": "publish-output.published.json",
+      "valid": true
+    },
+    {
+      "schema": "stage-publish-output.json",
+      "example": "publish-output.published-without-url.json",
+      "valid": false
+    },
+    {
+      "schema": "stage-metadata-output.json",
+      "example": "metadata-output.json",
+      "valid": true
+    },
+    {
+      "schema": "events/envelope.json",
+      "example": "envelope.job-succeeded.json",
+      "valid": true
+    },
+    {
+      "schema": "events/envelope.json",
+      "example": "envelope.job-event-without-fence.json",
+      "valid": false
+    }
+  ]
+}

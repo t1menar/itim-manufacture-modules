@@ -1,0 +1,15 @@
+{
+  "publications": [
+    {
+      "platform": "instagram",
+      "platform_account_id": "0193a1d0-0000-7000-8000-000000000004",
+      "handle": "@itim",
+      "external_post_id": "1789",
+      "url": "https://www.instagram.com/reel/example/",
+      "published_at": "2026-11-08T17:02:11Z",
+      "status": "published",
+      "error": null,
+      "intent_id": "0193a1f0-0000-7000-8000-000000000006"
+    }
+  ]
+}

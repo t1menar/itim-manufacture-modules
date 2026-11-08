@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "events/job.requested.json",
+  "description": "payload = job request (core-04 §7.2); callback.base_url stays for contract-1 compatibility and reconcile",
+  "$ref": "../job-request.json"
+}
