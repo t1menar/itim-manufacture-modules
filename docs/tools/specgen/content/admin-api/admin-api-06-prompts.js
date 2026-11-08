@@ -75,7 +75,7 @@ T('2', 'Hand-written `api/openapi.yaml` covering every endpoint of 04, generated
 
 Done when:
 - Every endpoint of 04 sections 3-6 exists with operationId, tag, request and response schemas, and the extensions x-permission, x-step-up, x-audit-action (03 section 6). Secret fields (password, new_password, current_password, value, token, key, start_link, recovery_codes, secret, otpauth_uri, code, recovery_code) are writeOnly or marked x-secret as appropriate.
-- Shared components: Problem (with errors[], current_version, author, saved_at, references), Page cursor envelope, User, Session, AuditEntry, Idea, ProductionSummary, ProductionDetail, Job, Module, SettingsVersion, CredentialMeta, AccessKey, Reviewer, Summary, GlossaryEntry, Overview.
+- Shared components: Problem (with errors[], current_version, author, saved_at, references), Page cursor envelope, User, Session, AuditEntry, Idea, ProductionSummary, ProductionDetail, Job, Module, SettingsVersion, CredentialMeta, AccessKey, Reviewer, Summary, VideoRun, VideoRunDetail, PromptVersions, GoldenRun, Overview.
 - oapi-codegen generates the chi strict server and models into internal/gen/api.gen.go; a second config generates a client for ../core/api/openapi.yaml into internal/gen/coreclient.gen.go. If the core document lacks endpoints listed in 04 section 9.1 as proposed (C1-C3), write them into admin-api/api/core-additions.yaml as a temporary overlay and list them in your summary; do not edit core/.
 - internal/server/routes.go declares the route table (03 section 2.1); a unit test fails if an OpenAPI operation has no route entry, if a route has no permission, or if x-permission differs from the table.
 - All handlers exist and return 501 not_implemented as an RFC 9457 problem.
@@ -165,8 +165,8 @@ Verify: fake core in test/contract generated from core/api/openapi.yaml (plus th
 ` + COMMON],
 
 ['h1', '10. Phase 7 — Module admin proxy and panel support endpoints'],
-T('7', 'Review keys, reviewers, summaries and glossary through the core proxy; client error reports', '04 §3.3, §4.5, §6, §9.2–9.3; 05 §6.4', 'relay tests with fake core proxy and fake modules pass, including field-name translation and capability errors', '≈ 600 lines'),
-['code', `Goal: implement the /review/* and /glossary endpoints through the core proxy and POST /client-errors.
+T('7', 'Review keys, reviewers, summaries and video runs, prompts and golden runs through the core proxy; client error reports', '04 §3.3, §4.5, §6, §9.2–9.3; 05 §6.4', 'relay tests with fake core proxy and fake modules pass, including field-name translation and capability errors', '≈ 600 lines'),
+['code', `Goal: implement the /review/* and /video/* endpoints through the core proxy and POST /client-errors.
 
 Done when:
 - Active module resolution and admin_endpoints capability check with a 30 s cache (05 section 6.4); 409 module_not_available and 409 module_capability_missing as specified.

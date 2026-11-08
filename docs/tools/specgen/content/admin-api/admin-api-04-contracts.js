@@ -39,7 +39,7 @@ module.exports = {
 ], [1.1, 5.4]],
 
 ['h1', '3. Endpoint index'],
-['p', 'Permissions are defined in 02 §4. ⇑ = step-up. "relay R" / "relay V" = core relay to the active module of stage `review` / `video` (§9.2). Audit "—" means reads that are not audited; every `401`/`403` on an authenticated route is audited regardless.'],
+['p', 'Permissions are defined in 02 §4. ⇑ = step-up. "relay R" / "relay V" = core proxy to the active module of stage `review` / `video` (§9.2). Audit "—" means reads that are not audited; every `401`/`403` on an authenticated route is audited regardless.'],
 ['h2', '3.1 Local'],
 ['table', EP, [
   ['GET', '`/auth/setup/status`', 'public', '—', 'local'],
@@ -119,9 +119,10 @@ module.exports = {
   ['DELETE', '`/review/reviewers/{id}`', '`review_access.write`', '`reviewer.revoke`', 'relay R → DELETE `/admin/v1/reviewers/{id}`'],
   ['GET', '`/review/summaries`, `/review/summaries/{id}`', '`review_access.read`', '—', 'relay R → GET `/admin/v1/summaries[/{id}]`'],
   ['POST', '`/review/summaries`', '`review_access.write`', '`review_summary.run`', 'relay R → POST `/admin/v1/summaries`'],
-  ['GET', '`/glossary`', '`glossary.read`', '—', 'relay V → GET `/admin/v1/glossary`'],
-  ['POST', '`/glossary`', '`glossary.write`', '`glossary.create`', 'relay V → POST `/admin/v1/glossary`'],
-  ['PATCH / DELETE', '`/glossary/{id}`', '`glossary.write`', '`glossary.update` / `.delete`', 'relay V → same `/admin/v1/glossary/{id}`'],
+  ['GET', '`/video/runs`, `/video/runs/{id}`', '`productions.read`', '—', 'relay V → GET `/admin/v1/runs[/{run_id}]`'],
+  ['GET', '`/video/prompts`', '`config.read`', '—', 'relay V → GET `/admin/v1/prompts`'],
+  ['POST', '`/video/golden`', '`golden.run`', '`golden.run`', 'relay V → POST `/admin/v1/golden`'],
+  ['GET', '`/video/golden/{id}`', '`config.read`', '—', 'relay V → GET `/admin/v1/golden/{id}`'],
 ], EW],
 
 ['h1', '4. Local endpoints'],
@@ -390,15 +391,20 @@ GET  /api/v1/review/summaries        -> {"items": [{"id", "period_start", "perio
 GET  /api/v1/review/summaries/{id}   -> {Summary, "output": {…}}     (output schema: module-review-06 §2.4)
 POST /api/v1/review/summaries {"window": "7d", "send": false}  -> 202 {"id": "…", "status": "running"}`],
 ['p', 'Telegram roles (`admin`, `reviewer`, `observer`) are module-review roles, independent of panel roles; `expires_in` 1h–720h. admin-api translates between the public names (from the panel contract) and module-review\'s names: `expires_in` ↔ `ttl`, `start_link` ↔ `deep_link`, key status `unused` ↔ `active`; other fields pass through. Module codes map to public ones: `key_already_used` → `409 conflict`, `ttl_too_long` and `invalid_request` → `422 validation_failed`, `not_found` → `404`; `actor_required` and `unauthorized` mean a relay misconfiguration → `502 upstream_error`. `key` and `start_link` are masked in audit and never logged. Summaries are produced by module-review with Claude; admin-api only shows them.'],
-['h2', '6.2 Glossary (module-video, stage video)'],
-['code', `GET  /api/v1/glossary?q=wal&language=en&limit=100
--> {"items": [{"id": "…", "term": "WAL", "language": "en", "definition": "write-ahead log", "note": "always upper case",
-               "updated_by": "owner@example.com", "updated_at": "…"}], "next_cursor": null}
-POST  /api/v1/glossary        {"term": "WAL", "language": "en", "definition": "write-ahead log", "note": "always upper case"} -> 201 {Entry}
-PATCH /api/v1/glossary/{id}   {"note": "…"}  -> 200 {Entry}
-DELETE /api/v1/glossary/{id}  -> 204`],
-['p', 'In stage 1 the glossary holds English terminology rules (spelling, expansions, notes) for the video module; `language` defaults to `en`. Field names to be confirmed with module-video (proposal C5). The stage 1 panel has no glossary screen; the endpoints exist so it can be added without an API change.'],
-
+['h2', '6.2 Video runs, prompts and golden runs (module-video, stage video)'],
+['code', `GET  /api/v1/video/runs?production_id=…&status=running&limit=50&cursor=…
+-> {"items": [VideoRun], "next_cursor": null}
+VideoRun = {"id": "…", "job_id": "…", "production_id": "…", "mode": "create|revise", "status": "…", "current_step": "render",
+            "cost_usd": 1.2, "started_at": "…", "finished_at": null}
+GET  /api/v1/video/runs/{id}  -> {VideoRun, "steps": [{"name", "status", "started_at", "finished_at", "cost_usd"}],
+                                  "checks": {…}, "agent_runs": [{"step", "turns", "cost_usd", "stop_reason"}],
+                                  "artifacts": [{"ref", "kind"}], "transcript_refs": ["s3://…"]}
+GET  /api/v1/video/prompts    -> {"items": [{"step": "script", "versions": ["1.0.0", "1.1.0"], "default": "1.0.0", "sha256": {"1.0.0": "…"}}]}
+POST /api/v1/video/golden     {"settings": {…}, "overrides": {"prompt_versions": {"script": "1.1.0"}}, "ideas": ["create-database"]}
+-> 202 {"golden_run_id": "…"}
+GET  /api/v1/video/golden/{id} -> {"id", "status", "results": [{"idea", "status", "failed_checks": [...], "duration_s", "cost_usd",
+                                   "contact_sheet_ref", "diff": {…}}], "created_at", "finished_at"}`],
+['p', 'Shapes follow module-video-04 (admin endpoints); nested `checks`, `diff` and `settings` are typed as free-form objects because module-video owns their schema. Transcript and artifact refs open through `/artifacts/presign`. A golden run spends model budget, so it needs `golden.run` (admin) and is audited with the body masked as usual. The stage 1 panel has no screens for these endpoints.'],
 ['h1', '7. Errors'],
 ['p', 'Body: `{"type": "urn:manufacture:problem:<code>", "title": "<fixed per code>", "status": <int>, "detail": "<human text>", "code": "<code>", "request_id": "…", "errors": [{"pointer": "/text", "code": "too_short", "message": "…"}]}`. Some codes add members: `version_conflict` → `current_version`, `author`, `saved_at`; `credential_in_use` → `references`. `detail` never contains secrets or upstream internals.'],
 ['table', ['Status', 'code', 'When'], [
@@ -461,7 +467,7 @@ DELETE /api/v1/glossary/{id}  -> 204`],
   ['module-review', '`DELETE /admin/v1/keys/{id}`', '`204`; `409 key_already_used`; `404`'],
   ['module-review', '`GET /admin/v1/reviewers`, `PATCH|DELETE /admin/v1/reviewers/{id}`', 'as §6.1'],
   ['module-review', '`GET /admin/v1/summaries[/{id}]`, `POST /admin/v1/summaries`', 'as §6.1 (`202` on POST)'],
-  ['module-video', '`GET|POST /admin/v1/glossary`, `PATCH|DELETE /admin/v1/glossary/{id}`', 'as §6.2'],
+  ['module-video', '`GET /admin/v1/runs[/{run_id}]`, `GET /admin/v1/prompts`, `POST /admin/v1/golden`, `GET /admin/v1/golden/{id}`', 'as §6.2 (module-video-04, admin endpoints)'],
 ], [1.2, 2.4, 3]],
 
 ['h1', '10. Settings JSON Schema (owner admin-api)'],
@@ -515,7 +521,7 @@ DELETE /api/v1/glossary/{id}  -> 204`],
   ['C2', 'Settings endpoints `/internal/v1/modules/{id}/settings…` also serve owner `admin-api` (as for `core`), plus `PUT /internal/v1/modules/admin-api/settings/schema` to register its schema', 'core-04', 'system rule: admin-api settings live in the core'],
   ['C3', 'Core proxy `ANY /internal/v1/modules/{id}/admin/{path}` (agreed with module-review, its P3): admin-api uses `ADMIN_CORE_TOKEN`; the core checks `admin_endpoints` from `/info`, forwards with the module token and passes `X-Admin-Actor`', 'core-04, module-review-04, module-video-04', 'modules verify one caller (the core); admin-api holds no module secrets. The core must keep module tokens recoverable (encrypted) to send them, not only hashed'],
   ['C4', 'Header `X-Admin-Actor: <user id>` (as agreed with module-review) plus optional `X-Admin-Actor-Email` on admin-api → core calls; the core uses them as `author` of settings versions and `created_by` of ideas and passes `X-Admin-Actor` on through the module proxy', 'core-04', 'authorship without the core knowing panel users'],
-  ['C5', 'module-video glossary entry fields `id`, `term`, `language`, `definition`, `note`, `updated_by`, `updated_at` (no `translation`, which belongs to later localization); module-review `POST /admin/v1/keys` returns `deep_link` (published as `start_link`)', 'module-video-04, module-review-04', 'stage 1 is English only; panel P12'],
+  ['C5', 'module-review `POST /admin/v1/keys` returns `deep_link` (published by admin-api as `start_link`); module-video `/admin/v1/runs`, `/prompts`, `/golden` reached through the core proxy (answers module-video PC5)', 'module-review-04, module-video-04', 'panel P12; one way for admin-api to reach every module'],
   ['C6', 'Optional `Idempotency-Key` on core `POST` creates, deduplicated 24 h', 'core-04', 'safe resubmits from the panel'],
   ['C7', 'Problem `type` URIs `urn:manufacture:problem:<code>` for all services; codes of §7 shared where they apply', 'all 04 documents', 'stable identifiers without a domain'],
   ['C8', 'Bootstrap env for admin-api extended with `ADMIN_MASTER_KEY` (optional `ADMIN_MASTER_KEY_PREVIOUS`) and standard `OTEL_*` variables', 'AUTHORING §3', 'TOTP secrets must be encrypted at rest by admin-api'],
@@ -531,7 +537,7 @@ DELETE /api/v1/glossary/{id}  -> 204`],
   ['P10', 'accepted: `/admin-settings`; core settings stay on `/modules/core/settings` as the panel expects'],
   ['P12', 'accepted: module-review returns `deep_link`, admin-api publishes it as `start_link`'],
   ['P13', 'accepted: `POST /client-errors`, metric `admin_panel_client_errors_total{kind}` with a bounded `kind` list'],
-  ['Additions for the panel', '`403 reauth_required` and `POST /auth/reauth` for ⇑ operations (setting `step_up_required`, default true): the panel must show a password + code dialog and repeat the request; until it does, an operator may set `step_up_required` to false. `remaining_recovery_codes`, `POST /auth/recovery-codes`, `/glossary` exist but have no panel screen yet.'],
+  ['Additions for the panel', '`403 reauth_required` and `POST /auth/reauth` for ⇑ operations (setting `step_up_required`, default true): the panel must show a password + code dialog and repeat the request; until it does, an operator may set `step_up_required` to false. `remaining_recovery_codes`, `POST /auth/recovery-codes` and the `/video/*` endpoints exist but have no panel screen yet.'],
 ], [1.2, 5.3]],
 
 ['h1', '12. Versioning and compatibility'],

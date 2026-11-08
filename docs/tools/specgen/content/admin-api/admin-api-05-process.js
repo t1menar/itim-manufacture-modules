@@ -272,7 +272,7 @@ CREATE TRIGGER audit_log_guard BEFORE UPDATE OR DELETE ON audit_log
   ['Wrong `public_origin` locks everyone out', 'operator runs `admin-api settings-set public_origin https://…` which writes through the core with `X-Admin-Actor: cli` and an audit row `admin.settings.update` actor `cli`'],
   ['Last admin lost phone and recovery codes', 'operator runs `admin-api totp-reset --email owner@example.com` on the host (DB access is the trust anchor); audit row with actor `cli`; the admin enrols again at next login'],
   ['No active review module', 'review key endpoints `409 module_not_available`; the panel links to Modules'],
-  ['Module lists no glossary endpoint', '`409 module_capability_missing`; glossary screen hidden by the panel via `/modules` data'],
+  ['Active video module lists no `/admin/v1/golden`', '`409 module_capability_missing` without calling the module'],
   ['Very large audit query', 'cursor paging with `limit` ≤ 200; queries without `at_from` are limited to the last 30 days'],
   ['Request body with a secret sent to a non-secret field', 'not detectable; the masker\'s name list is the safety net; credential values only ever go to `value`'],
 ], [2.2, 4.4]],
