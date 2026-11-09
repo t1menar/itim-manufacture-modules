@@ -31,3 +31,7 @@ Rebuild everything:
 ```bash
 cd tools/specgen && npm install && npm run build
 ```
+
+## Ideas (D21)
+
+Backlog ownership: `module-video/docs/IDEAS.md`. Shared JSON Schemas: `contracts/idea.json`, `contracts/topic.json`.

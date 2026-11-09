@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## On main
 
-#7–#12 merged (publish intents, P1 metadata, core gaps, module skeletons, D20 admin deactivate/retry/skip, review admin client).
+#7–#13 merged (publish intents, P1 metadata, core gaps, module skeletons, D20 admin, publish result + notify).
 
 ## Accepted decisions
 
@@ -13,14 +13,17 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 | D18 | Admin republish with reason |
 | D16 | Prompts in module-video |
 | D19 | Metadata from module-video |
-| **D20** | **Bot admin: `mfa_` only in env `MODULE_CORE_ADMIN_TOKEN` (not a Core credential ref) + `X-Admin-Actor: tg:<id>` allowlist; no admin-api in MVP** |
+| D20 | Bot admin token `mfa_` in `MODULE_CORE_ADMIN_TOKEN` + `X-Admin-Actor: tg:<id>`; no admin-api in MVP |
+| **D21** | **Ideas/topics only in module-video; statuses draft→ready→queued→dispatched→…; scheduler publishes `idea.ready` (orchestration hints only); reverse statuses via RabbitMQ; core stores only `idea_ref`; module loads idea by ref; core.`ideas` removed (no data migration); core = orchestration only** |
 
 ## Open
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| (this) publish result + notify | core: publications → intents + aggregate + notify outbox; module-publish fake runner; module-review notify + FakeTelegram | owner — **do not merge until green CI + review** |
+| #14 | module-publish job intake | owner — wait |
+| #15 | D21 ideas-in-video spec | owner — **do not merge until asked** |
+| #16 | module-review job intake | owner — wait |
 
 ## Still later
 
-Real Telegram polling; real Instagram Login; admin-api/panel; module-video owned by owner.
+Core drop `ideas` + consumer `idea.ready`; module-video tables/scheduler (owner); real Telegram/Instagram; admin-api/panel; further core domain carve-out (see audit).

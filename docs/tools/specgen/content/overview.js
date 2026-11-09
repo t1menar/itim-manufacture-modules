@@ -2,7 +2,7 @@ module.exports = {
   dir: '',
   file: 'Manufacture-Overview.docx',
   meta: { title: 'Manufacture — System Overview', subtitle: 'Abstract, processes and architecture at a high level of abstraction',
-    doc: 'Manufacture-Overview', version: '0.5' },
+    doc: 'Manufacture-Overview', version: '0.6' },
   blocks: [
 ['h1', '1. Abstract'],
 ['p', 'Manufacture is a system that turns a one-line video idea into finished short vertical videos for the **iTim** channel, sends each video for human review in Telegram, and publishes approved videos to the matching channel. Content (analysis, research, script, translation) is written by Claude; frames are drawn by a deterministic renderer, so every number and every line of code shown on screen comes from a real run of the real system.'],
@@ -22,13 +22,13 @@ module.exports = {
   'Core: pipeline engine, module registry, channels and routing, settings, credentials\nAdmin API (Go) and admin panel (web)\nModule **video**: idea → finished English video\nModule **review**: Telegram bot with access keys, approve / reject with a text reason\nModule **publish**: Instagram Reels (primary platform)\nMetrics, logs and traces for all services',
   'Localization (translated copies) and a Russian-language channel\nIntro module (channel intro is created later, plugged in as a module)\nSeveral modules on one stage running in parallel, with merged output\nYouTube Shorts and TikTok publishing adapters\nReach analytics and A/B testing\nAutomatic idea generation; voice rejection reasons\nSecrets in Vault',
 ]], [1, 1]],
-['note', '**MVP scope (updated 2026-11-09, D20):** stage-1 backend without web UI and without **admin-api**. Administration is the Telegram bot (module-review) plus direct database access. `admin-panel` and `admin-api` are deferred. Modules video (owner), review and publish stay in scope. The video module is written by the owner with Claude Code; the other services implement its contract and test it with a fake module.'],
+['note', '**MVP scope (updated 2026-11-09, D20/D21):** stage-1 backend without web UI and without **admin-api**. Telegram bot (module-review) is **review-only** (approve/reject + publish notify). Ideas/topics and other admin writes go through the databases. `admin-panel` and `admin-api` are deferred. Ideas live in module-video; a module scheduler publishes `idea.ready` to RabbitMQ (D21). Modules video (owner), review and publish stay in scope.'],
 ['h1', '3. Glossary'],
 ['table', ['Term', 'Meaning'], [
   ['Brand', 'The umbrella name of the content line: **iTim**. Channels belong to a brand.'],
   ['Channel', 'One publishing destination with one language. Stage 1 has one channel, **iTim** (`itim`, English); a Russian-language channel comes later with localization. A channel has platform accounts (Instagram first).'],
   ['Platform account', 'A channel\'s account on a platform (Instagram, later YouTube, TikTok) with its credentials.'],
-  ['Idea', 'A text line written by the owner, plus priority and notes. In stage 1 every idea is produced in English.'],
+  ['Idea', 'A structured backlog item owned by **module-video** (title, description, topic, tags, priority; D21). Core stores only opaque `idea_ref` (id+rev); the video module loads the document itself. Stage 1: English only.'],
   ['Production', 'One run of the pipeline for one idea. Identified by `production_id`, which is also the trace id everywhere.'],
   ['Variant', 'One language version of a production. Stage 1 always has exactly one variant, `en`; the concept stays so localization can return without a schema change.'],
   ['Stage', 'A step of the pipeline (`video`, `review`, `publish`, later `intro`, …). A stage has a scope: per production or per variant.'],
@@ -68,7 +68,7 @@ module.exports = {
 ]],
 ['h1', '6. End-to-end process'],
 ['ol', [
-  'The owner adds an idea in the admin panel: text, priority, notes.',
+  'The owner adds a topic and an idea in the **module-video database** (MVP): draft→ready→queued (D21). The video-module scheduler publishes orchestration-only `idea.ready`; the module later loads the idea by `idea_ref`.',
   'The Core takes the next idea, creates a production with one English variant and starts the pipeline stored in the database (stage 1: `video` → `review` → `publish`).',
   'Stage **video** (scope: production). The video module analyses the idea, researches what viewers need and the real source code, writes the script in English, captures real data in a sandbox, renders the video and packages it (loudness, cover, caption text). Result: one video file in MinIO plus a self-check report.',
   'Stage **review** (scope: variant). The review bot sends each variant to the reviewers in Telegram with **Approve** and **Reject** buttons. Reject requires a text reason.',
@@ -97,7 +97,7 @@ module.exports = {
 ['ul', [
   'PostgreSQL 17: one server in stage 1, one database and one role per service; a service can only connect to its own database. Migrations live in each service folder.',
   'MinIO: all files under `s3://manufacture/<production_id>/<stage>/<attempt>/…`. Intermediate files expire after 30 days; final videos, scripts and captured data are kept.',
-  'The Core database is the source of truth for ideas, productions, variants, jobs and their results (as references to MinIO objects with sha256 and size).',
+  'module-video is the source of truth for ideas and topics (D21). The Core database is the source of truth for productions, variants, jobs and their results (as references to MinIO objects with sha256 and size), holding only opaque `idea_ref` per production.',
 ]],
 ['h1', '10. Security and access'],
 ['ul', [
@@ -157,7 +157,8 @@ module.exports = {
   ['D17', 'No duplicate work at database level: one live production per idea, one live job per variant, unique publish intents (core-04 C32, C38)', 'owner\'s decision 2026-11-08'],
   ['D18', 'Republish of the same variant to the same account is admin-only and manual: `POST /internal/v1/publish-intents/{id}/republish` with a required reason (and `base_generation` / Idempotency-Key). No automatic republish; generation > 1 only via this path (accepted P2/C38)', 'owner\'s decision 2026-11-09'],
   ['D19', 'Title, description and tags (with per-platform caption/hashtags) are returned by **module-video** in the video stage result as required `variants[].metadata` (accepted P1/C39). There is no separate `content-claude` / module-content stage in the plan.', 'owner\'s decision 2026-11-09'],
-  ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin is the Telegram bot in module-review: it stores the core admin token `mfa_…` **only** in bootstrap env `MODULE_CORE_ADMIN_TOKEN` (never as a Core credentials ref) and, for allow-listed Telegram admins only, calls core admin routes with `Authorization: Bearer mfa_…` and `X-Admin-Actor: tg:<telegram_user_id>`. Module `mft_` remains for job callbacks. DB access stays as escape hatch; admin-api returns later with the panel.', 'owner\'s decision 2026-11-09; auth pattern confirmed'],
+  ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin paths that exist use the Telegram bot in module-review with core admin token `mfa_…` **only** in bootstrap env `MODULE_CORE_ADMIN_TOKEN` and `X-Admin-Actor: tg:<telegram_user_id>` for allow-listed admins. Module `mft_` remains for job callbacks. Clarified with D21: the bot\'s product job is review-only; idea/topic backlog is edited in the DB on MVP.', 'owner\'s decision 2026-11-09; auth pattern confirmed'],
+  ['D21', 'Ideas and topics live only in **module-video**. Statuses: `draft` → `ready` → `queued` → `dispatched` → `in_production` → `done`/`failed` (plus cancelled/archived). Scheduler in module-video publishes orchestration-only `idea.ready` (idea_ref + language/pipeline/priority) via transactional outbox; reverse statuses `idea.in_production`/`done`/`failed` over RabbitMQ with stable UUIDv5 message_id and module inbox dedup. Core stores only opaque `idea_ref` on the production, never idea body; video job input carries `idea_ref` and the module loads the document from its DB. Table core.`ideas` is removed with **no** data migration. Principle: core orchestrates the system; module domain stays in modules. Spec: `module-video/docs/IDEAS.md`.', 'owner\'s decision 2026-11-09; Q&A closed'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [
