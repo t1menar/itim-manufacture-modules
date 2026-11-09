@@ -1,0 +1,3 @@
+# English strings for the Telegram bot (phase 4+ fills commands and card texts).
+[access]
+denied = "This key is not valid."

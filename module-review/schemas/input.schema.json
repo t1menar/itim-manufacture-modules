@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture/schemas/review-telegram/input/1",
+  "title": "review job input (fields this module reads)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "idea",
+    "channels",
+    "upstream",
+    "review_round"
+  ],
+  "properties": {
+    "idea": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        }
+      }
+    },
+    "channels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "upstream": {
+      "type": "object",
+      "required": [
+        "video"
+      ],
+      "properties": {
+        "video": {
+          "type": "object",
+          "required": [
+            "video"
+          ],
+          "properties": {
+            "video": {
+              "type": "object",
+              "required": [
+                "ref"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string"
+                }
+              }
+            },
+            "contact_sheet": {
+              "type": "object"
+            },
+            "cover": {
+              "type": "object"
+            },
+            "checks": {
+              "type": "object"
+            },
+            "preview": {
+              "type": "object"
+            },
+            "provenance": {
+              "type": "object"
+            },
+            "changes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "review_round": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previous": {
+      "type": "object"
+    }
+  }
+}

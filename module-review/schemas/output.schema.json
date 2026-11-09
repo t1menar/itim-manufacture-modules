@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture/schemas/review-telegram/output/1",
+  "title": "review stage output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "reviewer",
+    "decided_at",
+    "round"
+  ],
+  "properties": {
+    "decision": {
+      "enum": [
+        "approved",
+        "rejected"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "\\S"
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "telegram_user_id"
+      ],
+      "properties": {
+        "telegram_user_id": {
+          "type": "integer"
+        },
+        "username": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "content_revision_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}
