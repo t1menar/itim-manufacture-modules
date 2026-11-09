@@ -11,11 +11,13 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from mvideo import __version__
-from mvideo.api import health, info, jobs, mcp_sandbox
+from mvideo.agents.prompts import PROMPTS_ROOT, PromptStore
+from mvideo.api import admin_prompts, health, info, jobs, mcp_sandbox
 from mvideo.api.health import AuthStatus, Check
 from mvideo.api.problems import install_problem_handlers
 from mvideo.config import BootstrapConfig
 from mvideo.core_client import CoreGateway
+from mvideo.db import prompts_repo
 from mvideo.db.engine import db_health_check, session_factory
 from mvideo.db.migrate import upgrade
 from mvideo.db.repo import LEASE_TTL_S
@@ -57,6 +59,7 @@ def create_app(
         and finalize is not None
     ):
         factory = session_factory(engine)
+        services = {"prompts": PromptStore(factory), **(services or {})}
         runner = Runner(
             factory=factory,
             storage=storage,
@@ -78,6 +81,8 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if engine is not None and migrate_on_start:
             await upgrade(engine)
+            async with session_factory(engine)() as s, s.begin():
+                await prompts_repo.seed_from_files(s, PROMPTS_ROOT)
         if worker is not None:
             worker.start()
         try:
@@ -113,4 +118,5 @@ def create_app(
     app.include_router(health.router)
     app.include_router(jobs.router)
     app.include_router(mcp_sandbox.router)
+    app.include_router(admin_prompts.router)
     return app

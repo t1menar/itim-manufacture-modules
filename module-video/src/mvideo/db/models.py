@@ -232,3 +232,47 @@ class GoldenRun(Base):
     report: Mapped[dict[str, Any] | None]
     created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
     finished_at: Mapped[dt.datetime | None]
+
+
+class PromptVersion(Base):
+    """An immutable runtime prompt version (D16 / C40). `skill` rows keep SKILL.md in `claude_md`."""
+
+    __tablename__ = "prompt_versions"
+    __table_args__ = (UniqueConstraint("step", "version", name="uq_prompt_versions_step_version"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    step: Mapped[str] = mapped_column(Text)
+    version: Mapped[str] = mapped_column(Text)
+    claude_md: Mapped[str] = mapped_column(Text)
+    task_md: Mapped[str] = mapped_column(Text, default="")
+    placeholders: Mapped[dict[str, Any]] = mapped_column(JSONB, default=list)  # list of names
+    meta: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    sha256: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+
+
+class PromptActive(Base):
+    """The version a step uses when the job settings say `active`; `revision` is the `If-Match` value."""
+
+    __tablename__ = "prompt_active"
+
+    step: Mapped[str] = mapped_column(Text, primary_key=True)
+    version: Mapped[str] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+
+
+class PromptAudit(Base):
+    __tablename__ = "prompt_audit"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+    actor: Mapped[str | None] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(Text)  # seed | create | activate
+    step: Mapped[str] = mapped_column(Text)
+    version: Mapped[str] = mapped_column(Text)
+    previous_version: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)

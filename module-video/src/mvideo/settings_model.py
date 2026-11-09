@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 StepName = Literal["analysis", "research", "script", "capture", "package", "script-revise"]
 Semver = Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")]
+PromptVersionRef = Annotated[
+    str, Field(pattern=r"^(active|[0-9]+\.[0-9]+\.[0-9]+)$")
+]  # `active`: the version activated in the module
 ImageRef = Annotated[str, Field(pattern=r"@sha256:[0-9a-f]{64}$")]
 HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
 
@@ -282,14 +285,14 @@ class VideoSettings(BaseModel):
 
     model: str = "claude-opus-5-5"
     models: dict[StepName, str] = {}
-    prompt_versions: dict[str, Semver] = {
-        "analysis": "1.0.0",
-        "research": "1.0.0",
-        "script": "1.0.0",
-        "capture": "1.0.0",
-        "package": "1.0.0",
-        "script-revise": "1.0.0",
-        "skill": "1.0.0",
+    prompt_versions: dict[str, PromptVersionRef] = {
+        "analysis": "active",
+        "research": "active",
+        "script": "active",
+        "capture": "active",
+        "package": "active",
+        "script-revise": "active",
+        "skill": "active",
     }
     limits: Limits = Limits()
     network: Network = Network()
