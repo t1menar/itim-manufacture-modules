@@ -76,10 +76,10 @@ class Worker:
                 log.exception("bot_poll_failed")
             await asyncio.sleep(0.2)
 
-    def start(self) -> None:
+    def start(self, *, use_fake_poll: bool = True) -> None:
         if self._loop is None:
             self._loop = asyncio.create_task(self._loop_forever(), name="review-worker")
-        if self._poll_updates is None:
+        if use_fake_poll and self._poll_updates is None:
             self._poll_updates = asyncio.create_task(self._poll_bot(), name="review-bot-poll")
 
     async def stop(self) -> None:

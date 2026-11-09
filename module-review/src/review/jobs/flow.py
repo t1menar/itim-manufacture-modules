@@ -16,7 +16,7 @@ from review.db.models import FINAL
 from review.jobs.cards import approve_reject_keyboard, card_caption, extract_meta, stale_keyboard
 from review.observability.logging import get_logger
 from review.telegram.bot import TelegramBot
-from review.telegram.fake import FakeTelegramUpdate
+from review.telegram.updates import TelegramUpdate
 
 log = get_logger(__name__)
 
@@ -96,7 +96,7 @@ class ReviewFlow:
             except Exception:
                 log.warning("progress_failed")
 
-    async def handle_update(self, upd: FakeTelegramUpdate) -> None:
+    async def handle_update(self, upd: TelegramUpdate) -> None:
         if not self._allowlist.contains(upd.user_id):
             return
         if upd.callback_data:
@@ -105,8 +105,11 @@ class ReviewFlow:
         if upd.text:
             await self._on_text(upd)
 
-    async def _on_callback(self, upd: FakeTelegramUpdate) -> None:
+    async def _on_callback(self, upd: TelegramUpdate) -> None:
         data = upd.callback_data or ""
+        if upd.callback_query_id:
+            with contextlib.suppress(Exception):
+                await self._bot.answer_callback_query(upd.callback_query_id)
         if data == "noop" or not data.startswith(("approve:", "reject:")):
             return
         action, _, raw_id = data.partition(":")
@@ -148,7 +151,7 @@ class ReviewFlow:
 
         await self._submit_decision(snapshot, decision="approved", reason=None, reviewer_id=upd.user_id)
 
-    async def _on_text(self, upd: FakeTelegramUpdate) -> None:
+    async def _on_text(self, upd: TelegramUpdate) -> None:
         text = (upd.text or "").strip()
         if not text or text.startswith("/"):
             return

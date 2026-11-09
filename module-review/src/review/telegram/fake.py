@@ -5,22 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from review.telegram.updates import TelegramUpdate
 
-@dataclass
-class FakeTelegramUpdate:
-    update_id: int
-    chat_id: int
-    user_id: int
-    text: str | None = None
-    callback_data: str | None = None
-    callback_message_id: int | None = None
-    reply_to_message_id: int | None = None
+# Back-compat alias used by older tests/imports.
+FakeTelegramUpdate = TelegramUpdate
 
 
 @dataclass
 class FakeTelegramBot:
     sent: list[dict[str, Any]] = field(default_factory=list)
-    _updates: list[FakeTelegramUpdate] = field(default_factory=list)
+    _updates: list[TelegramUpdate] = field(default_factory=list)
     _msg_seq: int = 0
 
     def _next_id(self) -> int:
@@ -37,7 +31,7 @@ class FakeTelegramBot:
         reply_to_message_id: int | None = None,
     ) -> None:
         self._updates.append(
-            FakeTelegramUpdate(
+            TelegramUpdate(
                 update_id=update_id,
                 chat_id=chat_id,
                 user_id=user_id,
@@ -54,18 +48,20 @@ class FakeTelegramBot:
         data: str,
         message_id: int,
         update_id: int = 1,
+        callback_query_id: str = "cb1",
     ) -> None:
         self._updates.append(
-            FakeTelegramUpdate(
+            TelegramUpdate(
                 update_id=update_id,
                 chat_id=chat_id,
                 user_id=user_id,
                 callback_data=data,
                 callback_message_id=message_id,
+                callback_query_id=callback_query_id,
             )
         )
 
-    def poll(self) -> list[FakeTelegramUpdate]:
+    def poll(self) -> list[TelegramUpdate]:
         out, self._updates = self._updates, []
         return out
 
@@ -124,5 +120,21 @@ class FakeTelegramBot:
                 "chat_id": chat_id,
                 "message_id": message_id,
                 "reply_markup": reply_markup,
+            }
+        )
+
+    async def answer_callback_query(
+        self,
+        callback_query_id: str,
+        *,
+        text: str | None = None,
+        show_alert: bool = False,
+    ) -> None:
+        self.sent.append(
+            {
+                "type": "answer_callback_query",
+                "callback_query_id": callback_query_id,
+                "text": text,
+                "show_alert": show_alert,
             }
         )

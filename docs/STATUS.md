@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## On main
 
-#7–#19 merged (through D23 intents-in-publish).
+#7–#20 merged (through real Telegram Bot API).
 
 ## Accepted decisions
 
@@ -22,13 +22,12 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #20 | module-review real Telegram Bot API | owner — wait |
 | #21 | module-publish real Instagram Graph Reels | owner — wait |
 
 ## Real integrations
 
-- **Telegram (module-review):** `REVIEW_TELEGRAM_MODE=fake|real`, token via `REVIEW_TELEGRAM_BOT_TOKEN`.
-- **Instagram (module-publish):** `PUBLISH_INSTAGRAM_MODE=fake|real`. Graph API Reels (`media_type=REELS` → poll `status_code` → `media_publish`). Token via env or Core credentials vault (`credential_ref` on account). **Blocker:** `video_url` must be public HTTPS — MinIO/presigned URLs not wired yet (`s3://` rejected with a clear error).
+- **Telegram (module-review):** **done (#20).** `REVIEW_TELEGRAM_MODE=fake|real`, token via `REVIEW_TELEGRAM_BOT_TOKEN` (never logged).
+- **Instagram (module-publish):** this PR — Graph Reels (`media_type=REELS` → poll `status_code` → `media_publish`). Token via env or Core credentials vault. **Blocker:** `video_url` must be public HTTPS — MinIO/presigned URLs not wired yet (`s3://` rejected with a clear error).
 
 ## module-video
 

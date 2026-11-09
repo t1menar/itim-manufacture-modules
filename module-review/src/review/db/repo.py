@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -261,3 +262,48 @@ async def run_by_card_message(session: AsyncSession, chat_id: int, message_id: i
     if card is None:
         return None
     return await get_run(session, card.run_id)
+
+
+async def get_bot_state_int(session: AsyncSession, key: str) -> int | None:
+    row = (await session.execute(text("SELECT value FROM bot_state WHERE key = :key"), {"key": key})).first()
+    if row is None:
+        return None
+    value = row[0]
+    if isinstance(value, dict) and "offset" in value:
+        try:
+            return int(value["offset"])
+        except (TypeError, ValueError):
+            return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
+async def set_bot_state_int(session: AsyncSession, key: str, offset: int) -> None:
+    await session.execute(
+        text(
+            """
+            INSERT INTO bot_state (key, value, updated_at)
+            VALUES (:key, CAST(:value AS jsonb), now())
+            ON CONFLICT (key) DO UPDATE
+              SET value = EXCLUDED.value, updated_at = now()
+            """
+        ),
+        {"key": key, "value": json.dumps({"offset": offset})},
+    )
+
+
+async def claim_telegram_update(session: AsyncSession, update_id: int) -> bool:
+    """Return True if this update_id was not seen before (idempotent insert)."""
+    result = await session.execute(
+        text(
+            """
+            INSERT INTO telegram_updates_seen (update_id)
+            VALUES (:uid)
+            ON CONFLICT (update_id) DO NOTHING
+            RETURNING update_id
+            """
+        ),
+        {"uid": update_id},
+    )
+    return result.first() is not None
