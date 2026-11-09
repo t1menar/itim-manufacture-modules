@@ -35,7 +35,7 @@ def _review_job(*, job_id: uuid.UUID, variant: uuid.UUID, round_n: int, callback
         "round": round_n,
         "variant": {"id": str(variant), "language": "en"},
         "input": {
-            "idea": {"id": 1, "text": "an idea text", "language": "en"},
+            "idea_ref": {"id": 1, "rev": 1},
             "channels": [],
             "upstream": {
                 "content_revision": {

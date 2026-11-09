@@ -29,7 +29,11 @@ def validate_job(raw: Any) -> ValidJob:
         raise ProblemError(
             422, "stage_unsupported", f"This module serves stage 'publish', not {request.stage!r}"
         )
-    intents = request.input.get("intents") if isinstance(request.input, dict) else None
+    inp = request.input if isinstance(request.input, dict) else {}
+    idea_ref = inp.get("idea_ref")
+    if not isinstance(idea_ref, dict) or idea_ref.get("id") is None or idea_ref.get("rev") is None:
+        raise ProblemError(422, "input_invalid", "Publish jobs need input.idea_ref {id,rev}")
+    intents = inp.get("intents")
     if not isinstance(intents, list) or not intents:
         raise ProblemError(422, "input_invalid", "Publish jobs need input.intents")
     try:
