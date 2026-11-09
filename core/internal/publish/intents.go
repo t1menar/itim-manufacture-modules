@@ -63,7 +63,7 @@ func (s *Store) CreateRevision(ctx context.Context, variantID, sourceJob uuid.UU
 	return out, err
 }
 
-// CreateRevisionInTx is CreateRevision inside the caller's transaction.
+// CreateRevisionInTx is CreateRevision inside the caller's transaction (video result → revision).
 func (s *Store) CreateRevisionInTx(ctx context.Context, tx pgx.Tx, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
 	if len(body) == 0 || body[0] != '{' {
 		return Revision{}, fmt.Errorf("body must be a JSON object")

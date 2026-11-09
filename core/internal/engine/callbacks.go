@@ -313,6 +313,11 @@ func (e *Engine) validateResultOutput(ctx context.Context, tx pgx.Tx, j jobRow, 
 
 // afterSuccess advances the pipeline, or runs the review revise loop when decision=rejected.
 func (e *Engine) afterSuccess(ctx context.Context, tx pgx.Tx, j jobRow, output json.RawMessage) error {
+	if j.stageID == "video" {
+		if err := e.snapshotVideoRevision(ctx, tx, j, output); err != nil {
+			return err
+		}
+	}
 	if j.stageID == "review" {
 		return e.afterReview(ctx, tx, j, output)
 	}

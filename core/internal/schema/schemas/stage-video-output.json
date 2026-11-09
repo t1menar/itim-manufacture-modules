@@ -15,7 +15,8 @@
         "required": [
           "language",
           "video",
-          "post"
+          "post",
+          "metadata"
         ],
         "properties": {
           "language": {
@@ -215,7 +216,7 @@
     },
     "metadata": {
       "type": "object",
-      "description": "proposed C39; platform limits are validated by adapters, not here",
+      "description": "Accepted C39/D19: produced by module-video with the reel. Platform limits validated by publish adapters, not here.",
       "required": [
         "title",
         "description",

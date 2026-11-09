@@ -16,6 +16,24 @@
         "hashtags": [
           "#pg"
         ]
+      },
+      "metadata": {
+        "title": "CREATE DATABASE copies a template",
+        "description": "PostgreSQL CREATE DATABASE clones template1; it does not create an empty database.",
+        "topics": [
+          "postgres",
+          "createdb"
+        ],
+        "platforms": {
+          "instagram": {
+            "caption": "CREATE DATABASE doesn't create anything. It copies.\n\n#postgresql #database",
+            "hashtags": [
+              "#postgresql",
+              "#database"
+            ],
+            "fields": {}
+          }
+        }
       }
     }
   ],
