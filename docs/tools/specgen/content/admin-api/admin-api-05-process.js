@@ -206,7 +206,7 @@ CREATE TRIGGER audit_log_guard BEFORE UPDATE OR DELETE ON audit_log
   FOR EACH ROW EXECUTE FUNCTION audit_log_guard();`],
 ['h2', '8.4 Masking'],
 ['ol', [
-  'Walk the JSON value recursively. Replace by `"***"` the value of any key that is `writeOnly`/`x-secret` in the OpenAPI schema of that operation, or whose lower-case name is in the list of FR-AAPI-072.',
+  'Walk the JSON value recursively. Replace by `"***"` the value of any key that is `writeOnly`/`x-secret` in the OpenAPI schema of that operation, or whose lower-case name is in the list of FR-AAPI-072 (which includes `claude_oauth_token`, `anthropic_api_key`, `api_key`).',
   'Strings longer than 2 000 characters are truncated with `…(truncated)`; total `before`/`after`/`details` size per row ≤ 64 KiB (larger: keep keys, drop values, flag `details.truncated`).',
   'Masking runs before the value reaches the audit writer, the logger or a span; the masker is a pure function covered by property tests.',
 ]],

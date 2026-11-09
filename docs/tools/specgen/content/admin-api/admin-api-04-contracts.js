@@ -274,12 +274,12 @@ ProductionSummary = {"id", "idea": {"id", "text"}, "status", "stage", "channel_i
 GET /api/v1/productions/{id}  -> ProductionDetail = ProductionSummary + {
   "pipeline_id": "default-v1", "current_position": 2, "trace_id": "0193…",
   "allowed_actions": ["retry:video", "cancel"], "language": "en",
-  "totals": {"cost_usd": 1.84, "tokens_in": 120000, "tokens_out": 8000}, "live_jobs": [JobSummary], "failure": null,
+  "totals": {"cost_usd": 1.84, "cost_estimated_usd": 0.0, "tokens_in": 120000, "tokens_out": 8000},   // cost_usd billed only; cost_estimated_usd = estimates (e.g. subscription use) "live_jobs": [JobSummary], "failure": null,
   "provenance": {"commit": "…", "settings_versions": {"video-claude": 7}, "prompt_versions": {…}},
   "variants": [{                                   // exactly one in stage 1
     "id": "0193…", "language": "en", "status": "in_review", "stage_id": "review", "position": 2,
     "review_round": 2, "max_rounds": 3, "channels": ["itim"],
-    "attention": null,   // {reason: max_rounds|blocked|timeout|publish_partial|retries_exhausted, job_id, message, retry_after?}
+    "attention": null,   // {reason: max_rounds|blocked|timeout|publish_partial|retries_exhausted, job_id, code?, message, retry_after?}  code e.g. agent_auth_failed
     "video": {"ref": "s3://manufacture/<pid>/video/2/final.mp4", "sha256": "…", "duration_s": 58.4,
               "size": 18234112, "width": 1080, "height": 1920, "fps": 30},
     "cover": {"ref": "s3://…"}, "contact_sheet": {"ref": "s3://…"},
@@ -297,11 +297,11 @@ GET /api/v1/productions/{id}/jobs                           -> {"items": [Job], 
 GET /api/v1/jobs/{id}  -> Job = {"id", "production_id", "variant_id", "stage_id", "module_id", "position", "attempt", "try",
      "max_attempts", "mode", "round", "status", "progress": {"percent", "step", "message", "at"}, "settings_version",
      "module_version", "run_after", "deadline", "dispatched_at", "started_at", "finished_at",
-     "metrics": {"cost_usd", "tokens_in", "tokens_out"}, "error": {"class", "message"} | null,
+     "metrics": {"cost_usd", "cost_estimated", "tokens_in", "tokens_out"}, "error": {"class", "message"} | null,
      "request": {…}, "output": {…}, "artifacts": [{"ref", "sha256", "size", "kind"}]}     // request, output, artifacts: detail only
 POST /api/v1/productions/{id}/retry   {"stage": "video", "variant_id": null}  -> 202 {"job_id": "…"}
 POST /api/v1/productions/{id}/cancel  {"reason": "duplicate idea"}           -> 200 {ProductionDetail}`],
-['p', 'The variant fields come from the canonical `video`, `review` and `publish` stage outputs as stored by the core; `account_handle` is joined by the core. Job `request` and `output` contain credential references (`cred:…`), never values. `allowed_actions` entries `retry:<stage>` and `cancel` are removed for callers without `productions.control`; the core actions `skip:<variant_id>` and `extra_rounds:<variant_id>` are removed for everyone, because admin-api does not expose them in stage 1 (later). Status values (core-04 §2.7, §2.9): production `running`, `done`, `failed`, `cancelled` (a production stays `running` while a variant needs attention); variant `pending`, `producing`, `in_review`, `revising`, `approved`, `publishing`, `published`, `skipped`, `failed`, `needs_attention`, `cancelled`; job `queued`, `dispatching`, `dispatched`, `running`, `succeeded`, `failed`, `timed_out`, `cancelled`. Unknown values are passed through as strings.'],
+['p', 'The variant fields come from the canonical `video`, `review` and `publish` stage outputs as stored by the core; `account_handle` is joined by the core. Job `request` and `output` contain credential references (`cred:…`), never values. `allowed_actions` entries `retry:<stage>` and `cancel` are removed for callers without `productions.control`; the core actions `skip:<variant_id>` and `extra_rounds:<variant_id>` are removed for everyone, because admin-api does not expose them in stage 1 (later). Status values (core-04 §2.7, §2.9): production `running`, `done`, `failed`, `cancelled` (a production stays `running` while a variant needs attention); variant `pending`, `producing`, `in_review`, `revising`, `approved`, `publishing`, `published`, `skipped`, `failed`, `needs_attention`, `cancelled`; job `queued`, `dispatching`, `dispatched`, `running`, `succeeded`, `failed`, `timed_out`, `cancelled`. Unknown values are passed through as strings. Cost: `totals.cost_usd` is billed cost only; `totals.cost_estimated_usd` sums jobs whose `metrics.cost_estimated` is true (for example use of the Claude subscription, which is not billed). The panel must label estimated cost as an estimate and never add it to billed cost. `ProductionSummary.cost_usd` is billed cost. `attention.code` is a machine code from the module or core (for example `agent_auth_failed`), shown next to `message`.'],
 ['h2', '5.4 Artifacts'],
 ['code', `GET /api/v1/artifacts/presign?ref=s3://manufacture/0193…/video/2/final.mp4&disposition=inline|attachment
 -> 200 {"url": "https://minio.example.com/manufacture/…?X-Amz-…", "expires_at": "2026-11-08T14:18:00Z"}
@@ -363,17 +363,18 @@ POST /api/v1/modules/video-claude/settings/rollback/5  {"comment": "back to 5"} 
 CredentialMeta = {"id": "0192…", "name": "instagram-itim", "ref": "cred:instagram-itim", "kind": "oauth_token",
                   "last4": "x9Qa", "expires_at": "2027-01-05T00:00:00Z", "allowed_modules": ["publish-social"],
                   "access": "job", "owner_module": "publish-social", "rotated_at": "…", "created_at": "…", "updated_at": "…", "last_used_at": "…"}
-POST  /api/v1/credentials  {"name": "anthropic-main", "kind": "api_key", "value": "<secret>", "expires_at": null, "allowed_modules": ["video-claude"]}
+POST  /api/v1/credentials  {"name": "anthropic-main", "kind": "claude_oauth_token", "value": "<secret from claude setup-token>", "expires_at": null, "allowed_modules": ["video-claude"]}
 -> 201 {CredentialMeta}
 PUT   /api/v1/credentials/{id}  {"value": "<secret>", "expires_at": "2027-01-05T00:00:00Z"}  -> 200 {CredentialMeta}
 PATCH /api/v1/credentials/{id}  {"name"?, "access"?, "allowed_modules"?, "owner_module"?, "expires_at"?}  -> 200 {CredentialMeta}
 DELETE /api/v1/credentials/{id} -> 204
    409 credential_in_use {"references": [{"kind": "platform_account", "id": "…", "name": "itim"}, {"kind": "settings", "id": "video-claude", "name": "…"}]}`],
-['p', '`name` is a slug of 2–64 characters. `kind` ∈ `api_key`, `oauth_token`, `bot_token`, `password`, `s3_keys`, `generic`; `access` ∈ `job`, `module` (core-04 §4.1). Access log items are `{principal, job_id, action, outcome, at}`. `value` is `writeOnly` and `x-secret`, 1–16 384 bytes; no response contains it, and admin-api does not decode a field named `value` from any credential response.'],
+['p', '`name` is a slug of 2–64 characters. `kind` ∈ `api_key`, `anthropic_api_key` (Anthropic API key), `claude_oauth_token` (token from `claude setup-token`, used by module-video in its default subscription mode), `oauth_token`, `bot_token`, `password`, `s3_keys`, `generic`; `access` ∈ `job`, `module` (core-04 §4.1). Access log items are `{principal, job_id, action, outcome, at}`. `value` is `writeOnly` and `x-secret`, 1–16 384 bytes; no response contains it, and admin-api does not decode a field named `value` from any credential response.'],
 ['h2', '5.9 Overview'],
 ['code', `GET /api/v1/overview
 -> 200 {"counts": {"ideas_queued": 3, "productions_running": 1, "waiting_review": 1, "published_today": 2, "failed_24h": 0,
-                   "needs_attention": 0, "jobs_queued": 0},
+                   "needs_attention": 0, "jobs_queued": 0,
+                   "cost_today_usd": 1.2, "cost_today_estimated_usd": 3.4},
         "active": [{"production_id": "…", "idea": {"id": 42, "text": "…"}, "status": "running", "stage": "video",
                     "progress": {"percent": 40, "step": "render"}, "started_at": "…"}],
         "waiting_review": [{"production_id": "…", "variant_id": "…", "idea_text": "…", "round": 2, "since": "…"}],
@@ -382,7 +383,7 @@ DELETE /api/v1/credentials/{id} -> 204
                     "resource": "credential", "resource_id": "…", "at": "…"}],
         "publications_today": [{"production_id": "…", "platform": "instagram", "account_handle": "itim",
                                 "url": "https://www.instagram.com/reel/…", "published_at": "…"}]}`],
-['p', 'Alert `kind`: `production_failed`, `needs_attention`, `review_waiting`, `module_unhealthy`, `credential_expiring`, `credential_expired`, `publish_failed`, `budget_exceeded`. The whole object is computed by the core; if the core is down admin-api returns `503 upstream_unavailable`.'],
+['p', 'Alert messages read `<code>: <message>`. Alert `kind`: `production_failed`, `needs_attention`, `review_waiting`, `module_unhealthy`, `credential_expiring`, `credential_expired`, `publish_failed`, `budget_exceeded` (counts billed cost only; estimates never trigger it). `counts.cost_today_usd` is billed cost for the UTC day and `counts.cost_today_estimated_usd` the estimate. The whole object is computed by the core; if the core is down admin-api returns `503 upstream_unavailable`.'],
 
 ['h1', '6. Module admin endpoints'],
 ['h2', '6.1 Review access (module-review, stage review)'],
