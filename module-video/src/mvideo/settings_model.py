@@ -131,6 +131,10 @@ class SandboxImage(BaseModel):
     env: dict[str, str] | None = None
     tmpfs: dict[str, str] | None = None
     cap_add: list[str] | None = None
+    exec_user: str | None = Field(
+        default=None,
+        description="user of the session processes (docker exec --user); default: the image user",
+    )
     ready_cmd: str
     version_cmd: str
     version_expect: str

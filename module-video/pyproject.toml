@@ -20,6 +20,7 @@ dependencies = [
     "numpy>=2",
     "fonttools>=4.50",
     "scipy>=1.13",
+    "docker>=7.2.0",
 ]
 
 [project.scripts]
@@ -53,6 +54,7 @@ packages = ["src/mvideo", "src/mvrender"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = ["docker: needs a Docker daemon and the image postgres:17 (skipped when absent)"]
 
 [tool.ruff]
 line-length = 110

@@ -54,9 +54,9 @@
    "op": "value",
    "name": "n_relations",
    "session": "psql",
-   "query": "SELECT count(*) FROM pg_class",
+   "query": "SELECT count(*) FROM pg_class WHERE NOT relisshared AND relkind IN ('r', 'i', 't', 'm', 'S')",
    "parse": "single",
-   "why_equal": "ScanSourceDatabasePgClass lists every pg_class row of the template (rlocatorlist)"
+   "why_equal": "ScanSourceDatabasePgClass lists the non-shared relations with storage of the template (rlocatorlist)"
   },
   {
    "op": "value",
@@ -97,6 +97,12 @@
   {
    "op": "run",
    "cmd": "c-create-x"
+  },
+  {
+   "op": "setup",
+   "session": "psql",
+   "text": "ROLLBACK;",
+   "why": "ends the failed transaction so the next command starts from an idle session"
   },
   {
    "op": "open",

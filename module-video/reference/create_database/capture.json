@@ -262,12 +262,12 @@
    "value": "222",
    "kind": "number",
    "session": "psql",
-   "query": "SELECT count(*) FROM pg_class",
+   "query": "SELECT count(*) FROM pg_class WHERE NOT relisshared AND relkind IN ('r', 'i', 't', 'm', 'S')",
    "after": "c-create-shop-2",
    "raw": [
     "222"
    ],
-   "why_equal": "ScanSourceDatabasePgClass lists every pg_class row of the template (rlocatorlist)"
+   "why_equal": "ScanSourceDatabasePgClass lists the non-shared relations with storage of the template (rlocatorlist)"
   },
   "n_pages": {
    "value": "14",
@@ -293,6 +293,11 @@
   }
  },
  "hidden": [
+  {
+   "session": "psql",
+   "text": "ROLLBACK;",
+   "status": "ok"
+  },
   {
    "session": "other",
    "text": "SELECT 1;",
