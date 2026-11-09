@@ -1,0 +1,39 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://manufacture.local/schemas/video/capture-1.json",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["format", "plan_sha256", "started_at", "finished_at", "image", "version", "limits", "sessions", "commands", "values"],
+ "properties": {
+  "format": {"const": "manufacture.capture/1"},
+  "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+  "started_at": {"type": "string"},
+  "finished_at": {"type": "string"},
+  "image": {"type": "object", "required": ["key", "ref", "digest"],
+           "properties": {"key": {"type": "string"}, "ref": {"type": "string"}, "digest": {"type": "string"}}},
+  "version": {"type": "object", "required": ["cmd", "output", "expect", "pass"],
+             "properties": {"cmd": {"type": "string"}, "output": {"type": "string"}, "expect": {"type": "string"}, "pass": {"type": "boolean"}}},
+  "limits": {"type": "object"},
+  "sessions": {"type": "object", "additionalProperties": {"type": "object", "required": ["kind"],
+              "properties": {"kind": {"enum": ["psql", "sh"]}, "database": {"type": "string"}, "workdir": {"type": "string"}}}},
+  "commands": {"type": "object", "additionalProperties": {"type": "object",
+    "required": ["seq", "session", "text", "prompt_before", "prompt_after", "output", "status", "duration_ms"],
+    "properties": {
+     "seq": {"type": "integer", "minimum": 1}, "session": {"type": "string"}, "text": {"type": "string"},
+     "prompt_before": {"type": "string"}, "prompt_after": {"type": "string"},
+     "output": {"type": "array", "items": {"type": "string"}},
+     "status": {"enum": ["ok", "error"]},
+     "tx_state": {"enum": ["idle", "in_tx", "failed"]},
+     "exit": {"type": "integer"},
+     "duration_ms": {"type": "integer", "minimum": 0}}}},
+  "values": {"type": "object", "additionalProperties": {"type": "object",
+    "required": ["value", "kind", "session", "query", "after", "raw", "why_equal"],
+    "properties": {
+     "value": {"type": "string"}, "kind": {"enum": ["number", "text"]}, "session": {"type": "string"},
+     "query": {"type": "string"}, "after": {"type": "string"},
+     "raw": {"type": "array", "items": {"type": "string"}}, "why_equal": {"type": "string"}}}},
+  "hidden": {"type": "array", "items": {"type": "object", "required": ["session", "text", "status"],
+            "properties": {"session": {"type": "string"}, "text": {"type": "string"}, "status": {"enum": ["ok", "error"]}}}},
+  "log_ref": {"type": "string"}
+ }
+}

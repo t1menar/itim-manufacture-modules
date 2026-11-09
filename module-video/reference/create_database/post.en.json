@@ -1,0 +1,10 @@
+{
+ "format": "manufacture.post/1",
+ "hook": "CREATE DATABASE creates nothing. It copies.",
+ "summary": "What really happens inside PostgreSQL when you run CREATE DATABASE: permissions, a ShareLock on template1, a new OID, a folder and a page-by-page copy through WAL.",
+ "topic_hashtags": [
+  "postgresql",
+  "database",
+  "sql"
+ ]
+}

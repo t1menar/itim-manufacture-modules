@@ -1,0 +1,33 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://manufacture.local/schemas/video/post-1.json",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "format",
+  "hook",
+  "summary",
+  "topic_hashtags"
+ ],
+ "properties": {
+  "format": {
+   "const": "manufacture.post/1"
+  },
+  "hook": {
+   "type": "string",
+   "maxLength": 150
+  },
+  "summary": {
+   "type": "string",
+   "maxLength": 900
+  },
+  "topic_hashtags": {
+   "type": "array",
+   "maxItems": 10,
+   "items": {
+    "type": "string",
+    "pattern": "^[a-z0-9_]{2,40}$"
+   }
+  }
+ }
+}

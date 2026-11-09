@@ -1,0 +1,163 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://manufacture.local/schemas/video/analysis-1.json",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "format",
+  "decision",
+  "topic",
+  "system",
+  "sandbox_image",
+  "angle",
+  "hooks",
+  "target_duration_s",
+  "what_to_run",
+  "audience",
+  "risks"
+ ],
+ "properties": {
+  "format": {
+   "const": "manufacture.analysis/1"
+  },
+  "decision": {
+   "enum": [
+    "go"
+   ]
+  },
+  "topic": {
+   "type": "string",
+   "maxLength": 120
+  },
+  "system": {
+   "type": "object",
+   "required": [
+    "name",
+    "version",
+    "repo",
+    "ref"
+   ],
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "version": {
+     "type": "string"
+    },
+    "repo": {
+     "type": "string"
+    },
+    "ref": {
+     "type": "string"
+    },
+    "entry_points": {
+     "type": "array",
+     "maxItems": 6,
+     "items": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "sandbox_image": {
+   "type": "string"
+  },
+  "angle": {
+   "type": "string",
+   "maxLength": 300
+  },
+  "hooks": {
+   "type": "array",
+   "minItems": 3,
+   "maxItems": 3,
+   "items": {
+    "type": "object",
+    "required": [
+     "lines",
+     "why"
+    ],
+    "properties": {
+     "lines": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+       "type": "string",
+       "maxLength": 40
+      }
+     },
+     "why": {
+      "type": "string",
+      "maxLength": 200
+     }
+    }
+   }
+  },
+  "target_duration_s": {
+   "type": "number",
+   "minimum": 30,
+   "maximum": 180
+  },
+  "what_to_run": {
+   "type": "array",
+   "minItems": 1,
+   "maxItems": 20,
+   "items": {
+    "type": "object",
+    "required": [
+     "purpose",
+     "command"
+    ],
+    "properties": {
+     "purpose": {
+      "type": "string"
+     },
+     "command": {
+      "type": "string"
+     },
+     "session": {
+      "enum": [
+       "psql",
+       "sh"
+      ]
+     }
+    }
+   }
+  },
+  "audience": {
+   "type": "object",
+   "required": [
+    "level",
+    "assumed_knowledge"
+   ],
+   "properties": {
+    "level": {
+     "enum": [
+      "beginner",
+      "intermediate"
+     ]
+    },
+    "assumed_knowledge": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "risks": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "maxLength": 200
+   }
+  },
+  "sources_consulted": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "format": "uri"
+   }
+  }
+ }
+}

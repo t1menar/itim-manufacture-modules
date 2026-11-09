@@ -1,0 +1,1778 @@
+{
+ "format": "manufacture.scenario/1",
+ "meta": {
+  "language": "en",
+  "idea_id": 1,
+  "title": "How CREATE DATABASE works",
+  "hook": "CREATE DATABASE creates nothing. It copies.",
+  "system": {
+   "name": "PostgreSQL",
+   "version": "17",
+   "repo": "https://github.com/postgres/postgres",
+   "ref": "REL_17_STABLE",
+   "commit": "e6b2f7c2b41d6261dac15825dede55e94ca35614"
+  },
+  "sandbox_image": "postgres17",
+  "target_duration_s": 160,
+  "cover": {
+   "scene": "s4-create",
+   "at": {
+    "at": "s9-pages.start"
+   }
+  }
+ },
+ "sources": {
+  "utility.c": "src/backend/tcop/utility.c",
+  "dbcommands.c": "src/backend/commands/dbcommands.c",
+  "bufmgr.c": "src/backend/storage/buffer/bufmgr.c"
+ },
+ "facts": [
+  "f1",
+  "f2",
+  "f3",
+  "f4",
+  "f5",
+  "f6",
+  "f7",
+  "f8",
+  "f9",
+  "f10",
+  "f11",
+  "f12",
+  "f13",
+  "f14",
+  "f15",
+  "f16"
+ ],
+ "captures": {
+  "oid_shop": {
+   "description": "OID of the database shop",
+   "kind": "number"
+  },
+  "oid_blog": {
+   "description": "OID of the database blog",
+   "kind": "number"
+  },
+  "n_relations": {
+   "description": "relations to copy from template1",
+   "kind": "number"
+  },
+  "n_pages": {
+   "description": "8 KB blocks of pg_class in template1",
+   "kind": "number"
+  },
+  "n_files": {
+   "description": "files in the template1 folder",
+   "kind": "number"
+  }
+ },
+ "scenes": [
+  {
+   "id": "s0-hook",
+   "kind": "terminal",
+   "hook": {
+    "impact_line": 1,
+    "line_step_s": 1.2
+   },
+   "captions": [
+    {
+     "at": {
+      "at_s": 0
+     },
+     "lines": [
+      "*CREATE DATABASE*",
+      "creates nothing.",
+      "It *copies*."
+     ]
+    }
+   ],
+   "terminal": {
+    "session": "psql",
+    "title": "psql — postgres@17",
+    "events": [
+     {
+      "annotation": [
+       "-- CREATE DATABASE shop;"
+      ]
+     }
+    ]
+   },
+   "min_duration_s": 4.6
+  },
+  {
+   "id": "s1-database",
+   "kind": "diagram",
+   "captions": [
+    {
+     "lines": [
+      "First: what is",
+      "a *database*?"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "Database",
+     "text": "a set of tables, functions and its own system catalogs; you always connect to one database",
+     "at": {
+      "at_s": 1.2
+     }
+    },
+    {
+     "term": "Cluster",
+     "text": "all databases of one Postgres server, stored in one PGDATA directory"
+    }
+   ],
+   "diagram": {
+    "layout": "row3",
+    "heading": "PostgreSQL cluster",
+    "footer": "a connection is always *to one database*",
+    "footer_at": {
+     "at_s": 2.4
+    },
+    "elements": [
+     {
+      "id": "db-postgres",
+      "type": "cylinder",
+      "slot": 0,
+      "name": "postgres",
+      "sub": "tables · indexes · catalogs",
+      "style": "plain",
+      "appear": {
+       "at_s": 0.9
+      }
+     },
+     {
+      "id": "db-template1",
+      "type": "cylinder",
+      "slot": 1,
+      "name": "template1",
+      "sub": "tables · indexes · catalogs",
+      "style": "template",
+      "appear": {
+       "at_s": 1.25
+      }
+     },
+     {
+      "id": "db-template0",
+      "type": "cylinder",
+      "slot": 2,
+      "name": "template0",
+      "sub": "tables · indexes · catalogs",
+      "style": "plain",
+      "appear": {
+       "at_s": 1.6
+      }
+     }
+    ]
+   },
+   "min_duration_s": 4.0,
+   "tail_s": 0
+  },
+  {
+   "id": "s2-pg-database",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "What databases exist?",
+      "*template1* is a template"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "pg_database",
+     "text": "a system table listing every database in the cluster",
+     "at": {
+      "at_s": 1.4
+     }
+    },
+    {
+     "term": "Template",
+     "text": "a model database: new databases are made by copying it"
+    }
+   ],
+   "terminal": {
+    "session": "psql",
+    "title": "psql — postgres@17",
+    "events": [
+     {
+      "cmd": "c-list-dbs",
+      "session": "psql",
+      "text": "SELECT oid, datname FROM pg_database;",
+      "cps": 28,
+      "post_s": 0.25,
+      "output": {
+       "lines": [
+        0,
+        6
+       ],
+       "gap_s": 0.045,
+       "highlight": [
+        "template1"
+       ]
+      }
+     }
+    ]
+   },
+   "tail_s": 1.5
+  },
+  {
+   "id": "s3-folders",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "On disk, a database",
+      "is just a *folder*"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "PGDATA",
+     "text": "Postgres' data directory: all databases, the WAL and the config live here",
+     "at": {
+      "at_s": 0.8
+     }
+    },
+    {
+     "term": "OID",
+     "text": "internal numeric identifier; folder name = the database's OID"
+    },
+    {
+     "term": "Files in the folder",
+     "text": "tables and indexes; _fsm and _vm are the free-space and visibility maps"
+    }
+   ],
+   "terminal": {
+    "session": "sh",
+    "title": "bash — /var/lib/postgresql/data",
+    "events": [
+     {
+      "cmd": "c-ls-base",
+      "session": "sh",
+      "text": "ls $PGDATA/base",
+      "cps": 20,
+      "output": {
+       "lines": [
+        0,
+        2
+       ],
+       "gap_s": 0.35
+      }
+     },
+     {
+      "wait_s": 0.8
+     },
+     {
+      "cmd": "c-ls-base1",
+      "session": "sh",
+      "text": "ls $PGDATA/base/1 | head -4",
+      "cps": 24,
+      "output": {
+       "lines": [
+        0,
+        3
+       ],
+       "gap_s": 0.12
+      }
+     }
+    ]
+   },
+   "panel": {
+    "layout": "row3",
+    "footer": "inside base/1: files 112, 113, 1247 … are tables and indexes",
+    "footer_at": {
+     "at": "c-ls-base1.output"
+    },
+    "elements": [
+     {
+      "id": "f-template1",
+      "type": "folder",
+      "slot": 0,
+      "label": "base/1",
+      "name": "template1",
+      "style": "template",
+      "appear": {
+       "at": "c-ls-base.output"
+      }
+     },
+     {
+      "id": "f-template0",
+      "type": "folder",
+      "slot": 1,
+      "label": "base/4",
+      "name": "template0",
+      "style": "plain",
+      "appear": {
+       "at": "c-ls-base.output",
+       "offset": 0.35
+      }
+     },
+     {
+      "id": "f-postgres",
+      "type": "folder",
+      "slot": 2,
+      "label": "base/5",
+      "name": "postgres",
+      "style": "plain",
+      "appear": {
+       "at": "c-ls-base.output",
+       "offset": 0.7
+      }
+     }
+    ]
+   },
+   "facts": [
+    "f3",
+    "f16"
+   ],
+   "tail_s": 2.0
+  },
+  {
+   "id": "s4-create",
+   "kind": "debugger",
+   "captions": [
+    {
+     "lines": [
+      "Let's create database shop.",
+      "and look *into the source* of Postgres"
+     ]
+    },
+    {
+     "at": {
+      "at": "debugger.resume"
+     },
+     "lines": [
+      "Done: *CREATE DATABASE*",
+      "≈ a copy of template1"
+     ]
+    }
+   ],
+   "terminal": {
+    "session": "psql",
+    "title": "psql — postgres@17",
+    "events": [
+     {
+      "cmd": "c-create-shop-2",
+      "session": "psql",
+      "text": "CREATE DATABASE shop;",
+      "cps": 18,
+      "output": {
+       "lines": [
+        0,
+        0
+       ]
+      }
+     },
+     {
+      "mark": "after_debugger"
+     }
+    ]
+   },
+   "debugger": {
+    "after": "c-create-shop-2",
+    "steps": [
+     {
+      "id": "s0-entry",
+      "file": "utility.c",
+      "stack": [
+       "standard_ProcessUtility"
+      ],
+      "ranges": [
+       [
+        766,
+        770
+       ]
+      ],
+      "seq": [
+       {
+        "n": 766,
+        "expect": "case T_CreatedbStmt:"
+       },
+       {
+        "n": 768,
+        "expect": "PreventInTransactionBlock",
+        "hold_s": 1.8
+       },
+       {
+        "n": 769,
+        "expect": "createdb(",
+        "hold_s": 1.4
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "nodeTag(parsetree)",
+        "value": {
+         "text": "T_CreatedbStmt",
+         "fact": "f1"
+        }
+       },
+       {
+        "at": 1,
+        "name": "isTopLevel",
+        "value": {
+         "text": "true",
+         "fact": "f14"
+        }
+       },
+       {
+        "at": 1,
+        "name": "IsTransactionBlock()",
+        "value": {
+         "text": "false",
+         "fact": "f14"
+        }
+       }
+      ],
+      "caption": [
+       "Step 0. Entering the command",
+       "first — the *transaction* check"
+      ],
+      "notes": [
+       {
+        "term": "Transaction",
+        "text": "a BEGIN … COMMIT group of commands: applied as a whole or rolled back as a whole"
+       }
+      ],
+      "status": "outside a transaction — OK",
+      "facts": [
+       "f1",
+       "f14"
+      ]
+     },
+     {
+      "id": "s1-perm",
+      "file": "dbcommands.c",
+      "stack": [
+       "standard_ProcessUtility",
+       "createdb"
+      ],
+      "ranges": [
+       [
+        962,
+        967
+       ]
+      ],
+      "seq": [
+       {
+        "n": 962,
+        "expect": "have_createdb_privilege",
+        "hold_s": 1.8
+       },
+       {
+        "n": 967,
+        "expect": "check_can_set_role",
+        "hold_s": 1.4
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "GetUserId()",
+        "value": {
+         "text": "10  /* postgres */",
+         "fact": "f2"
+        }
+       },
+       {
+        "at": 0,
+        "name": "have_createdb_privilege()",
+        "value": {
+         "text": "true",
+         "fact": "f2"
+        }
+       }
+      ],
+      "caption": [
+       "Step 1. Permissions",
+       "does the role have *CREATEDB*?"
+      ],
+      "notes": [
+       {
+        "term": "CREATEDB",
+        "text": "role attribute that allows creating databases; a superuser always can"
+       },
+       {
+        "term": "Role",
+        "text": "a Postgres user. OID 10 is the superuser created by initdb",
+        "facts": [
+         "f2"
+        ]
+       }
+      ],
+      "status": "role postgres: allowed",
+      "facts": [
+       "f2"
+      ]
+     },
+     {
+      "id": "s2-template",
+      "file": "dbcommands.c",
+      "stack": [
+       "standard_ProcessUtility",
+       "createdb"
+      ],
+      "ranges": [
+       [
+        971,
+        972
+       ],
+       [
+        978,
+        983
+       ]
+      ],
+      "seq": [
+       {
+        "n": 978,
+        "expect": "if (!dbtemplate)",
+        "hold_s": 0.9
+       },
+       {
+        "n": 979,
+        "expect": "\"template1\"",
+        "hold_s": 1.3
+       },
+       {
+        "n": 981,
+        "expect": "get_db_info(dbtemplate, ShareLock",
+        "hold_s": 2.2
+       }
+      ],
+      "watch": [
+       {
+        "at": 1,
+        "name": "dbtemplate",
+        "value": {
+         "text": "\"template1\"",
+         "fact": "f3"
+        }
+       },
+       {
+        "at": 2,
+        "name": "src_dboid",
+        "value": {
+         "text": "1",
+         "fact": "f3"
+        }
+       },
+       {
+        "at": 2,
+        "name": "src_istemplate",
+        "value": {
+         "text": "true",
+         "fact": "f3"
+        }
+       },
+       {
+        "at": 2,
+        "name": "src_allowconn",
+        "value": {
+         "text": "true",
+         "fact": "f3"
+        }
+       }
+      ],
+      "caption": [
+       "Step 2. The template",
+       "find *template1* and lock it"
+      ],
+      "notes": [
+       {
+        "term": "ShareLock",
+        "text": "a lock: others may copy the template too, but not drop it or connect"
+       },
+       {
+        "term": "get_db_info",
+        "text": "reads the template's row from pg_database and locks it"
+       }
+      ],
+      "status": "ShareLock on template1",
+      "facts": [
+       "f3",
+       "f4"
+      ]
+     },
+     {
+      "id": "s3-sessions",
+      "file": "dbcommands.c",
+      "stack": [
+       "standard_ProcessUtility",
+       "createdb"
+      ],
+      "ranges": [
+       [
+        1358,
+        1361
+       ],
+       [
+        1366,
+        1371
+       ]
+      ],
+      "seq": [
+       {
+        "n": 1359,
+        "expect": "can't have any active backends",
+        "hold_s": 1.6
+       },
+       {
+        "n": 1367,
+        "expect": "CountOtherDBBackends",
+        "hold_s": 2.2
+       }
+      ],
+      "watch": [
+       {
+        "at": 1,
+        "name": "notherbackends",
+        "value": {
+         "text": "0",
+         "fact": "f5"
+        }
+       },
+       {
+        "at": 1,
+        "name": "npreparedxacts",
+        "value": {
+         "text": "0",
+         "fact": "f5"
+        }
+       }
+      ],
+      "caption": [
+       "Step 3. Who else is connected?",
+       "the template must have no *sessions*"
+      ],
+      "notes": [
+       {
+        "term": "Backend",
+        "text": "a separate Postgres process serving one connection (session)"
+       },
+       {
+        "term": "Exception",
+        "text": "your own session to template1 doesn't count — see the comment"
+       }
+      ],
+      "status": "no other sessions",
+      "facts": [
+       "f5"
+      ]
+     },
+     {
+      "id": "s4-new-oid",
+      "file": "dbcommands.c",
+      "stack": [
+       "standard_ProcessUtility",
+       "createdb"
+      ],
+      "ranges": [
+       [
+        1379,
+        1379
+       ],
+       [
+        1402,
+        1407
+       ]
+      ],
+      "seq": [
+       {
+        "n": 1379,
+        "expect": "table_open(DatabaseRelationId",
+        "hold_s": 1.4
+       },
+       {
+        "n": 1405,
+        "expect": "GetNewOidWithIndex",
+        "hold_s": 2.2
+       },
+       {
+        "n": 1407,
+        "expect": "check_db_file_conflict",
+        "hold_s": 1.2
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "pg_database_rel",
+        "value": {
+         "text": "\"pg_database\"",
+         "fact": "f7"
+        }
+       },
+       {
+        "at": 1,
+        "name": "dboid",
+        "value": {
+         "capture": "oid_shop"
+        }
+       },
+       {
+        "at": 2,
+        "name": "check_db_file_conflict(dboid)",
+        "value": {
+         "text": "false",
+         "fact": "f8"
+        }
+       }
+      ],
+      "caption": [
+       "Step 4. A new OID",
+       "the database gets number *{oid_shop}*"
+      ],
+      "notes": [
+       {
+        "term": "OID",
+        "text": "Object Identifier — the internal numeric ID of an object"
+       },
+       {
+        "term": "{oid_shop}",
+        "text": "FirstNormalObjectId: the first OID for user objects; everything below is system",
+        "facts": [
+         "f6"
+        ]
+       }
+      ],
+      "status": "OID = {oid_shop}",
+      "facts": [
+       "f6",
+       "f7",
+       "f8"
+      ]
+     },
+     {
+      "id": "s5-catalog",
+      "file": "dbcommands.c",
+      "stack": [
+       "standard_ProcessUtility",
+       "createdb"
+      ],
+      "ranges": [
+       [
+        1421,
+        1422
+       ],
+       [
+        1455,
+        1458
+       ]
+      ],
+      "seq": [
+       {
+        "n": 1421,
+        "expect": "Anum_pg_database_datname",
+        "hold_s": 1.6
+       },
+       {
+        "n": 1455,
+        "expect": "heap_form_tuple(RelationGetDescr(pg_database_rel)",
+        "hold_s": 1.4
+       },
+       {
+        "n": 1458,
+        "expect": "CatalogTupleInsert",
+        "hold_s": 2.0
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "dbname",
+        "value": {
+         "text": "\"shop\"",
+         "fact": "f7"
+        }
+       },
+       {
+        "at": 1,
+        "name": "tuple",
+        "value": {
+         "text": "(16384, 'shop', …)",
+         "fact": "f7"
+        }
+       }
+      ],
+      "caption": [
+       "Step 5. Writing the catalog",
+       "a new row in *pg_database*"
+      ],
+      "notes": [
+       {
+        "term": "pg_database",
+        "text": "shared catalog of all databases in the cluster; on disk it's global/1262",
+        "facts": [
+         "f7"
+        ]
+       },
+       {
+        "term": "Tuple",
+        "text": "a table row in Postgres' internal format"
+       }
+      ],
+      "status": "pg_database += ({oid_shop}, shop)",
+      "facts": [
+       "f7"
+      ]
+     },
+     {
+      "id": "s6-strategy",
+      "file": "dbcommands.c",
+      "stack": [
+       "standard_ProcessUtility",
+       "createdb"
+      ],
+      "ranges": [
+       [
+        1508,
+        1513
+       ]
+      ],
+      "seq": [
+       {
+        "n": 1508,
+        "expect": "CREATEDB_WAL_LOG",
+        "hold_s": 1.8
+       },
+       {
+        "n": 1509,
+        "expect": "CreateDatabaseUsingWalLog",
+        "hold_s": 1.6
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "dbstrategy",
+        "value": {
+         "text": "CREATEDB_WAL_LOG",
+         "fact": "f9"
+        }
+       }
+      ],
+      "caption": [
+       "Step 6. How to copy?",
+       "the default strategy is *WAL_LOG*"
+      ],
+      "notes": [
+       {
+        "term": "WAL",
+        "text": "write-ahead log: a change goes to the log first, then to the data files"
+       },
+       {
+        "term": "FILE_COPY",
+        "text": "the old strategy (before PG 15): copies whole files, needs 2 checkpoints",
+        "facts": [
+         "f9"
+        ]
+       }
+      ],
+      "status": "strategy: WAL_LOG",
+      "facts": [
+       "f9"
+      ]
+     },
+     {
+      "id": "s7-folder",
+      "file": "dbcommands.c",
+      "stack": [
+       "createdb",
+       "CreateDatabaseUsingWalLog"
+      ],
+      "ranges": [
+       [
+        161,
+        169
+       ]
+      ],
+      "seq": [
+       {
+        "n": 162,
+        "expect": "GetDatabasePath(src_dboid",
+        "hold_s": 1.1
+       },
+       {
+        "n": 163,
+        "expect": "GetDatabasePath(dst_dboid",
+        "hold_s": 1.3
+       },
+       {
+        "n": 166,
+        "expect": "CreateDirAndVersionFile",
+        "hold_s": 2.2
+       },
+       {
+        "n": 169,
+        "expect": "RelationMapCopy",
+        "hold_s": 1.3
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "srcpath",
+        "value": {
+         "text": "\"base/1\"",
+         "fact": "f3"
+        }
+       },
+       {
+        "at": 1,
+        "name": "dstpath",
+        "value": {
+         "text": "\"base/16384\"",
+         "fact": "f10"
+        }
+       }
+      ],
+      "caption": [
+       "Step 7. A folder on disk",
+       "*base/{oid_shop}* is created"
+      ],
+      "notes": [
+       {
+        "term": "Folder (directory)",
+        "text": "a container for files in the file system; each database has its own"
+       },
+       {
+        "term": "PG_VERSION",
+        "text": "a file in the database folder holding the major version, here 17",
+        "facts": [
+         "f10"
+        ]
+       }
+      ],
+      "status": "mkdir base/{oid_shop}",
+      "facts": [
+       "f3",
+       "f10"
+      ]
+     },
+     {
+      "id": "s8-relations",
+      "file": "dbcommands.c",
+      "stack": [
+       "createdb",
+       "CreateDatabaseUsingWalLog"
+      ],
+      "ranges": [
+       [
+        171,
+        173
+       ],
+       [
+        182,
+        186
+       ]
+      ],
+      "seq": [
+       {
+        "n": 172,
+        "expect": "ScanSourceDatabasePgClass",
+        "hold_s": 2.2
+       },
+       {
+        "n": 183,
+        "expect": "foreach(cell, rlocatorlist)",
+        "hold_s": 1.4
+       },
+       {
+        "n": 186,
+        "expect": "srcrlocator = relinfo->rlocator",
+        "hold_s": 1.2
+       }
+      ],
+      "watch": [
+       {
+        "at": 0,
+        "name": "list_length(rlocatorlist)",
+        "value": {
+         "capture": "n_relations"
+        }
+       },
+       {
+        "at": 2,
+        "name": "srcrlocator.relNumber",
+        "value": {
+         "text": "1259  /* pg_class */",
+         "fact": "f11"
+        }
+       }
+      ],
+      "caption": [
+       "Step 8. What to copy?",
+       "*{n_relations}* relations from template1"
+      ],
+      "notes": [
+       {
+        "term": "Relation",
+        "text": "a table, index or sequence — each has its own file"
+       },
+       {
+        "term": "relfilenode",
+        "text": "the relation's file number: base/1/1259 is the pg_class table",
+        "facts": [
+         "f11"
+        ]
+       }
+      ],
+      "status": "relations to copy: {n_relations}",
+      "facts": [
+       "f11"
+      ]
+     },
+     {
+      "id": "s9-pages",
+      "file": "bufmgr.c",
+      "stack": [
+       "CreateAndCopyRelationData",
+       "RelationCopyStorageUsingBuffer"
+      ],
+      "ranges": [
+       [
+        4813,
+        4813
+       ],
+       [
+        4818,
+        4818
+       ],
+       [
+        4824,
+        4824
+       ],
+       [
+        4832,
+        4833
+       ],
+       [
+        4836,
+        4837
+       ]
+      ],
+      "loop": {
+       "iterations": {
+        "capture": "n_pages"
+       },
+       "full": 1,
+       "first": [
+        {
+         "n": 4813,
+         "expect": "for (blkno = 0",
+         "hold_s": 0.55
+        },
+        {
+         "n": 4818,
+         "expect": "ReadBufferWithoutRelcache(srclocator",
+         "hold_s": 0.6
+        },
+        {
+         "n": 4824,
+         "expect": "ReadBufferWithoutRelcache(dstlocator",
+         "hold_s": 0.5
+        },
+        {
+         "n": 4832,
+         "expect": "memcpy(dstPage, srcPage",
+         "hold_s": 0.65
+        },
+        {
+         "n": 4837,
+         "expect": "log_newpage_buffer",
+         "hold_s": 0.65
+        }
+       ],
+       "rest": [
+        {
+         "n": 4813,
+         "expect": "for (blkno = 0"
+        },
+        {
+         "n": 4832,
+         "expect": "memcpy(dstPage, srcPage"
+        },
+        {
+         "n": 4837,
+         "expect": "log_newpage_buffer"
+        }
+       ],
+       "fast_line_s": 0.14,
+       "counter": "blkno"
+      },
+      "watch": [
+       {
+        "at": 0,
+        "name": "srclocator.relNumber",
+        "value": {
+         "text": "1259",
+         "fact": "f11"
+        }
+       },
+       {
+        "at": 0,
+        "name": "nblocks",
+        "value": {
+         "capture": "n_pages"
+        }
+       },
+       {
+        "at": 0,
+        "name": "use_wal",
+        "value": {
+         "text": "true",
+         "fact": "f13"
+        }
+       }
+      ],
+      "caption": [
+       "Step 9. Copying pages",
+       "block by block through *WAL*"
+      ],
+      "notes": [
+       {
+        "term": "Page (block)",
+        "text": "an 8 KB unit of storage; a table file is a chain of pages",
+        "facts": [
+         "f12"
+        ]
+       },
+       {
+        "term": "memcpy",
+        "text": "copies the page's 8192 bytes from the template to the new database",
+        "facts": [
+         "f12"
+        ]
+       },
+       {
+        "term": "log_newpage_buffer",
+        "text": "writes the page copy to WAL — for replicas and recovery",
+        "facts": [
+         "f13"
+        ]
+       }
+      ],
+      "status": "pg_class: pages",
+      "facts": [
+       "f11",
+       "f12",
+       "f13"
+      ]
+     }
+    ]
+   },
+   "panel": {
+    "layout": "row3",
+    "footer": "…and so on for all {n_relations} relations",
+    "footer_at": {
+     "at": "debugger.resume"
+    },
+    "elements": [
+     {
+      "id": "p-template1",
+      "type": "folder",
+      "slot": 0,
+      "label": "base/1",
+      "name": "template1",
+      "style": "template"
+     },
+     {
+      "id": "p-lock",
+      "type": "pill",
+      "slot": 0,
+      "text": "ShareLock",
+      "style": "dark",
+      "appear": {
+       "at": "s2-template.line.981"
+      }
+     },
+     {
+      "id": "p-status",
+      "type": "pill",
+      "slot": 1,
+      "style": "accent",
+      "follow": {
+       "step": "s0-entry"
+      }
+     },
+     {
+      "id": "p-oid",
+      "type": "number",
+      "slot": 1,
+      "value": {
+       "capture": "oid_shop"
+      },
+      "appear": {
+       "at": "s4-new-oid.line.1405"
+      }
+     },
+     {
+      "id": "p-wal",
+      "type": "pill",
+      "slot": 1,
+      "text": "WAL",
+      "style": "accent",
+      "appear": {
+       "at": "s6-strategy.start",
+       "offset": 0.4
+      }
+     },
+     {
+      "id": "p-copy",
+      "type": "arrow",
+      "slot": 1,
+      "from_slot": 0,
+      "to_slot": 2,
+      "style": "muted",
+      "appear": {
+       "at": "s6-strategy.start",
+       "offset": 0.4
+      }
+     },
+     {
+      "id": "p-pages",
+      "type": "pages_flow",
+      "slot": 1,
+      "from_slot": 0,
+      "to_slot": 2,
+      "text": "pg_class: blocks copied",
+      "value": {
+       "capture": "n_pages"
+      },
+      "follow": {
+       "step": "s9-pages"
+      },
+      "appear": {
+       "at": "s9-pages.start"
+      }
+     },
+     {
+      "id": "p-newfolder",
+      "type": "folder",
+      "slot": 2,
+      "label": "base/{oid_shop}",
+      "name": "shop",
+      "style": "new",
+      "appear": {
+       "at": "s7-folder.line.166"
+      }
+     }
+    ]
+   },
+   "facts": [
+    "f3",
+    "f6",
+    "f10"
+   ],
+   "tail_s": 1.5
+  },
+  {
+   "id": "s5-proof",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "Let's verify:",
+      "the new folder is a *copy* of template1"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "wc -l",
+     "text": "counts output lines — here, the number of files in the folder",
+     "at": {
+      "at_s": 1.0
+     }
+    },
+    {
+     "term": "diff",
+     "text": "compares two lists; empty output means no difference"
+    }
+   ],
+   "terminal": {
+    "session": "sh",
+    "title": "bash — /var/lib/postgresql/data",
+    "events": [
+     {
+      "cmd": "c-ls-after",
+      "session": "sh",
+      "text": "ls $PGDATA/base",
+      "cps": 22,
+      "output": {
+       "lines": [
+        0,
+        3
+       ],
+       "gap_s": 0.12,
+       "highlight": [
+        "{oid_shop}"
+       ]
+      }
+     },
+     {
+      "cmd": "c-count-1",
+      "session": "sh",
+      "text": "ls $PGDATA/base/1 | wc -l",
+      "cps": 26,
+      "output": {
+       "lines": [
+        0,
+        0
+       ]
+      }
+     },
+     {
+      "cmd": "c-count-2",
+      "session": "sh",
+      "text": "ls $PGDATA/base/16384 | wc -l",
+      "cps": 26,
+      "output": {
+       "lines": [
+        0,
+        0
+       ],
+       "highlight": [
+        "{n_files}"
+       ]
+      }
+     },
+     {
+      "cmd": "c-diff",
+      "session": "sh",
+      "text": "diff <(ls $PGDATA/base/1) <(ls $PGDATA/base/16384)",
+      "cps": 34
+     }
+    ]
+   },
+   "panel": {
+    "layout": "pair",
+    "footer": "diff: empty — the file lists match",
+    "footer_at": {
+     "at": "c-diff.typed",
+     "offset": 0.5
+    },
+    "elements": [
+     {
+      "id": "cnt-src",
+      "type": "folder",
+      "slot": 0,
+      "label": "base/1",
+      "name": "template1",
+      "style": "template",
+      "appear": {
+       "at": "c-ls-after.output"
+      }
+     },
+     {
+      "id": "cnt-dst",
+      "type": "folder",
+      "slot": 1,
+      "label": "base/{oid_shop}",
+      "name": "shop",
+      "style": "new",
+      "appear": {
+       "at": "c-ls-after.output"
+      }
+     },
+     {
+      "id": "cnt-a",
+      "type": "counter",
+      "slot": 0,
+      "text": "files",
+      "value": {
+       "capture": "n_files"
+      },
+      "appear": {
+       "at": "c-count-1.output"
+      }
+     },
+     {
+      "id": "cnt-b",
+      "type": "counter",
+      "slot": 1,
+      "text": "files",
+      "value": {
+       "capture": "n_files"
+      },
+      "appear": {
+       "at": "c-count-2.output"
+      }
+     },
+     {
+      "id": "cnt-eq",
+      "type": "equals",
+      "slot": 0,
+      "appear": {
+       "at": "c-count-2.output",
+       "offset": 0.3
+      }
+     }
+    ]
+   },
+   "facts": [
+    "f3"
+   ],
+   "tail_s": 3.0
+  },
+  {
+   "id": "s6-transaction",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "First consequence:",
+      "only *outside a transaction*"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "PreventInTransactionBlock",
+     "text": "the very check from the first step: inside BEGIN the command fails at once",
+     "at": {
+      "at": "c-create-x.output",
+      "offset": 0.2
+     }
+    }
+   ],
+   "terminal": {
+    "session": "psql",
+    "title": "psql — postgres@17",
+    "events": [
+     {
+      "cmd": "c-begin",
+      "session": "psql",
+      "text": "BEGIN;",
+      "cps": 14,
+      "output": {
+       "lines": [
+        0,
+        0
+       ]
+      }
+     },
+     {
+      "cmd": "c-create-x",
+      "session": "psql",
+      "text": "CREATE DATABASE x;",
+      "cps": 20,
+      "output": {
+       "lines": [
+        0,
+        0
+       ]
+      }
+     }
+    ]
+   },
+   "panel": {
+    "layout": "single",
+    "elements": [
+     {
+      "id": "card-txn",
+      "type": "code_card",
+      "slot": 0,
+      "file": "utility.c",
+      "lines": [
+       766,
+       767,
+       768,
+       769
+      ],
+      "highlight": 768,
+      "expect": {
+       "768": "PreventInTransactionBlock"
+      },
+      "text": "The check runs *before* createdb(): files on disk can't be undone by ROLLBACK",
+      "appear": {
+       "at": "c-create-x.output",
+       "offset": 0.2
+      }
+     }
+    ]
+   },
+   "tail_s": 3.0
+  },
+  {
+   "id": "s7-busy",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "Second consequence: *template1*",
+      "must have no connections"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "Session",
+     "text": "an open connection to a database — e.g. a DBeaver tab or psql",
+     "at": {
+      "at": "c-create-blog.output",
+      "offset": 0.2
+     }
+    }
+   ],
+   "terminal": {
+    "session": "psql",
+    "title": "psql — postgres@17",
+    "events": [
+     {
+      "cmd": "c-create-blog",
+      "session": "psql",
+      "text": "CREATE DATABASE blog;",
+      "cps": 20,
+      "output": {
+       "lines": [
+        0,
+        1
+       ]
+      }
+     }
+    ]
+   },
+   "panel": {
+    "layout": "single",
+    "elements": [
+     {
+      "id": "card-busy",
+      "type": "code_card",
+      "slot": 0,
+      "file": "dbcommands.c",
+      "lines": [
+       1367,
+       1368,
+       1369,
+       1370
+      ],
+      "highlight": 1367,
+      "expect": {
+       "1367": "CountOtherDBBackends"
+      },
+      "text": "Otherwise the template could be copied *mid-change* — an inconsistent copy",
+      "appear": {
+       "at": "c-create-blog.output",
+       "offset": 0.2
+      }
+     }
+    ]
+   },
+   "tail_s": 3.0
+  },
+  {
+   "id": "s8-trick",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "Third consequence: *template1*",
+      "content lands in every new database"
+     ]
+    }
+   ],
+   "notes": [
+    {
+     "term": "Extension",
+     "text": "a package of functions and types; pg_trgm finds similar strings",
+     "at": {
+      "at_s": 0.6
+     }
+    },
+    {
+     "term": "template0",
+     "text": "the pristine template, never modified — use it for clean databases"
+    }
+   ],
+   "terminal": {
+    "session": "sh",
+    "title": "bash — /var/lib/postgresql/data",
+    "events": [
+     {
+      "cmd": "c-ext",
+      "session": "sh",
+      "text": "psql -d template1 -c \"CREATE EXTENSION pg_trgm;\"",
+      "cps": 30,
+      "output": {
+       "lines": [
+        0,
+        0
+       ]
+      }
+     },
+     {
+      "cmd": "c-db-blog",
+      "session": "sh",
+      "text": "psql -c \"CREATE DATABASE blog;\"",
+      "cps": 30,
+      "output": {
+       "lines": [
+        0,
+        0
+       ]
+      }
+     },
+     {
+      "cmd": "c-ext-list",
+      "session": "sh",
+      "text": "psql -d blog -c \"SELECT extname FROM pg_extension;\"",
+      "cps": 32,
+      "output": {
+       "lines": [
+        0,
+        4
+       ],
+       "highlight": [
+        "pg_trgm"
+       ]
+      }
+     }
+    ]
+   },
+   "panel": {
+    "layout": "row3",
+    "elements": [
+     {
+      "id": "tr-src",
+      "type": "folder",
+      "slot": 0,
+      "label": "base/1",
+      "name": "template1",
+      "style": "template",
+      "appear": {
+       "at_s": 0.3
+      }
+     },
+     {
+      "id": "tr-ext1",
+      "type": "pill",
+      "slot": 0,
+      "text": "pg_trgm",
+      "style": "accent",
+      "appear": {
+       "at": "c-ext.output"
+      }
+     },
+     {
+      "id": "tr-copy",
+      "type": "arrow",
+      "slot": 1,
+      "from_slot": 0,
+      "to_slot": 2,
+      "style": "accent",
+      "appear": {
+       "at": "c-db-blog.output"
+      }
+     },
+     {
+      "id": "tr-copy-lbl",
+      "type": "pill",
+      "slot": 1,
+      "text": "copy",
+      "style": "accent",
+      "appear": {
+       "at": "c-db-blog.output"
+      }
+     },
+     {
+      "id": "tr-dst",
+      "type": "folder",
+      "slot": 2,
+      "label": "base/{oid_blog}",
+      "name": "blog",
+      "style": "new",
+      "appear": {
+       "at": "c-db-blog.output"
+      }
+     },
+     {
+      "id": "tr-ext2",
+      "type": "pill",
+      "slot": 2,
+      "text": "pg_trgm",
+      "style": "accent",
+      "appear": {
+       "at": "c-ext-list.output",
+       "offset": 0.2
+      }
+     }
+    ]
+   },
+   "facts": [
+    "f3"
+   ],
+   "tail_s": 3.0
+  },
+  {
+   "id": "s9-outro",
+   "kind": "terminal",
+   "captions": [
+    {
+     "lines": [
+      "CREATE DATABASE =",
+      "*a copy of a template*"
+     ]
+    }
+   ],
+   "terminal": {
+    "session": "psql",
+    "title": "psql — postgres@17",
+    "events": [
+     {
+      "annotation": [
+       "-- CREATE DATABASE shop;",
+       "--   1. checks: permissions, template, sessions",
+       "--   2. OID {oid_shop} + a row in pg_database",
+       "--   3. mkdir base/{oid_shop}",
+       "--   4. {n_relations} relations, page by page via WAL"
+      ]
+     }
+    ]
+   },
+   "panel": {
+    "layout": "single",
+    "footer": "Source: github.com/postgres/postgres · REL_17_STABLE",
+    "footer_at": {
+     "at_s": 1.2
+    },
+    "elements": [
+     {
+      "id": "o1",
+      "type": "label",
+      "slot": 0,
+      "text": "*ShareLock* on template1, nobody connected to it",
+      "appear": {
+       "at_s": 0.5
+      }
+     },
+     {
+      "id": "o2",
+      "type": "label",
+      "slot": 0,
+      "text": "a new *OID* and a row in pg_database",
+      "appear": {
+       "at_s": 0.85
+      }
+     },
+     {
+      "id": "o3",
+      "type": "label",
+      "slot": 0,
+      "text": "folder base/<OID> and a *page copy* via WAL",
+      "appear": {
+       "at_s": 1.2
+      }
+     }
+    ]
+   },
+   "min_duration_s": 6.0,
+   "tail_s": 0
+  }
+ ]
+}
