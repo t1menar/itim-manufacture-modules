@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from mvideo.agents.launcher import ReplayLauncher
-from mvideo.contract import Channel, ChannelSettings, Idea, JobInput
+from mvideo.contract import Channel, ChannelSettings, IdeaRef, JobInput
 from mvideo.core_client import Credential
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
@@ -53,7 +53,7 @@ def make_ctx(launcher: ReplayLauncher, storage: MemStorage | None = None, **sett
     return RunContext(
         run_id=uuid.uuid4(), job_id=uuid.uuid4(), attempt=1, production_id=uuid.uuid4(), mode="create",
         input=JobInput(
-            idea=Idea(id=42, text="Detailed implementation of CREATE DATABASE in PostgreSQL", language="en"),
+            idea_ref=IdeaRef(id=42, rev=1),
             channels=[
                 Channel(id="itim", language="en", name="iTim", settings=ChannelSettings(reading_wps=2.6))
             ],
@@ -61,7 +61,7 @@ def make_ctx(launcher: ReplayLauncher, storage: MemStorage | None = None, **sett
         settings=VideoSettings.model_validate(settings_values(**settings)),
         storage=storage or MemStorage(),  # type: ignore[arg-type]
         credential=Credential("cred:x", "claude_oauth_token", "sk-secret"),
-        launcher=launcher, git_cache=FakeGit(),
+        launcher=launcher, git_cache=FakeGit(), idea=refdata.idea_document(),
     )  # fmt: skip
 
 

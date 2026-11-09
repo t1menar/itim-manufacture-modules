@@ -46,7 +46,7 @@ def job_request(
     mode: str = "create",
     deadline: dt.datetime | None = None,
     settings: dict[str, Any] | None = None,
-    input_text: str | None = None,
+    idea_ref: dict[str, int] | None = None,
     **overrides: Any,
 ) -> dict[str, Any]:
     jid = job_id or uuid.uuid4()
@@ -58,11 +58,7 @@ def job_request(
         "mode": mode,
         "variant": None,
         "input": {
-            "idea": {
-                "id": 42,
-                "text": input_text or "Why CREATE DATABASE copies a template",
-                "language": "en",
-            },
+            "idea_ref": idea_ref or {"id": 42, "rev": 1},
             "channels": [{"id": "itim", "language": "en", "name": "iTim", "settings": {}}],
         },
         "settings": {"version": 7, "values": settings if settings is not None else settings_values()},
@@ -108,3 +104,44 @@ class FakeCore:
 
 
 __all__ = ["CoreRejected", "CoreUnavailable", "FakeCore", "job_request", "settings_values"]
+
+
+async def seed_idea(
+    factory: Any,
+    *,
+    idea_id: int = 42,
+    rev: int = 1,
+    title: str = "Why CREATE DATABASE copies a template",
+    status: str = "dispatched",
+    priority: int = 0,
+    active_topic: bool = True,
+    topic_code: str = "postgres_internals",
+    **fields: Any,
+) -> None:
+    """Insert a topic and an idea with a fixed id and rev (idempotent)."""
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from mvideo.db.models import Idea, IdeaRevision, Topic
+    from tests import refdata
+
+    async with factory() as s, s.begin():
+        await s.execute(
+            pg_insert(Topic)
+            .values(code=topic_code, title="PostgreSQL internals", default_tags=["postgresql"],
+                    default_platforms=["instagram"], active=active_topic)
+            .on_conflict_do_nothing(index_elements=["code"])
+        )  # fmt: skip
+        topic_id = (await s.execute(select(Topic.id).where(Topic.code == topic_code))).scalar_one()
+        values = {
+            "id": idea_id, "topic_id": topic_id, "title": title, "description": "It copies template1.",
+            "language": "en", "priority": priority, "status": status, "rev": rev, **fields,
+        }  # fmt: skip
+        await s.execute(pg_insert(Idea).values(**values).on_conflict_do_nothing(index_elements=["id"]))
+        # older revisions exist only as snapshots, as in production
+        doc = refdata.idea_document(id=idea_id, rev=rev, idea_ref=f"idea:{idea_id}:v{rev}", title=title)
+        await s.execute(
+            pg_insert(IdeaRevision)
+            .values(idea_id=idea_id, rev=rev, document=doc)
+            .on_conflict_do_nothing(index_elements=["idea_id", "rev"])
+        )

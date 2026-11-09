@@ -21,6 +21,9 @@ from mvideo.db import prompts_repo
 from mvideo.db.engine import db_health_check, session_factory
 from mvideo.db.migrate import upgrade
 from mvideo.db.repo import LEASE_TTL_S
+from mvideo.ideas.relay import AmqpPublisher
+from mvideo.ideas.runtime import IdeaRuntime
+from mvideo.ideas.scheduler import SchedulerParams
 from mvideo.observability.metrics import Metrics
 from mvideo.pipeline.runner import AuthState, Finalize, Runner
 from mvideo.pipeline.steps.base import Step
@@ -85,9 +88,13 @@ def create_app(
                 await prompts_repo.seed_from_files(s, PROMPTS_ROOT)
         if worker is not None:
             worker.start()
+        if idea_runtime is not None:
+            idea_runtime.start()
         try:
             yield
         finally:
+            if idea_runtime is not None:
+                await idea_runtime.stop()
             if worker is not None:
                 await worker.stop()
             if engine is not None:
@@ -101,6 +108,17 @@ def create_app(
         openapi_url=None,
         lifespan=lifespan,
     )
+    idea_runtime: IdeaRuntime | None = None
+    if engine is not None and config.amqp_url:
+        idea_runtime = IdeaRuntime(
+            session_factory(engine),
+            AmqpPublisher(config.amqp_url, config.amqp_prefix),
+            SchedulerParams(config.ideas_paused, config.ideas_max_dispatch, config.ideas_max_in_flight),
+            tick_s=config.ideas_tick_s,
+            amqp_url=config.amqp_url,
+            prefix=config.amqp_prefix,
+        )
+    app.state.idea_runtime = idea_runtime
     app.state.config = config
     app.state.metrics = Metrics()
     app.state.engine = engine

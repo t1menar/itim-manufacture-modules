@@ -17,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -25,7 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -276,3 +277,111 @@ class PromptAudit(Base):
     version: Mapped[str] = mapped_column(Text)
     previous_version: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
+
+
+IDEA_STATUSES = (
+    "draft", "ready", "queued", "dispatched", "in_production", "done", "failed", "cancelled", "archived",
+)  # fmt: skip
+
+
+class Topic(Base):
+    """Topic catalog entry (D21, contracts/topic.json)."""
+
+    __tablename__ = "topics"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_topics_code"),
+        CheckConstraint("code ~ '^[a-z][a-z0-9_]{1,63}$'", name="ck_topics_code"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    code: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    default_tags: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    default_platforms: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    rev: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+
+
+class Idea(Base):
+    """An idea of a video (D21). Content changes only in draft/ready; `rev` is fixed when it is queued."""
+
+    __tablename__ = "ideas"
+    __table_args__ = (
+        CheckConstraint(_in("status", IDEA_STATUSES), name="ck_ideas_status"),
+        Index(
+            "ix_ideas_queue",
+            text("priority DESC"),
+            "queued_at",
+            "id",
+            postgresql_where=text("status = 'queued'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
+    title: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text)
+    hook: Mapped[str | None] = mapped_column(Text)
+    audience: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    references: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    constraints: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    language: Mapped[str] = mapped_column(Text, server_default="en")
+    priority: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    notes: Mapped[str | None] = mapped_column(Text)
+    author: Mapped[str | None] = mapped_column(Text)
+    pipeline_id: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="draft")
+    rev: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    ready_at: Mapped[dt.datetime | None]
+    queued_at: Mapped[dt.datetime | None]
+    dispatched_at: Mapped[dt.datetime | None]
+    last_message_id: Mapped[uuid.UUID | None]
+    failure: Mapped[dict[str, Any] | None]
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+
+
+class IdeaRevision(Base):
+    """The idea document at a `rev`, written when the idea is dispatched; jobs load it by `idea_ref`."""
+
+    __tablename__ = "idea_revisions"
+
+    idea_id: Mapped[int] = mapped_column(ForeignKey("ideas.id"), primary_key=True)
+    rev: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document: Mapped[dict[str, Any]]
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+
+
+class IdeaOutbox(Base):
+    """Transactional outbox of `idea.ready`; the relay publishes rows with `published_at` null."""
+
+    __tablename__ = "idea_outbox"
+    __table_args__ = (
+        UniqueConstraint("message_id", name="uq_idea_outbox_message_id"),
+        UniqueConstraint("idea_id", "rev", "routing_key", name="uq_idea_outbox_idea_rev_key"),
+        Index("ix_idea_outbox_pending", "created_at", postgresql_where=text("published_at IS NULL")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    message_id: Mapped[uuid.UUID]
+    idea_id: Mapped[int] = mapped_column(BigInteger)
+    rev: Mapped[int] = mapped_column(Integer)
+    routing_key: Mapped[str] = mapped_column(Text)
+    envelope: Mapped[dict[str, Any]]
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+    published_at: Mapped[dt.datetime | None]
+
+
+class AmqpInbox(Base):
+    """Dedup of consumed messages by `message_id` (at-least-once delivery)."""
+
+    __tablename__ = "amqp_inbox"
+
+    message_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    type: Mapped[str] = mapped_column(Text)
+    outcome: Mapped[str] = mapped_column(Text)
+    received_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())

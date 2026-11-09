@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from mvideo.ideas.document import idea_text
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
 from mvideo.pipeline.steps.agent_step import (
@@ -29,7 +30,7 @@ class AnalysisStep(AgentStep):
 
     async def inputs(self, ctx: RunContext) -> dict[str, bytes]:
         return {
-            "idea.json": jdump(ctx.input.idea.model_dump()),
+            "idea.json": jdump(ctx.idea),
             "environment.json": jdump(environment_json(ctx)),
             "channel.json": jdump(channel_json(ctx)),
         }
@@ -72,7 +73,7 @@ class ResearchStep(AgentStep):
 
     async def inputs(self, ctx: RunContext) -> dict[str, bytes]:
         return {
-            "idea.json": jdump(ctx.input.idea.model_dump()),
+            "idea.json": jdump(ctx.idea),
             "analysis.json": await ctx.storage.get_bytes(ctx.outputs["analysis"]["analysis.json"].ref),
         }
 
@@ -88,7 +89,7 @@ class ResearchStep(AgentStep):
 
     async def values(self, ctx: RunContext) -> dict[str, Any]:
         repo, ref, commit = await self.pin(ctx)
-        return {"idea_text": ctx.input.idea.text, "repo": repo, "ref": ref, "commit": commit}
+        return {"idea_text": idea_text(ctx.idea), "repo": repo, "ref": ref, "commit": commit}
 
     async def src_volume(self, ctx: RunContext) -> str | None:
         repo, _, commit = await self.pin(ctx)
@@ -104,7 +105,7 @@ class ScriptStep(AgentStep):
     async def inputs(self, ctx: RunContext) -> dict[str, bytes]:
         get = ctx.storage.get_bytes
         return {
-            "idea.json": jdump(ctx.input.idea.model_dump()),
+            "idea.json": jdump(ctx.idea),
             "analysis.json": await get(ctx.outputs["analysis"]["analysis.json"].ref),
             "research.json": await get(ctx.outputs["research"]["research.json"].ref),
             "channel.json": jdump(channel_json(ctx)),

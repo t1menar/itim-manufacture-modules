@@ -58,7 +58,7 @@ class FakeStep(Step):
         out: dict[str, Artifact] = {}
         for filename, kind in self.files.items():
             body = (
-                json.dumps({"step": self.name, "idea": ctx.input.idea.text}).encode()
+                json.dumps({"step": self.name, "idea": ctx.idea.get("title")}).encode()
                 if kind == "json"
                 else f"fake {kind} of {self.name}".encode()
             )

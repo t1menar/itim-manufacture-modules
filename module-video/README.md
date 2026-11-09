@@ -69,3 +69,28 @@ with no active version, the newest is activated. Existing rows are never overwri
   reviewed spec (the contract text says `{{name}}`; unresolved, see the open questions).
 - The resolved version and sha256 go to `provenance.prompts` and `provenance.prompt_refs`, and into the step's
   input hash, so an edited prompt never hits the step cache.
+
+## Ideas (D21)
+
+Ideas and topics live in database `video` (`topics`, `ideas`, `idea_revisions`, `idea_outbox`, `amqp_inbox`);
+core keeps only the opaque `idea_ref` (`idea:<id>:v<rev>`). Spec: `docs/IDEAS.md`, schemas: `contracts/` (vendored
+in `src/mvideo/ideas/schemas/`, a test fails when they drift).
+
+- **Job input** is `input.idea_ref {id, rev}`; `input.idea` is gone. Intake loads the document (from the
+  snapshot written at dispatch, else the live row when its content is frozen) and answers 422 `input_invalid`
+  when it is missing; the run loads it into `ctx.idea`, and the steps read title, description and guidance
+  from it (`{idea_text}`, `/in/idea.json`). The document hash goes into the step input hash and into
+  `provenance.idea`.
+- **Scheduler**: every `VIDEO_IDEAS_TICK_S` (5) it takes `queued` ideas of active topics by priority, queue
+  time and id (advisory lock, `SKIP LOCKED`), up to `VIDEO_IDEAS_MAX_DISPATCH` (5) per pass and
+  `VIDEO_IDEAS_MAX_IN_FLIGHT` (3, dispatched + in production). One transaction writes the snapshot, the
+  `idea.ready` outbox row (message id `UUIDv5(NS, idea_ref)`, orchestration hints only) and sets `dispatched`.
+  An invalid document marks the idea `failed` (`idea_invalid`). `VIDEO_IDEAS_PAUSED=true` stops it.
+- **Relay** publishes outbox rows to `manufacture.events` (routing key `idea.ready`) with confirms; rows
+  published before an error stay marked.
+- **Status consumer**: queue `module.video.idea-status` (quorum, DLQ) bound to `idea.in_production`,
+  `idea.done`, `idea.failed`. Inbox dedup on `message_id`; transitions are monotonic and a wrong revision or a
+  late event is `stale`.
+- The loops start only when `MODULE_AMQP_URL` is set (`MODULE_AMQP_PREFIX` for test isolation). They need the
+  `aio-pika` package, which is imported lazily and is **not yet in `pyproject.toml`** (needs installing).
+- Seed ideas by SQL as in `docs/IDEAS.md` section 9; admin HTTP for ideas comes later.

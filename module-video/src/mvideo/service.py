@@ -9,9 +9,11 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from mvideo.api.problems import ProblemError
 from mvideo.db import repo
 from mvideo.db.models import Run
 from mvideo.db.repo import NewRun
+from mvideo.ideas import repo as idea_repo
 from mvideo.intake import ValidJob
 from mvideo.pipeline.budget import check_job_gate
 from mvideo.pipeline.runner import Runner
@@ -39,6 +41,13 @@ class JobService:
     async def accept(self, job: ValidJob, traceparent: str | None) -> Run:
         """Store the run (idempotent on job_id) and apply the daily usage gate (05 section 2.1)."""
         req = job.request
+        ref = job.input.idea_ref
+        async with self._factory() as s:
+            doc = await idea_repo.load_document(s, ref.id, ref.rev)
+        if doc is None:
+            raise ProblemError(422, "input_invalid", f"Idea idea:{ref.id}:v{ref.rev} is not in this module")
+        if doc.get("language") != "en":
+            raise ProblemError(422, "language_unsupported", "Stage 1 is English only")
         async with self._factory() as s, s.begin():
             run, created = await repo.create_run(
                 s,

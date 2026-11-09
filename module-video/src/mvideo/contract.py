@@ -22,10 +22,11 @@ class ChannelSettings(BaseModel):
     palette: dict[str, str] | None = None
 
 
-class Idea(BaseModel):
-    id: int
-    text: Annotated[str, Field(min_length=5, max_length=500)]
-    language: Literal["en"]
+class IdeaRef(BaseModel):
+    """Opaque reference to an idea of this module (D21): the document is loaded from the module database."""
+
+    id: Annotated[int, Field(ge=1)]
+    rev: Annotated[int, Field(ge=1)]
 
 
 class Channel(BaseModel):
@@ -44,7 +45,7 @@ class Previous(BaseModel):
 class JobInput(BaseModel):
     """The module view of `input` in the job request."""
 
-    idea: Idea
+    idea_ref: IdeaRef
     channels: Annotated[list[Channel], Field(min_length=1)]
     previous: Previous | None = None
     upstream: dict[str, Any] | None = None

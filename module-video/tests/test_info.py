@@ -91,7 +91,7 @@ def test_invalid_settings_rejected(bad: dict[str, Any]) -> None:
 
 
 JOB_INPUT: dict[str, Any] = {
-    "idea": {"id": 42, "text": "Why CREATE DATABASE copies a template", "language": "en"},
+    "idea_ref": {"id": 42, "rev": 1},
     "channels": [{"id": "itim", "language": "en", "name": "iTim", "settings": {"reading_wps": 3.5}}],
 }
 
@@ -100,8 +100,8 @@ def test_input_schema_accepts_canonical_input(client: TestClient) -> None:
     jsonschema.validate(JOB_INPUT, info(client)["input_schema"])
 
 
-def test_input_schema_rejects_other_languages(client: TestClient) -> None:
-    bad = {**JOB_INPUT, "idea": {**JOB_INPUT["idea"], "language": "ru"}}
+def test_input_schema_requires_an_idea_ref_not_idea_text(client: TestClient) -> None:
+    bad = {**{k: v for k, v in JOB_INPUT.items() if k != "idea_ref"}, "idea": {"id": 42, "text": "Why?"}}
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, info(client)["input_schema"])
 

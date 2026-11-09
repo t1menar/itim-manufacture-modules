@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import uuid
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -22,7 +23,7 @@ from mvideo.pipeline.steps.fake import FakeStep, fake_finalize, fake_pipeline
 from mvideo.pipeline.worker import Worker
 from mvideo.service import JobService
 from mvideo.storage import Storage
-from tests.helpers import FakeCore, job_request
+from tests.helpers import FakeCore, job_request, seed_idea
 
 TOKEN = "test-token"
 
@@ -47,7 +48,17 @@ class Harness:
 
     async def submit(self, **kw: Any) -> dict[str, Any]:
         """POST a job through the API; returns the request body (so tests know the job id)."""
+        title = kw.pop("input_text", None)  # a different idea text means a different idea revision
+        if title is not None:
+            kw["idea_ref"] = {"id": 42, "rev": 2 + zlib.crc32(title.encode()) % 1000}
         body = job_request(**kw)
+        ref = body["input"]["idea_ref"]
+        await seed_idea(
+            self.factory,
+            idea_id=ref["id"],
+            rev=ref["rev"],
+            **({"title": title} if title else {}),
+        )  # the idea the job refers to must be in this module's database
         async with self.client() as c:
             resp = await c.post("/v1/jobs", json=body)
         assert resp.status_code == 202, resp.text
