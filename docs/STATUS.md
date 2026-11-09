@@ -22,7 +22,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 1. D21 — **done (#17)**.
 2. D22 opaque revisions — PR #18 (do not merge until asked).
-3. D23 intents → module-publish — this PR (do not merge until asked).
+3. D23 intents → module-publish — PR #19 (do not merge until asked).
 4. review_rounds detail → module-review — later.
 
 ## Open PRs
@@ -30,7 +30,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 | PR | Content | Merge? |
 |----|---------|--------|
 | #18 | D22 opaque content_revisions | owner — wait |
-| (this) | D23 intents/accounts/IG limits → module-publish | owner — wait |
+| #19 | D23 intents/accounts/IG limits → module-publish | owner — wait |
 
 ## module-video
 
