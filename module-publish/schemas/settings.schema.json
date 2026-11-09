@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "publish-settings.schema.json",
+  "type": "object",
+  "properties": {
+    "dry_run": {
+      "type": "boolean",
+      "default": true
+    },
+    "instagram": {
+      "type": "object",
+      "properties": {
+        "auth_path": {
+          "type": "string",
+          "const": "instagram_login",
+          "default": "instagram_login"
+        },
+        "client": {
+          "type": "string",
+          "enum": [
+            "fake",
+            "login_api"
+          ],
+          "default": "fake"
+        },
+        "max_caption_chars": {
+          "type": "integer",
+          "default": 2200
+        },
+        "max_hashtags": {
+          "type": "integer",
+          "default": 30
+        }
+      },
+      "additionalProperties": false
+    },
+    "reconcile": {
+      "type": "object",
+      "properties": {
+        "on_unknown": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
