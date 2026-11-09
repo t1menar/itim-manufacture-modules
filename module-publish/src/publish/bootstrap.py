@@ -17,6 +17,14 @@ REQUIRED_VARS = (
 )
 
 OPTIONAL_VARS = (
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY",
+    "S3_SECRET_KEY",
+    "S3_BUCKET",
+    "S3_SECURE",
+    "S3_PUBLIC_ENDPOINT",
+    "S3_PUBLIC_SECURE",
+    "S3_REGION",
     "PUBLISH_AMQP_URL",
     "PUBLISH_AMQP_QUEUE",
     "PUBLISH_INSTAGRAM_MODE",  # fake | real
@@ -49,6 +57,8 @@ class BootstrapConfig:
     instagram_graph_base: str = "https://graph.instagram.com"
     instagram_api_version: str = "v22.0"
 
+    s3_env_fallback: dict[str, str] = field(default_factory=dict, repr=False)
+
     @property
     def host(self) -> str:
         return self.listen_addr.rpartition(":")[0]
@@ -79,6 +89,18 @@ class BootstrapConfig:
             raise ConfigError("PUBLISH_INSTAGRAM_MODE must be 'fake' or 'real'")
         # Token: prefer platform_accounts.access_token / module_secrets; env is fallback.
         token = (source.get("PUBLISH_INSTAGRAM_ACCESS_TOKEN") or "").strip() or None
+
+        s3_keys = (
+            "S3_ENDPOINT",
+            "S3_ACCESS_KEY",
+            "S3_SECRET_KEY",
+            "S3_BUCKET",
+            "S3_SECURE",
+            "S3_PUBLIC_ENDPOINT",
+            "S3_PUBLIC_SECURE",
+            "S3_REGION",
+        )
+        s3_env = {k: source[k].strip() for k in s3_keys if (source.get(k) or "").strip()}
         return cls(
             database_url=source["PUBLISH_DATABASE_URL"].strip(),
             listen_addr=listen_addr,
@@ -96,4 +118,5 @@ class BootstrapConfig:
             .strip()
             .rstrip("/"),
             instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v22.0").strip() or "v22.0",
+            s3_env_fallback=s3_env,
         )

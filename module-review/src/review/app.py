@@ -55,7 +55,14 @@ def create_app(
     telegram = bot or _safe_build_bot(config)
     allowlist = AdminAllowlist(list(config.admin_telegram_ids))
     chat_ids = config.reviewer_chat_ids
-    flow = ReviewFlow(factory, telegram, core, allowlist, chat_ids)
+    flow = ReviewFlow(
+        factory,
+        telegram,
+        core,
+        allowlist,
+        chat_ids,
+        s3_env_fallback=config.s3_env_fallback,
+    )
     worker = Worker(factory, flow)
     job_service = JobService(factory, worker)
     notify_handler = NotifyHandler(factory, telegram, chat_ids)
@@ -91,7 +98,14 @@ def create_app(
                 telegram = build_telegram_bot(effective)
                 allowlist = AdminAllowlist(list(overlay.admin_telegram_ids))
                 chat_ids = overlay.reviewer_chat_ids
-                flow = ReviewFlow(factory, telegram, core, allowlist, chat_ids)
+                flow = ReviewFlow(
+                    factory,
+                    telegram,
+                    core,
+                    allowlist,
+                    chat_ids,
+                    s3_env_fallback=effective.s3_env_fallback,
+                )
                 worker = Worker(factory, flow)
                 notify_handler = NotifyHandler(factory, telegram, chat_ids)
                 poller = None

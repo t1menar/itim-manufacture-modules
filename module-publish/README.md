@@ -47,11 +47,11 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 
 INSERT INTO module_settings (key, value) VALUES
   ('s3', '{
-     "endpoint": "<INTERNAL_HOST:PORT>",
-     "public_endpoint": "<PUBLIC_TLS_HOST>",
+     "endpoint": "127.0.0.1:59000",
+     "public_endpoint": "127.0.0.1:59000",
      "bucket": "manufacture",
      "secure": false,
-     "public_secure": true,
+     "public_secure": false,
      "region": "us-east-1"
    }'::jsonb),
   ('instagram.mode', '"real"'::jsonb)
@@ -99,3 +99,9 @@ uv run publish serve
 Bootstrap env: `PUBLISH_DATABASE_URL`, `PUBLISH_LISTEN_ADDR`, `MODULE_CORE_URL`, `MODULE_CORE_TOKEN`. Optional: `PUBLISH_AMQP_URL`, `PUBLISH_AMQP_QUEUE`.
 
 **CI/tests never call Meta Graph hosts.** Set `PUBLISH_INSTAGRAM_MODE=real` only with a real token and public HTTPS video URLs.
+
+## MinIO / presigned video URLs
+
+Real Instagram publish resolves `s3://` artifact refs to a **public** presigned HTTPS `video_url` (SigV4 signed for `public_endpoint`, not the internal `minio:9000` host). Config from module DB (`s3.*`) with env fallback. Package: `packages/mf-storage`. Local default: `http://127.0.0.1:59000` via `deploy/compose.minio.yml`. For live Instagram, tunnel that port (cloudflared/ngrok) and set `public_endpoint` to the tunnel host — no permanent domain/TLS required.
+
+**module-video** must upload the object to the same bucket/key; this module does not change video upload.

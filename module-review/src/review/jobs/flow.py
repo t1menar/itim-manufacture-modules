@@ -15,6 +15,7 @@ from review.db import repo
 from review.db.models import FINAL
 from review.jobs.cards import approve_reject_keyboard, card_caption, extract_meta, stale_keyboard
 from review.observability.logging import get_logger
+from review.storage.s3_client import load_storage_client
 from review.telegram.bot import TelegramBot
 from review.telegram.updates import TelegramUpdate
 
@@ -29,12 +30,14 @@ class ReviewFlow:
         core: CoreClient,
         allowlist: AdminAllowlist,
         admin_chat_ids: tuple[int, ...],
+        s3_env_fallback: dict[str, str] | None = None,
     ) -> None:
         self._factory = factory
         self._bot = bot
         self._core = core
         self._allowlist = allowlist
         self._admins = admin_chat_ids
+        self._s3_env = s3_env_fallback or {}
 
     async def deliver_card(self, run_id: uuid.UUID) -> None:
         async with self._factory() as s, s.begin():
@@ -56,6 +59,10 @@ class ReviewFlow:
             fence = run.fence
             job_id_s = str(run.job_id)
             chat_id = self._admins[0] if self._admins else 0
+            if video_ref.startswith("s3://"):
+                storage = await load_storage_client(s, env_fallback=self._s3_env)
+                if storage is not None:
+                    video_ref = storage.resolve_https(video_ref, ttl_s=3600, public=True)
             if chat_id == 0:
                 await repo.store_outcome(
                     s,

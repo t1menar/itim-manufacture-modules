@@ -55,11 +55,11 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 
 INSERT INTO module_settings (key, value) VALUES
   ('s3', '{
-     "endpoint": "<INTERNAL_HOST:PORT>",
-     "public_endpoint": "<PUBLIC_TLS_HOST>",
+     "endpoint": "127.0.0.1:59000",
+     "public_endpoint": "127.0.0.1:59000",
      "bucket": "manufacture",
      "secure": false,
-     "public_secure": true,
+     "public_secure": false,
      "region": "us-east-1"
    }'::jsonb)
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
@@ -98,3 +98,7 @@ uv run review serve
 Bootstrap env only: `REVIEW_DATABASE_URL`, `REVIEW_LISTEN_ADDR`, `MODULE_CORE_URL`, `MODULE_CORE_TOKEN`. Optional: `REVIEW_AMQP_URL`, `REVIEW_AMQP_QUEUE`. All other configuration is Core settings (04 §8).
 
 **CI/tests never call api.telegram.org.** Set `REVIEW_TELEGRAM_MODE=real` only in a dedicated environment with a bot token.
+
+## MinIO / presigned video URLs
+
+When a review card has `s3://manufacture/…`, the module loads MinIO config from `module_secrets`/`module_settings` (env fallback) via `mf-storage` and sends Telegram a **public presigned HTTPS GET** (TTL default 1h). Local stack: `docker compose -f ../deploy/compose.minio.yml up -d` (or `../deploy/scripts/mfinfra-minio.sh`). For live IG, tunnel :59000 (cloudflared/ngrok) into `S3_PUBLIC_ENDPOINT` — no domain/TLS infra.

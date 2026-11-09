@@ -1,10 +1,16 @@
 name: module-publish
 on:
   pull_request:
-    paths: ["module-publish/**", ".github/workflows/module-publish.yml"]
+    paths:
+      - "module-publish/**"
+      - "packages/mf-storage/**"
+      - ".github/workflows/module-publish.yml"
   push:
     branches: [main]
-    paths: ["module-publish/**", ".github/workflows/module-publish.yml"]
+    paths:
+      - "module-publish/**"
+      - "packages/mf-storage/**"
+      - ".github/workflows/module-publish.yml"
 permissions:
   contents: read
 jobs:
@@ -35,11 +41,30 @@ jobs:
       PUBLISH_LISTEN_ADDR: 127.0.0.1:8080
       MODULE_CORE_URL: http://127.0.0.1:9
       MODULE_CORE_TOKEN: ci-token
+      S3_ENDPOINT: 127.0.0.1:9000
+      S3_ACCESS_KEY: manufacture
+      S3_SECRET_KEY: manufacture_dev_secret
+      S3_BUCKET: manufacture
+      S3_SECURE: "0"
+      S3_PUBLIC_ENDPOINT: 127.0.0.1:9000
+      S3_PUBLIC_SECURE: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+      - name: start MinIO
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/minio/data" "$RUNNER_TEMP/minio/bin"
+          curl -fsSL -o "$RUNNER_TEMP/minio/bin/minio" \
+            "https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z"
+          chmod +x "$RUNNER_TEMP/minio/bin/minio"
+          export MINIO_ROOT_USER=manufacture MINIO_ROOT_PASSWORD=manufacture_dev_secret
+          "$RUNNER_TEMP/minio/bin/minio" server "$RUNNER_TEMP/minio/data" --address ":9000" --console-address ":9001" \
+            >"$RUNNER_TEMP/minio/minio.log" 2>&1 &
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+          curl -sf http://127.0.0.1:9000/minio/health/live
       - name: sync
         run: uv sync
       - name: ruff
@@ -47,4 +72,5 @@ jobs:
       - name: pytest
         run: uv run pytest -q
       - name: docker build
-        run: docker build -t module-publish:ci .
+        working-directory: ${{ github.workspace }}
+        run: docker build -f module-publish/Dockerfile -t module-publish:ci .
