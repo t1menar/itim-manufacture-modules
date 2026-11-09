@@ -17,7 +17,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mvideo.db.models import ACTIVE_RUN_STATUSES, Run, Step, UsageLog
+from mvideo.db.models import ACTIVE_RUN_STATUSES, Run, SourceCache, Step, UsageLog
 from mvideo.ids import uuid7
 
 LEASE_TTL_S = 60  # 05 section 2: lease renewed every 20 s, taken for 60 s
@@ -347,3 +347,49 @@ async def count_usage(session: AsyncSession, kind: str, since: dt.datetime) -> i
 async def oldest_usage(session: AsyncSession, kind: str, since: dt.datetime) -> dt.datetime | None:
     stmt = select(func.min(UsageLog.at)).where(UsageLog.kind == kind, UsageLog.at >= since)
     return (await session.execute(stmt)).scalar_one()
+
+
+async def upsert_source(
+    session: AsyncSession,
+    repo_url: str,
+    commit: str,
+    volume: str,
+    size_bytes: int,
+    *,
+    now: dt.datetime | None = None,
+) -> None:
+    """Record (or refresh) a cached checkout; `last_used_at` is set to now."""
+    at = _now(now)
+    stmt = pg_insert(SourceCache).values(
+        repo_url=repo_url, commit=commit, volume=volume, size_bytes=size_bytes, created_at=at, last_used_at=at
+    )
+    await session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["repo_url", "commit"],
+            set_={"volume": volume, "size_bytes": size_bytes, "last_used_at": at},
+        )
+    )
+
+
+async def get_source(session: AsyncSession, repo_url: str, commit: str) -> SourceCache | None:
+    return await session.get(SourceCache, (repo_url, commit))
+
+
+async def touch_source(
+    session: AsyncSession, repo_url: str, commit: str, *, now: dt.datetime | None = None
+) -> None:
+    await session.execute(
+        update(SourceCache)
+        .where(SourceCache.repo_url == repo_url, SourceCache.commit == commit)
+        .values(last_used_at=_now(now))
+    )
+
+
+async def list_sources(session: AsyncSession) -> list[SourceCache]:
+    return list((await session.execute(select(SourceCache).order_by(SourceCache.last_used_at))).scalars())
+
+
+async def delete_source(session: AsyncSession, repo_url: str, commit: str) -> None:
+    row = await session.get(SourceCache, (repo_url, commit))
+    if row is not None:
+        await session.delete(row)

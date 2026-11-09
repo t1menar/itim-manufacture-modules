@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from mvideo import __version__
-from mvideo.api import health, info, jobs
+from mvideo.api import health, info, jobs, mcp_sandbox
 from mvideo.api.health import AuthStatus, Check
 from mvideo.api.problems import install_problem_handlers
 from mvideo.config import BootstrapConfig
@@ -102,8 +102,10 @@ def create_app(
     app.state.service = service
     app.state.worker = worker
     app.state.runner = runner
+    app.state.scratch = None  # ScratchRegistry, set by the real capture step (B8)
     install_problem_handlers(app)
     app.include_router(info.router)
     app.include_router(health.router)
     app.include_router(jobs.router)
+    app.include_router(mcp_sandbox.router)
     return app

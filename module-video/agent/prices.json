@@ -1,0 +1,7 @@
+{
+  "version": "0.1-unverified",
+  "note": "USD per million tokens. Placeholder values used only to ESTIMATE cost; replace from the current Anthropic pricing page when the agent image is built. Versioned with the agent image.",
+  "models": {
+    "default": {"input": 15.0, "output": 75.0, "cache_read": 1.5, "cache_write": 18.75}
+  }
+}

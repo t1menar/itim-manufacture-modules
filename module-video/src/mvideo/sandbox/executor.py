@@ -275,3 +275,66 @@ def check_values(capture: dict[str, Any]) -> list[str]:
         elif v["kind"] == "number" and not NUMBER.match(v["value"]):
             problems.append(f"value {name}: {v['value']!r} is not a number")
     return problems
+
+
+class ScratchSandbox:
+    """One scratch container for `sandbox_try`: sessions open on first use; closed with the step."""
+
+    def __init__(
+        self, client: docker.DockerClient, settings: VideoSettings, image_key: str, step_id: str
+    ) -> None:
+        self.client, self.settings, self.image_key, self.step_id = client, settings, image_key, step_id
+        self.image = settings.sandbox_images[image_key]
+        self._stack: Any = None
+        self._container: Any = None
+        self._sessions: _Sessions | None = None
+        self._plan: dict[str, Any] = {"sessions": {}}
+        self.calls = 0
+
+    async def _start(self) -> None:
+        import asyncio
+        from contextlib import ExitStack
+
+        def go() -> None:
+            self._stack = ExitStack()
+            self._container = self._stack.enter_context(
+                sandbox_container(
+                    self.client, self.image, self.settings, purpose="scratch", run_id=self.step_id
+                )
+            )
+            wait_ready(self._container, self.image, self.settings.sandbox.ready_timeout_s)
+            self._sessions = _Sessions(
+                self.client.api, self._container.id, self.image, self._plan, self.settings
+            )
+
+        await asyncio.to_thread(go)
+
+    async def run(self, kind: str, text: str) -> dict[str, Any]:
+        import asyncio
+
+        if self._container is None:
+            await self._start()
+        assert self._sessions is not None  # noqa: S101
+        name = f"scratch_{kind}"
+        self._plan["sessions"].setdefault(name, {"kind": kind, "database": "postgres"})
+
+        def go() -> dict[str, Any]:
+            assert self._sessions is not None  # noqa: S101
+            self._sessions.open_session(name)
+            r = self._sessions.get(name).run(text)
+            return {"output": r.output, "status": r.status}
+
+        self.calls += 1
+        return await asyncio.to_thread(go)
+
+    async def close(self) -> None:
+        import asyncio
+
+        def go() -> None:
+            if self._sessions:
+                self._sessions.close_all()
+            if self._stack:
+                self._stack.close()
+
+        await asyncio.to_thread(go)
+        self._container = None
