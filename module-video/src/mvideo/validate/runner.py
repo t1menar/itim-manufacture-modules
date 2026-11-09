@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mvideo.revise import check_changes
 from mvideo.validate.issues import Issue, Report
 from mvideo.validate.rules import RuleConfig, check_plan, check_research, check_script
 from mvideo.validate.schemas import check_schema
@@ -28,8 +29,9 @@ def validate_documents(
     *,
     source: SourceTree | None = None,
     cfg: RuleConfig | None = None,
+    previous_script: Any = None,
 ) -> Report:
-    """Validate parsed documents given as `{file name: document}`."""
+    """Validate parsed documents given as `{file name: document}`; `previous_script` enables `revise_diff`."""
     cfg = cfg or RuleConfig()
     report = Report()
     schema_ok: dict[str, bool] = {}
@@ -56,6 +58,14 @@ def validate_documents(
                     )
                 ]
             )
+    changes = docs.get("changes.en.json")
+    if (
+        changes is not None
+        and schema_ok.get("changes.en.json")
+        and previous_script is not None
+        and script is not None
+    ):
+        report.extend(check_changes(changes, previous_script, script))
     plan = docs.get("capture.plan.json")
     if plan is not None and schema_ok.get("capture.plan.json"):
         report.extend(check_plan(plan, script, cfg, "capture.plan.json"))

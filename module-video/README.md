@@ -40,3 +40,13 @@ and are copied verbatim from the spec by `node scripts/extract_prompts.js`; do n
 Not verified yet: a run with the real Claude (needs `CLAUDE_CODE_OAUTH_TOKEN`, see `mvideo agent-smoke`) and the
 full package step on a complete 160 s render. `capture_status` is not derived (the script schema has no
 `expect_error`). Core's `cover`/`contact_sheet` are artifact objects while the module sends refs as strings.
+
+## B9: revise mode
+
+A `revise` job runs `revise_pipeline()`: `script-revise` (minimal edit by the agent, `changes.en.json` checked
+against the structural diff, rule `revise_diff`), capture (reused unless commands or capture names changed, then
+no sandbox starts), render, package (the post text is reused unless `meta.hook` or the first captions changed).
+Analysis and research come from the last succeeded run of the production; the pinned commit is never
+re-resolved. `output.changes` is rendered from `changes.en.json` plus "values changed".
+
+Not verified: golden-revise-1..4 against the real Claude (replay and unit tests only).

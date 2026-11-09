@@ -21,6 +21,7 @@ from mvideo.pipeline.steps.agent_step import (
 )
 from mvideo.pipeline.steps.base import Step
 from mvideo.post import build_metadata, render_post, source_label
+from mvideo.revise import command_signature, hook_inputs, render_changes, values_changed
 from mvideo.sandbox.executor import CaptureFailure, ScratchSandbox, check_values, run_capture
 from mvideo.storage import Artifact
 from mvideo.validate.issues import Issue
@@ -50,7 +51,7 @@ class CaptureStep(AgentStep):
         a = await self.read_json(ctx, "analysis", "analysis.json")
         img = ctx.settings.sandbox_images[a["sandbox_image"]]
         return {
-            "script.en.json": await get(ctx.outputs["script"]["script.en.json"].ref),
+            "script.en.json": await get(ctx.files("script")["script.en.json"].ref),
             "research.json": await get(ctx.outputs["research"]["research.json"].ref),
             "image.json": jdump(
                 {
@@ -74,6 +75,7 @@ class CaptureStep(AgentStep):
     async def run(self, ctx: RunContext) -> dict[str, Artifact]:
         inputs = await self.inputs(ctx)
         req = self.request(ctx, inputs, await self.values(ctx))
+        ctx.sandbox_used = True
         token = None
         if ctx.scratch is not None:
             image_key = (await self.read_json(ctx, "analysis", "analysis.json"))["sandbox_image"]
@@ -256,7 +258,8 @@ class RenderStep(Step):
 
 
 async def json_of(ctx: RunContext, step: str, name: str) -> Any:
-    return json.loads(await ctx.storage.get_bytes(ctx.outputs[step][name].ref))
+    files = ctx.files(step) if step == "script" else ctx.outputs[step]
+    return json.loads(await ctx.storage.get_bytes(files[name].ref))
 
 
 class PackageStep(AgentStep):
@@ -275,7 +278,7 @@ class PackageStep(AgentStep):
     async def inputs(self, ctx: RunContext) -> dict[str, bytes]:
         get = ctx.storage.get_bytes
         return {
-            "script.en.json": await get(ctx.outputs["script"]["script.en.json"].ref),
+            "script.en.json": await get(ctx.files("script")["script.en.json"].ref),
             "research.json": await get(ctx.outputs["research"]["research.json"].ref),
             "channel.json": jdump(channel_json(ctx)),
         }
@@ -306,6 +309,14 @@ class PackageStep(AgentStep):
         )
         return [Issue("post_limits", "/", p, "post.en.json") for p in problems]
 
+    async def get_post(self, ctx: RunContext) -> dict[str, Any]:
+        """`post.en.json` from the package agent."""
+        inputs = await self.inputs(ctx)
+        req = self.request(ctx, inputs, await self.values(ctx))
+        _res, out = await self.agent_loop(ctx, req, inputs)
+        post: dict[str, Any] = json.loads(out["post.en.json"])
+        return post
+
     async def run(self, ctx: RunContext) -> dict[str, Artifact]:
         analysis = await json_of(ctx, "analysis", "analysis.json")
         capture = await json_of(ctx, "capture", "capture.json")
@@ -316,10 +327,7 @@ class PackageStep(AgentStep):
         self._tags = list(st.hashtags or []) if st else []
         self._source = source_label(analysis["system"]["repo"], analysis["system"]["ref"])
 
-        inputs = await self.inputs(ctx)
-        req = self.request(ctx, inputs, await self.values(ctx))
-        _res, out = await self.agent_loop(ctx, req, inputs)
-        post = json.loads(out["post.en.json"])
+        post = await self.get_post(ctx)
         rendered, _ = render_post(
             post, self._capture, template=self._template, channel_hashtags=self._tags,
             source=self._source, max_caption_chars=ctx.settings.post.max_caption_chars,
@@ -413,6 +421,35 @@ def _cover_time(script: dict[str, Any], timeline: dict[str, Any]) -> float:
     return 2.4
 
 
+class ReviseCaptureStep(CaptureStep):
+    """05 section 3 step 5: reuse `capture.json` when commands and capture names are unchanged."""
+
+    async def run(self, ctx: RunContext) -> dict[str, Artifact]:
+        get = ctx.storage.get_bytes
+        old = json.loads(await get(ctx.previous["script"]["script.en.json"].ref))
+        new = await json_of(ctx, "script", "script.en.json")
+        if command_signature(old) == command_signature(new):
+            return dict(ctx.previous["capture"])  # no sandbox, no agent
+        outputs = await super().run(ctx)
+        before = json.loads(await get(ctx.previous["capture"]["capture.json"].ref))
+        after = json.loads(await get(outputs["capture.json"].ref))
+        ctx.values_changed = values_changed(before, after, new)
+        return outputs
+
+
+class RevisePackageStep(PackageStep):
+    """The package agent re-runs only if the hook or first captions changed; else the post is reused."""
+
+    async def get_post(self, ctx: RunContext) -> dict[str, Any]:
+        get = ctx.storage.get_bytes
+        old = json.loads(await get(ctx.previous["script"]["script.en.json"].ref))
+        new = await json_of(ctx, "script", "script.en.json")
+        if hook_inputs(old) == hook_inputs(new):
+            post: dict[str, Any] = json.loads(await get(ctx.previous["package"]["post.en.json"].ref))
+            return post
+        return await super().get_post(ctx)
+
+
 async def finalize_real(ctx: RunContext) -> tuple[dict[str, Any], list[Artifact]]:
     """The result `output` (04 section 2.5) from the artifacts of the steps."""
     pkg, render = ctx.outputs["package"], ctx.outputs["render"]
@@ -434,13 +471,24 @@ async def finalize_real(ctx: RunContext) -> tuple[dict[str, Any], list[Artifact]
         "provenance": {
             "prompts": {
                 s: f"{s}@{ctx.settings.prompt_versions.get(s, '1.0.0')}"
-                for s in ("analysis", "research", "script", "capture", "package")
+                for s in (
+                    ("analysis", "research", "script-revise", "capture", "package")
+                    if ctx.mode == "revise"
+                    else ("analysis", "research", "script", "capture", "package")
+                )
             },
             "skill": f"explainer-video@{ctx.settings.prompt_versions.get('skill', '1.0.0')}",
             "model": ctx.settings.model,
             "auth_mode": ctx.settings.agent.auth.mode,
             "cost_mode": ctx.settings.resolved_cost_mode(),
         },
-        "changes": None,
+        "changes": await _changes_text(ctx),
     }
     return output, [a for files in ctx.outputs.values() for a in files.values()]
+
+
+async def _changes_text(ctx: RunContext) -> str | None:
+    if ctx.mode != "revise":
+        return None
+    changes = json.loads(await ctx.storage.get_bytes(ctx.files("script")["changes.en.json"].ref))
+    return render_changes(changes, ctx.values_changed, ctx.settings.revise.changes_max_chars)

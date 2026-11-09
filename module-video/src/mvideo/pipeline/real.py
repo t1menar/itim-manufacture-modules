@@ -4,16 +4,28 @@ from __future__ import annotations
 
 from typing import Any
 
-from mvideo.pipeline.steps.analysis import AnalysisStep, ResearchStep, ScriptStep
+from mvideo.pipeline.steps.analysis import AnalysisStep, ResearchStep, ReviseScriptStep, ScriptStep
 from mvideo.pipeline.steps.base import Step
-from mvideo.pipeline.steps.media_steps import CaptureStep, PackageStep, RenderStep, finalize_real
+from mvideo.pipeline.steps.media_steps import (
+    CaptureStep,
+    PackageStep,
+    RenderStep,
+    ReviseCaptureStep,
+    RevisePackageStep,
+    finalize_real,
+)
 
 
 def real_pipeline() -> list[Step]:
     return [AnalysisStep(), ResearchStep(), ScriptStep(), CaptureStep(), RenderStep(), PackageStep()]
 
 
-__all__ = ["finalize_real", "real_pipeline"]
+def revise_pipeline() -> list[Step]:
+    """Revise never re-runs analysis or research (05 section 3)."""
+    return [ReviseScriptStep(), ReviseCaptureStep(), RenderStep(), RevisePackageStep()]
+
+
+__all__ = ["finalize_real", "real_pipeline", "revise_pipeline"]
 
 
 def services_from_env(sessions: Any, sandbox_mcp_url: str) -> dict[str, Any]:

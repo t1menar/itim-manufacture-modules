@@ -43,6 +43,7 @@ def create_app(
     ready_checks: list[Check] | None = None,
     auth_status: AuthStatus | None = None,
     services: dict[str, Any] | None = None,
+    revise_steps: list[Step] | None = None,
 ) -> FastAPI:
     auth = AuthState()
     worker: Worker | None = None
@@ -68,6 +69,7 @@ def create_app(
             lease_renew_s=lease_renew_s,
             cancel_poll_s=cancel_poll_s,
             services=services,
+            revise_steps=revise_steps,
         )
         worker = Worker(factory=factory, runner=runner, poll_s=worker_poll_s, lease_ttl_s=LEASE_TTL_S)
         service = JobService(factory, worker, runner)
