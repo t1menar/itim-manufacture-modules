@@ -15,7 +15,8 @@
         "required": [
           "language",
           "video",
-          "post"
+          "post",
+          "metadata"
         ],
         "properties": {
           "language": {
@@ -61,10 +62,28 @@
             }
           },
           "contact_sheet": {
-            "$ref": "#/$defs/artifact"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^s3://"
+              },
+              {
+                "$ref": "#/$defs/artifact"
+              }
+            ],
+            "description": "s3 URI string (module-video) or artifact object {ref,sha256?}"
           },
           "cover": {
-            "$ref": "#/$defs/artifact"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^s3://"
+              },
+              {
+                "$ref": "#/$defs/artifact"
+              }
+            ],
+            "description": "s3 URI string (module-video) or artifact object {ref,sha256?}"
           },
           "preview": {
             "type": "object",
@@ -197,7 +216,7 @@
     },
     "metadata": {
       "type": "object",
-      "description": "proposed C39; platform limits are validated by adapters, not here",
+      "description": "Accepted C39/D19: produced by module-video with the reel. Platform limits validated by publish adapters, not here.",
       "required": [
         "title",
         "description",

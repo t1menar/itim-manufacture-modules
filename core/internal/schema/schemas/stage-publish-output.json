@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-publish-output.json",
+  "type": "object",
+  "required": [
+    "publications"
+  ],
+  "properties": {
+    "publications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "platform",
+          "platform_account_id",
+          "status"
+        ],
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "platform_account_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_post_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "failed",
+              "skipped"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_detail": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "validation": {
+            "type": "object"
+          },
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "proposed C38"
+          }
+        },
+        "if": {
+          "properties": {
+            "status": {
+              "const": "published"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "external_post_id",
+            "url",
+            "published_at"
+          ],
+          "properties": {
+            "external_post_id": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "published_at": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

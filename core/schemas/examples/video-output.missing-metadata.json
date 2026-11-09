@@ -1,0 +1,12 @@
+{
+  "variants": [
+    {
+      "language": "en",
+      "video": {
+        "ref": "s3://manufacture/x",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  ],
+  "provenance": {}
+}
