@@ -18,6 +18,14 @@ REQUIRED_VARS = (
 
 # Optional transport for module contract 2 (RabbitMQ). Absent → AMQP consumer stays off.
 OPTIONAL_VARS = (
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY",
+    "S3_SECRET_KEY",
+    "S3_BUCKET",
+    "S3_SECURE",
+    "S3_PUBLIC_ENDPOINT",
+    "S3_PUBLIC_SECURE",
+    "S3_REGION",
     "REVIEW_AMQP_URL",
     "REVIEW_AMQP_QUEUE",
     "MODULE_CORE_ADMIN_TOKEN",  # mfa_ only here — never Core credentials ref (D20)
@@ -64,6 +72,8 @@ class BootstrapConfig:
     telegram_bot_token: str | None = field(default=None, repr=False)
     telegram_api_base: str = "https://api.telegram.org"
 
+    s3_env_fallback: dict[str, str] = field(default_factory=dict, repr=False)
+
     @property
     def host(self) -> str:
         return self.listen_addr.rpartition(":")[0]
@@ -101,6 +111,18 @@ class BootstrapConfig:
         api_base = (source.get("REVIEW_TELEGRAM_API_BASE") or "https://api.telegram.org").strip()
         admin_ids = _parse_ids(source.get("REVIEW_ADMIN_TELEGRAM_IDS") or "")
         chat_ids = _parse_ids(source.get("REVIEW_CHAT_IDS") or "")
+
+        s3_keys = (
+            "S3_ENDPOINT",
+            "S3_ACCESS_KEY",
+            "S3_SECRET_KEY",
+            "S3_BUCKET",
+            "S3_SECURE",
+            "S3_PUBLIC_ENDPOINT",
+            "S3_PUBLIC_SECURE",
+            "S3_REGION",
+        )
+        s3_env = {k: source[k].strip() for k in s3_keys if (source.get(k) or "").strip()}
         return cls(
             database_url=source["REVIEW_DATABASE_URL"].strip(),
             listen_addr=listen_addr,
@@ -116,4 +138,5 @@ class BootstrapConfig:
             telegram_mode=mode,
             telegram_bot_token=token,
             telegram_api_base=api_base.rstrip("/"),
+            s3_env_fallback=s3_env,
         )

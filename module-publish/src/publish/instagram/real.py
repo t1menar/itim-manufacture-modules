@@ -59,6 +59,7 @@ class RealInstagramClient:
         poll_interval_s: float = 2.0,
         poll_max_attempts: int = 60,
         client: httpx.AsyncClient | None = None,
+        video_url_resolver: Callable[[str], Awaitable[str]] | None = None,
     ) -> None:
         self._resolve = resolve_account
         self._base = graph_base.rstrip("/")
@@ -67,6 +68,7 @@ class RealInstagramClient:
         self._poll_interval = poll_interval_s
         self._poll_max = poll_max_attempts
         self._client = client
+        self._video_url_resolver = video_url_resolver
         # Last container id per account for reconcile after unknown.
         self._last_container: dict[str, str] = {}
 
@@ -86,7 +88,10 @@ class RealInstagramClient:
         intent_id: str | None = None,
     ) -> PublishResult:
         _ = intent_id
-        video_url = _require_public_https_url(video_ref)
+        if self._video_url_resolver is not None and video_ref.startswith("s3://"):
+            video_url = await self._video_url_resolver(video_ref)
+        else:
+            video_url = _require_public_https_url(video_ref)
         auth = await self._resolve(account_id)
         # Optional quota peek (non-fatal if missing permissions).
         try:
@@ -337,7 +342,8 @@ def _require_public_https_url(video_ref: str) -> str:
         raise RuntimeError("instagram requires https video_url (http not accepted); got http:// ref")
     if video_ref.startswith("s3://"):
         raise RuntimeError(
-            "instagram requires a public https video_url; s3:// refs need a presigned URL "
-            "from object storage (MinIO not wired yet)"
+            "instagram requires a public https video_url; configure MinIO "
+            "(module_secrets s3.access_key/s3.secret_key + module_settings s3) "
+            "so s3:// refs can be presigned"
         )
     raise RuntimeError(f"unsupported video_ref for Instagram publish: {video_ref!r}")

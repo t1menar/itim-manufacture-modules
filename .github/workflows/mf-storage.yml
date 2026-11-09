@@ -1,0 +1,43 @@
+name: mf-storage
+on:
+  pull_request:
+    paths: ["packages/mf-storage/**", ".github/workflows/mf-storage.yml"]
+  push:
+    branches: [main]
+    paths: ["packages/mf-storage/**", ".github/workflows/mf-storage.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/mf-storage
+    env:
+      S3_ENDPOINT: 127.0.0.1:9000
+      S3_ACCESS_KEY: manufacture
+      S3_SECRET_KEY: manufacture_dev_secret
+      S3_BUCKET: manufacture
+      S3_SECURE: "0"
+      S3_PUBLIC_ENDPOINT: 127.0.0.1:9000
+      S3_PUBLIC_SECURE: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: start MinIO
+        run: |
+          docker run -d --name mf-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=manufacture -e MINIO_ROOT_PASSWORD=manufacture_dev_secret \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:9000/minio/health/live && exit 0; sleep 1; done
+          exit 1
+      - name: sync
+        run: uv sync
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy
+      - name: pytest
+        run: uv run pytest -q

@@ -98,3 +98,7 @@ uv run review serve
 Bootstrap env only: `REVIEW_DATABASE_URL`, `REVIEW_LISTEN_ADDR`, `MODULE_CORE_URL`, `MODULE_CORE_TOKEN`. Optional: `REVIEW_AMQP_URL`, `REVIEW_AMQP_QUEUE`. All other configuration is Core settings (04 §8).
 
 **CI/tests never call api.telegram.org.** Set `REVIEW_TELEGRAM_MODE=real` only in a dedicated environment with a bot token.
+
+## MinIO / presigned video URLs
+
+When a review card has `s3://manufacture/…`, the module loads MinIO config from `module_secrets`/`module_settings` (env fallback) via `mf-storage` and sends Telegram a **public presigned HTTPS GET** (TTL default 1h). Local stack: `../deploy/scripts/mfinfra-minio.sh`.

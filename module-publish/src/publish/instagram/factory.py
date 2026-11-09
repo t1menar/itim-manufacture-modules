@@ -13,6 +13,7 @@ from publish.db.secrets import get_secret
 from publish.instagram.base import InstagramClient
 from publish.instagram.fake import FakeInstagramClient
 from publish.instagram.real import AccountAuth, RealInstagramClient
+from publish.storage.s3_client import StorageError, load_storage_client
 
 
 def build_instagram_client(
@@ -39,7 +40,6 @@ def build_instagram_client(
                     raise ConfigError(f"unknown platform_account_id {account_id}")
                 if acc.external_id:
                     ig_user_id = acc.external_id
-                # Prefer column access_token; ignore legacy settings.credential_ref.
                 if acc.access_token and acc.access_token.strip():
                     token = acc.access_token.strip()
                 if not token:
@@ -57,8 +57,24 @@ def build_instagram_client(
             )
         return AccountAuth(ig_user_id=str(ig_user_id), access_token=token)
 
+    async def resolve_video_url(video_ref: str) -> str:
+        if factory is None:
+            raise RuntimeError("s3:// video_ref requires DB session factory for MinIO config")
+        async with factory() as session:
+            storage = await load_storage_client(session, env_fallback=config.s3_env_fallback)
+        if storage is None:
+            raise RuntimeError(
+                "s3:// video_ref but MinIO/S3 is not configured "
+                "(module_secrets s3.access_key/s3.secret_key + module_settings s3)"
+            )
+        try:
+            return str(storage.resolve_https(video_ref, ttl_s=3600, public=True))
+        except StorageError as exc:
+            raise RuntimeError(f"presign failed: {exc}") from exc
+
     return RealInstagramClient(
         resolve_account=resolve,
         graph_base=config.instagram_graph_base,
         api_version=config.instagram_api_version,
+        video_url_resolver=resolve_video_url if factory is not None else None,
     )

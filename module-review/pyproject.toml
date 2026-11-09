@@ -17,6 +17,7 @@ dependencies = [
     "jsonschema>=4.23",
     "aio-pika>=9.4",
     "psycopg[binary]>=3.2",
+    "mf-storage",
 ]
 
 [project.scripts]
@@ -62,5 +63,9 @@ strict = true
 files = ["src/review"]
 
 [[tool.mypy.overrides]]
-module = ["aio_pika.*", "aiormq.*", "pamqp.*", "prometheus_client.*"]
+module = ["aio_pika.*", "aiormq.*", "pamqp.*", "prometheus_client.*", "minio.*", "mf_storage.*"]
 ignore_missing_imports = true
+
+
+[tool.uv.sources]
+mf-storage = { path = "../packages/mf-storage", editable = true }
