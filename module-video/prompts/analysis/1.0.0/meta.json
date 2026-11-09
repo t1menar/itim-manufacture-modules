@@ -1,0 +1,25 @@
+{
+ "id": "analysis@1.0.0",
+ "step": "analysis",
+ "version": "1.0.0",
+ "placeholders": [
+  "channel_name",
+  "idea_id",
+  "idea_text",
+  "max_s",
+  "min_s",
+  "sandbox_keys"
+ ],
+ "declared_placeholders": [
+  "idea_id",
+  "idea_text",
+  "channel_name",
+  "min_s",
+  "max_s",
+  "sandbox_keys"
+ ],
+ "input_files": "/in/idea.json, /in/environment.json (sandbox images with descriptions and versions, allowed repositories and refs, duration range), /in/channel.json, /ref/create_database/analysis.json",
+ "output": "/out/analysis.json — schema manufacture.analysis/1 (04 §5.1), file /work/schemas/analysis.schema.json; or /out/blocked.json (04 §7.2)",
+ "done_when": "validate passes; repo and ref are in environment.json; image key exists; 3 hooks; target within range",
+ "tools_network": "Read, Glob, Grep, Write, WebFetch, WebSearch, validate; Anthropic + allow_domains.analysis"
+}

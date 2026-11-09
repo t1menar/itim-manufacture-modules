@@ -414,3 +414,15 @@ def job_with_text(text: str) -> dict[str, object]:
     body = job_request()
     body["input"]["idea"]["text"] = text  # type: ignore[index]
     return body
+
+
+async def test_result_carries_metadata_that_validates_against_the_contract(harness: Harness) -> None:
+    from mvideo.contract import StageOutput
+
+    await harness.submit()
+    await harness.run_all()
+    output = harness.core.results[0][1]["output"]
+    parsed = StageOutput.model_validate(output)  # raises when metadata is missing or malformed
+    meta = parsed.variants[0].metadata
+    assert meta.title and meta.platforms["instagram"].hashtags[0].startswith("#")
+    assert output["variants"][0]["post"]["caption"] == meta.platforms["instagram"].caption

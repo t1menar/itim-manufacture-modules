@@ -90,6 +90,12 @@ class Agent(BaseModel):
     cpus: float = 1
     memory_mb: int = 2048
     pids: int = 256
+    # SDK option values live in settings because SDK details change (verified: claude-agent-sdk 0.2.179)
+    permission_mode: Literal["default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", "auto"] = (
+        "dontAsk"
+    )
+    setting_sources: list[str] = ["project"]
+    disallowed_tools: list[str] = ["Bash", "NotebookEdit", "Task"]
 
 
 class AllowedRepo(BaseModel):

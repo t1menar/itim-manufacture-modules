@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import hashlib
+import inspect
 import json
 import time
 import uuid
@@ -51,7 +52,7 @@ RENEW_TOKEN_MESSAGE = (
 )
 EXPECTED_KIND = {"subscription": "claude_oauth_token", "api_key": "anthropic_api_key"}
 
-Finalize = Callable[[RunContext], tuple[dict[str, Any], list[Artifact]]]
+Finalize = Callable[[RunContext], Any]  # sync or async: returns (output, artifacts)
 
 
 class AuthState:
@@ -102,7 +103,9 @@ class Runner:
         lease_renew_s: float = 20.0,
         cancel_poll_s: float = 2.0,
         clock: Callable[[], dt.datetime] = _utcnow,
+        services: dict[str, Any] | None = None,
     ) -> None:
+        self._services = services or {}  # launcher, source, docker, ... for RunContext
         self._factory = factory
         self._storage = storage
         self._core = core
@@ -207,6 +210,7 @@ class Runner:
             input=JobInput.model_validate(run.input),
             settings=settings,
             storage=self._storage,
+            **self._services,
         )
         try:
             ctx.credential = await self._fetch_credential(call, settings)
@@ -364,7 +368,8 @@ class Runner:
     # ---- outcome -----------------------------------------------------------------------------
 
     async def _build_result(self, run_id: uuid.UUID, ctx: RunContext) -> dict[str, Any]:
-        output, artifacts = self._finalize(ctx)
+        built = self._finalize(ctx)
+        output, artifacts = await built if inspect.isawaitable(built) else built
         StageOutput.model_validate(output)  # our own bug must not reach the core as a 422
         problems = await self._storage.verify(artifacts)
         if problems:

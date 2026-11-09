@@ -32,7 +32,7 @@ def pg_settings(image_ref: str) -> VideoSettings:
             "tmpfs": {
                 "/var/lib/postgresql/data": "size=1g",
                 "/var/run/postgresql": "size=16m",
-                "/tmp": "size=256m",  # noqa: S108
+                "/tmp": "size=256m",
             },
             "cap_add": ["CHOWN", "SETUID", "SETGID", "FOWNER", "DAC_OVERRIDE"],
             # TCP only: the temporary server of the entrypoint listens on the socket alone
@@ -93,7 +93,7 @@ def _docker_host() -> str | None:
         return os.environ["DOCKER_HOST"]
     try:
         out = subprocess.run(
-            ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],  # noqa: S607
+            ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
             capture_output=True, text=True, timeout=10, check=False,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired):

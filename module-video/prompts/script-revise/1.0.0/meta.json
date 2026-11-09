@@ -1,0 +1,25 @@
+{
+ "id": "script-revise@1.0.0",
+ "step": "script-revise",
+ "version": "1.0.0",
+ "placeholders": [
+  "commit",
+  "max_s",
+  "min_s",
+  "reading_wps",
+  "review_reason",
+  "round"
+ ],
+ "declared_placeholders": [
+  "review_reason",
+  "round",
+  "commit",
+  "min_s",
+  "max_s",
+  "reading_wps"
+ ],
+ "input_files": "/in/previous/script.en.json, /in/research.json, /in/capture.json (values as data), /in/channel.json, /in/limits.json, /src",
+ "output": "/out/script.en.json (scenario) and /out/changes.en.json — manufacture.changes/1 (04 §7.3); or /out/blocked.json",
+ "done_when": "validate(kind=\"script\") and validate(kind=\"changes\", old=\"/in/previous/script.en.json\") return no errors; the changes list equals the diff",
+ "tools_network": "as script; Anthropic only"
+}

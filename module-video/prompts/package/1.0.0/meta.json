@@ -1,0 +1,21 @@
+{
+ "id": "package@1.0.0",
+ "step": "package",
+ "version": "1.0.0",
+ "placeholders": [
+  "channel_name",
+  "fixed_hashtags",
+  "max_caption_chars",
+  "max_hashtags"
+ ],
+ "declared_placeholders": [
+  "channel_name",
+  "max_caption_chars",
+  "max_hashtags",
+  "fixed_hashtags"
+ ],
+ "input_files": "/in/script.en.json, /in/research.json, /in/channel.json (template, hashtags)",
+ "output": "/out/post.en.json — manufacture.post/1 (04 §7.1); or /out/blocked.json",
+ "done_when": "validate(kind=\"post\") returns no errors; rendered caption ≤ {max_caption_chars}; total hashtags ≤ {max_hashtags}",
+ "tools_network": "Read, Write, validate; Anthropic only"
+}
