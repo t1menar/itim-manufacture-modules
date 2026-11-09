@@ -13,6 +13,7 @@ from publish.clients.core import CoreClient
 from publish.db import repo
 from publish.domain.runner import result_callback_body, run_publish_intents
 from publish.instagram.base import InstagramClient, UnknownOutcomeError
+from publish.instagram.real import InstagramAPIError
 from publish.observability.logging import get_logger
 from publish.storage.artifacts import ArtifactError, verify_content_revision
 
@@ -232,6 +233,21 @@ class JobRunner:
                                 "intent_id": intent_id,
                             }
                         )
+                except InstagramAPIError as exc:
+                    publications.append(
+                        {
+                            "platform": "instagram",
+                            "platform_account_id": account_id,
+                            "status": "failed",
+                            "error": str(exc),
+                            "error_detail": {
+                                "code": exc.classified.code,
+                                "retryable": exc.classified.retryable,
+                                "message": exc.classified.message,
+                            },
+                            "intent_id": intent_id,
+                        }
+                    )
                 except Exception as exc:
                     publications.append(
                         {

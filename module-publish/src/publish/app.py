@@ -16,7 +16,8 @@ from publish.api.problems import install_problem_handlers
 from publish.bootstrap import BootstrapConfig
 from publish.clients.core import CoreClient
 from publish.db.session import make_engine, ping, session_factory
-from publish.instagram.fake import FakeInstagramClient
+from publish.instagram.base import InstagramClient
+from publish.instagram.factory import build_instagram_client
 from publish.jobs.runner import JobRunner
 from publish.jobs.service import JobService
 from publish.jobs.worker import Worker
@@ -35,7 +36,7 @@ def create_app(
     migrate_on_start: bool = False,
     start_amqp: bool = True,
     start_worker: bool = True,
-    ig_client: FakeInstagramClient | None = None,
+    ig_client: InstagramClient | None = None,
 ) -> FastAPI:
     metrics = Metrics()
     settings_holder = SettingsHolder()
@@ -43,7 +44,7 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
-    ig = ig_client or FakeInstagramClient(dry_run=True)
+    ig = ig_client or build_instagram_client(config, factory=factory, core=core, dry_run=True)
     runner = JobRunner(factory=factory, core=core, ig=ig)
     worker = Worker(factory=factory, runner=runner)
     job_service = JobService(factory, worker)

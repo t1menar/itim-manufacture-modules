@@ -16,10 +16,14 @@ REQUIRED_VARS = (
     "MODULE_CORE_TOKEN",
 )
 
-# Optional transport for module contract 2 (RabbitMQ). Absent → AMQP consumer stays off.
 OPTIONAL_VARS = (
     "PUBLISH_AMQP_URL",
     "PUBLISH_AMQP_QUEUE",
+    "PUBLISH_INSTAGRAM_MODE",  # fake | real
+    "PUBLISH_INSTAGRAM_ACCESS_TOKEN",  # required for real unless per-account credential_ref
+    "PUBLISH_INSTAGRAM_IG_USER_ID",  # optional default IG user id when account.external_id empty
+    "PUBLISH_INSTAGRAM_GRAPH_BASE",  # default https://graph.instagram.com
+    "PUBLISH_INSTAGRAM_API_VERSION",  # default v22.0
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
 )
@@ -39,6 +43,11 @@ class BootstrapConfig:
     amqp_queue: str = "module.publish-instagram.commands"
     otlp_endpoint: str | None = None
     otel_service_name: str = "module-publish"
+    instagram_mode: str = "fake"
+    instagram_access_token: str | None = field(default=None, repr=False)
+    instagram_ig_user_id: str | None = None
+    instagram_graph_base: str = "https://graph.instagram.com"
+    instagram_api_version: str = "v22.0"
 
     @property
     def host(self) -> str:
@@ -65,6 +74,22 @@ class BootstrapConfig:
             raise ConfigError(f"PUBLISH_LISTEN_ADDR must look like host:port, got {listen_addr!r}")
         amqp = (source.get("PUBLISH_AMQP_URL") or "").strip() or None
         queue = (source.get("PUBLISH_AMQP_QUEUE") or "").strip() or "module.publish-instagram.commands"
+        mode = (source.get("PUBLISH_INSTAGRAM_MODE") or "fake").strip().lower() or "fake"
+        if mode not in {"fake", "real"}:
+            raise ConfigError("PUBLISH_INSTAGRAM_MODE must be 'fake' or 'real'")
+        token = (source.get("PUBLISH_INSTAGRAM_ACCESS_TOKEN") or "").strip() or None
+        if mode == "real" and not token:
+            # Per-account credential_ref via Core vault is allowed at publish time;
+            # still require a bootstrap token OR document that accounts must have refs.
+            # For start-up we allow missing token if accounts use credential_ref only —
+            # but warn via ConfigError unless PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY=1.
+            allow_vault = (source.get("PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY") or "").strip() == "1"
+            if not allow_vault:
+                raise ConfigError(
+                    "PUBLISH_INSTAGRAM_ACCESS_TOKEN is required when PUBLISH_INSTAGRAM_MODE=real "
+                    "(or set PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY=1 to resolve tokens only from "
+                    "Core credentials vault per account)"
+                )
         return cls(
             database_url=source["PUBLISH_DATABASE_URL"].strip(),
             listen_addr=listen_addr,
@@ -75,4 +100,12 @@ class BootstrapConfig:
             otlp_endpoint=(source.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip() or None,
             otel_service_name=(source.get("OTEL_SERVICE_NAME") or "module-publish").strip()
             or "module-publish",
+            instagram_mode=mode,
+            instagram_access_token=token,
+            instagram_ig_user_id=(source.get("PUBLISH_INSTAGRAM_IG_USER_ID") or "").strip() or None,
+            instagram_graph_base=(
+                source.get("PUBLISH_INSTAGRAM_GRAPH_BASE") or "https://graph.instagram.com"
+            ).strip().rstrip("/"),
+            instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v22.0").strip()
+            or "v22.0",
         )
