@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/t1menar/manufacture/core/internal/auth"
 	"github.com/t1menar/manufacture/core/internal/credentials"
+	"github.com/t1menar/manufacture/core/internal/db"
 	"github.com/t1menar/manufacture/core/internal/engine"
 	"github.com/t1menar/manufacture/core/internal/modules"
 	"github.com/t1menar/manufacture/core/internal/publish"
@@ -64,6 +66,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /internal/v1/modules/{id}/activate", s.requireAdmin(s.activateModule))
 	mux.HandleFunc("GET /internal/v1/credentials/{ref}", s.requireModule(s.readCredential))
 	mux.HandleFunc("POST /internal/v1/publish-intents/{id}/republish", s.requireAdmin(s.republish))
+	mux.HandleFunc("POST /internal/v1/modules/{id}/deactivate", s.requireAdmin(s.deactivateModule))
+	mux.HandleFunc("POST /internal/v1/variants/{id}/retry", s.requireAdmin(s.retryVariant))
+	mux.HandleFunc("POST /internal/v1/variants/{id}/skip", s.requireAdmin(s.skipVariant))
 
 	mux.HandleFunc("/internal/", func(w http.ResponseWriter, _ *http.Request) {
 		problem(w, http.StatusNotImplemented, "not_implemented", "This endpoint is specified in core-04 but not implemented yet")
@@ -523,4 +528,106 @@ func (s *Server) republish(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(201)
 		_, _ = w.Write(res.HTTPResponse)
 	}
+}
+
+func (s *Server) deactivateModule(w http.ResponseWriter, r *http.Request) {
+	if s.Modules == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "module registry not configured")
+		return
+	}
+	if err := s.Modules.Deactivate(r.Context(), r.PathValue("id")); err != nil {
+		if errors.Is(err, modules.ErrNotFound) {
+			problem(w, http.StatusNotFound, "not_found", "module not found")
+			return
+		}
+		problem(w, http.StatusInternalServerError, "internal", "deactivate failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) retryVariant(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "engine not configured")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "id must be a uuid")
+		return
+	}
+	actor := r.Header.Get("X-Admin-Actor")
+	var jobID uuid.UUID
+	err = db.WithTx(r.Context(), s.Engine.Pool, func(tx pgx.Tx) error {
+		var e error
+		jobID, e = s.Engine.RetryVariant(r.Context(), tx, id)
+		if e != nil {
+			return e
+		}
+		_, e = tx.Exec(r.Context(), `INSERT INTO events (production_id, variant_id, job_id, type, actor, payload)
+			SELECT production_id, $1::uuid, $2::uuid, 'variant.retry_requested', $3::text,
+				jsonb_build_object('variant_id', $4::text)
+			FROM variants WHERE id = $1::uuid`, id, jobID, adminActor(actor), id.String())
+		return e
+	})
+	if errors.Is(err, engine.ErrInvalidState) {
+		problem(w, http.StatusConflict, "invalid_state", "variant is not needs_attention")
+		return
+	}
+	if err != nil {
+		problem(w, http.StatusInternalServerError, "internal", "retry failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"job_id": jobID})
+}
+
+func (s *Server) skipVariant(w http.ResponseWriter, r *http.Request) {
+	if s.Engine == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "engine not configured")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "id must be a uuid")
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	reason := strings.TrimSpace(body.Reason)
+	if reason == "" {
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "reason is required")
+		return
+	}
+	actor := r.Header.Get("X-Admin-Actor")
+	err = db.WithTx(r.Context(), s.Engine.Pool, func(tx pgx.Tx) error {
+		if err := s.Engine.SkipVariant(r.Context(), tx, id, reason); err != nil {
+			return err
+		}
+		_, err := tx.Exec(r.Context(), `INSERT INTO events (production_id, variant_id, type, actor, payload)
+			SELECT production_id, $1::uuid, 'variant.skip_requested', $2::text, jsonb_build_object('reason', $3::text)
+			FROM variants WHERE id = $1::uuid`, id, adminActor(actor), reason)
+		return err
+	})
+	if errors.Is(err, engine.ErrInvalidState) {
+		problem(w, http.StatusConflict, "invalid_state", "variant is not needs_attention")
+		return
+	}
+	if err != nil {
+		problem(w, http.StatusInternalServerError, "internal", "skip failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func adminActor(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "admin"
+	}
+	if strings.HasPrefix(raw, "user:") || strings.HasPrefix(raw, "tg:") {
+		return raw
+	}
+	return "user:" + raw
 }

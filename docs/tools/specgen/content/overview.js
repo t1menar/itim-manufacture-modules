@@ -157,7 +157,7 @@ module.exports = {
   ['D17', 'No duplicate work at database level: one live production per idea, one live job per variant, unique publish intents (core-04 C32, C38)', 'owner\'s decision 2026-11-08'],
   ['D18', 'Republish of the same variant to the same account is admin-only and manual: `POST /internal/v1/publish-intents/{id}/republish` with a required reason (and `base_generation` / Idempotency-Key). No automatic republish; generation > 1 only via this path (accepted P2/C38)', 'owner\'s decision 2026-11-09'],
   ['D19', 'Title, description and tags (with per-platform caption/hashtags) are returned by **module-video** in the video stage result as required `variants[].metadata` (accepted P1/C39). There is no separate `content-claude` / module-content stage in the plan.', 'owner\'s decision 2026-11-09'],
-  ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin for MVP is the Telegram bot in module-review (using core admin token `mfa_` with `X-Admin-Actor` = Telegram admin id) plus database access. admin-api returns later with the panel.', 'owner\'s decision 2026-11-09'],
+  ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin is the Telegram bot in module-review: it stores the core admin token `mfa_…` (bootstrap env/credentials) and, for allow-listed Telegram admins only, calls core admin routes with `Authorization: Bearer mfa_…` and `X-Admin-Actor: tg:<telegram_user_id>`. Module `mft_` remains for job callbacks. DB access stays as escape hatch; admin-api returns later with the panel.', 'owner\'s decision 2026-11-09; auth pattern confirmed'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [

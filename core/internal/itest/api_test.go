@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -420,5 +421,75 @@ func TestVideoResultWithoutMetadataRejected(t *testing.T) {
 	}
 	if n := e.count(`SELECT count(*) FROM jobs WHERE id = $1 AND status IN ('queued','dispatched','running')`, job); n != 1 {
 		t.Fatal("job must stay live on invalid output")
+	}
+}
+
+func TestAdminRetryAndSkipNeedsAttention(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.apiFull()
+	// Fail video fatally? easier: force needs_attention via SQL after creating variant
+	var variant uuid.UUID
+	_ = e.pool.QueryRow(e.ctx, `SELECT id FROM variants`).Scan(&variant)
+	e.exec(`UPDATE variants SET status = 'needs_attention', attention = '{"reason":"blocked"}' WHERE id = $1`, variant)
+	e.exec(`UPDATE jobs SET status = 'failed', finished_at = now() WHERE id = $1`, job)
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/internal/v1/variants/"+variant.String()+"/retry", nil)
+	req.Header.Set("Authorization", "Bearer mfa_test_admin_token_xxxxxxxx")
+	req.Header.Set("X-Admin-Actor", "tg:42")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 200 {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("retry: %d %s body=%s", res.StatusCode, problemCode(t, res), b)
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM jobs WHERE status = 'queued' AND stage_id = 'video'`); n != 1 {
+		t.Fatal("retry did not enqueue job")
+	}
+	if n := e.count(`SELECT count(*) FROM variants WHERE id = $1 AND status = 'producing'`, variant); n != 1 {
+		t.Fatal("variant not producing")
+	}
+
+	// put back to needs_attention and skip
+	e.exec(`UPDATE jobs SET status = 'failed', finished_at = now() WHERE status = 'queued' AND stage_id = 'video'`)
+	e.exec(`UPDATE variants SET status = 'needs_attention', attention = '{"reason":"blocked"}' WHERE id = $1`, variant)
+	body := bytes.NewBufferString(`{"reason":"not worth fixing"}`)
+	req, _ = http.NewRequest(http.MethodPost, srv.URL+"/internal/v1/variants/"+variant.String()+"/skip", body)
+	req.Header.Set("Authorization", "Bearer mfa_test_admin_token_xxxxxxxx")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Actor", "tg:42")
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 204 {
+		t.Fatalf("skip: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM variants WHERE id = $1 AND status = 'skipped'`, variant); n != 1 {
+		t.Fatal("not skipped")
+	}
+	_ = fence
+}
+
+func TestAdminDeactivateModule(t *testing.T) {
+	e := setup(t)
+	srv := e.apiFull()
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/internal/v1/modules/vidmod/deactivate", nil)
+	req.Header.Set("Authorization", "Bearer mfa_test_admin_token_xxxxxxxx")
+	req.Header.Set("X-Admin-Actor", "tg:7")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 204 {
+		t.Fatalf("deactivate: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM modules WHERE id = 'vidmod' AND active`); n != 0 {
+		t.Fatal("still active")
 	}
 }
