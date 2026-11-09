@@ -22,7 +22,7 @@ module.exports = {
   'Core: pipeline engine, module registry, channels and routing, settings, credentials\nAdmin API (Go) and admin panel (web)\nModule **video**: idea → finished English video\nModule **review**: Telegram bot with access keys, approve / reject with a text reason\nModule **publish**: Instagram Reels (primary platform)\nMetrics, logs and traces for all services',
   'Localization (translated copies) and a Russian-language channel\nIntro module (channel intro is created later, plugged in as a module)\nSeveral modules on one stage running in parallel, with merged output\nYouTube Shorts and TikTok publishing adapters\nReach analytics and A/B testing\nAutomatic idea generation; voice rejection reasons\nSecrets in Vault',
 ]], [1, 1]],
-['note', '**MVP scope (updated 2026-11-09, D20):** stage-1 backend without web UI and without **admin-api**. Administration is the Telegram bot (module-review) plus direct database access. `admin-panel` and `admin-api` are deferred. Modules video (owner), review and publish stay in scope. The video module is written by the owner with Claude Code; the other services implement its contract and test it with a fake module.'],
+['note', '**MVP scope (updated 2026-11-09, D20):** stage-1 backend without web UI and without **admin-api**. The Telegram review bot does **review cards + publish notifications only**; administration on MVP is via direct database access (core admin HTTP from #11 remains for ops). `admin-panel` and `admin-api` are deferred. Modules video (owner), review and publish stay in scope. The video module is written by the owner with Claude Code; the other services implement its contract and test it with a fake module.'],
 ['h1', '3. Glossary'],
 ['table', ['Term', 'Meaning'], [
   ['Brand', 'The umbrella name of the content line: **iTim**. Channels belong to a brand.'],
@@ -55,7 +55,7 @@ module.exports = {
   ['`admin-api` (deferred D20)', 'Go', 'Single entry point for the admin panel: login, 2FA, roles, audit; exposes and proxies all administrative operations.', '`admin`'],
   ['`admin-panel`', 'TypeScript (React)', 'Web client for all configuration and monitoring. No business logic.', '—'],
   ['`module-video`', 'Python', 'Stage `video`: analysis, research, script, capture, render, package. Uses Claude Code.', '`video`'],
-  ['`module-review`', 'Python', 'Stage `review`: Telegram bot, access keys, approve / reject with reason, notifications.', '`review`'],
+  ['`module-review`', 'Python', 'Stage `review`: Telegram bot — video review cards (approve/reject + reason) and publish notifications.', '`review`'],
   ['`module-publish`', 'Python', 'Stage `publish`: posts approved variants to platform accounts; Instagram Reels first.', '`publish`'],
 ], [1.2, 1, 4.2, 0.9]],
 ['p', 'Shared infrastructure: one PostgreSQL 17 server with a separate database and role per service; MinIO (S3-compatible) for videos and artifacts; RabbitMQ for job commands and job events (D11); Prometheus, Grafana, Loki and an OpenTelemetry collector for observability. Everything runs with Docker Compose in stage 1.'],
@@ -132,7 +132,7 @@ module.exports = {
 ], [2, 1.6, 2.6]],
 ['h1', '13. Roadmap'],
 ['table', ['Stage', 'Content', 'Done when'], [
-  ['1. Foundation', 'Core; modules video, review, publish (Instagram); metrics. admin-api and admin-panel deferred (D13/D20). Admin via Telegram bot + DB.', 'An idea (seeded or inserted in DB) becomes an English video, is reviewed in Telegram and is published to the iTim Instagram account; a rejection with a reason returns a corrected version.'],
+  ['1. Foundation', 'Core; modules video, review, publish (Instagram); metrics. admin-api and admin-panel deferred (D13/D20). Review bot = cards + publish notify; admin via DB.', 'An idea (seeded or inserted in DB) becomes an English video, is reviewed in Telegram and is published to the iTim Instagram account; a rejection with a reason returns a corrected version.'],
   ['2. Extensibility', 'Localization (`localize` stage, RU channel); intro module; parallel modules per stage with merge; YouTube and TikTok adapters', 'A second module on a stage is registered and run in parallel without Core code changes.'],
   ['3. Growth', 'Reach analytics, A/B tests, idea generation, Vault, voice reasons', 'Metrics from published posts influence which ideas are produced next.'],
 ], [1, 2.5, 3.5]],
@@ -157,7 +157,7 @@ module.exports = {
   ['D17', 'No duplicate work at database level: one live production per idea, one live job per variant, unique publish intents (core-04 C32, C38)', 'owner\'s decision 2026-11-08'],
   ['D18', 'Republish of the same variant to the same account is admin-only and manual: `POST /internal/v1/publish-intents/{id}/republish` with a required reason (and `base_generation` / Idempotency-Key). No automatic republish; generation > 1 only via this path (accepted P2/C38)', 'owner\'s decision 2026-11-09'],
   ['D19', 'Title, description and tags (with per-platform caption/hashtags) are returned by **module-video** in the video stage result as required `variants[].metadata` (accepted P1/C39). There is no separate `content-claude` / module-content stage in the plan.', 'owner\'s decision 2026-11-09'],
-  ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin is the Telegram bot in module-review: it stores the core admin token `mfa_…` **only** in bootstrap env `MODULE_CORE_ADMIN_TOKEN` (never as a Core credentials ref) and, for allow-listed Telegram admins only, calls core admin routes with `Authorization: Bearer mfa_…` and `X-Admin-Actor: tg:<telegram_user_id>`. Module `mft_` remains for job callbacks. DB access stays as escape hatch; admin-api returns later with the panel.', 'owner\'s decision 2026-11-09; auth pattern confirmed'],
+  ['D20', 'MVP excludes **admin-api** and **admin-panel**. The Telegram bot in module-review is **review + publish notifications only** (video card with Approve/Reject; reject asks for a text reason; revised card replies to the previous version; publish notify replies to the approved card). Admin slash commands (`/republish`, `/module`, `/retry`, `/skip`, `/settings`) are not routed. Administration on MVP is via the database; core admin HTTP (#11) remains. If an offline admin client is used, `mfa_…` stays **only** in env `MODULE_CORE_ADMIN_TOKEN` (never a Core credentials ref) with `X-Admin-Actor: tg:<telegram_user_id>`. Module `mft_` remains for job callbacks; admin-api returns later with the panel.', 'owner\'s decision 2026-11-09; clarified 2026-11-09 (bot = review/notify only)'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [
