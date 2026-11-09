@@ -57,9 +57,9 @@ jobs:
         run: |
           docker run -d --name mf-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=manufacture -e MINIO_ROOT_PASSWORD=manufacture_dev_secret \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
-          for i in $(seq 1 40); do curl -sf http://127.0.0.1:9000/minio/health/live && exit 0; sleep 1; done
-          exit 1
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
+          curl -sf http://127.0.0.1:9000/minio/health/live
       - name: sync
         run: uv sync
       - name: ruff

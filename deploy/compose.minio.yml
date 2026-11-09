@@ -1,11 +1,14 @@
-# MinIO for local Manufacture artifact storage.
-# Internal API: http://127.0.0.1:59000  (S3 API)
-# Console:      http://127.0.0.1:59001
-# Public endpoint for presigned URLs in local/dev defaults to the same host.
-# In production set S3_PUBLIC_ENDPOINT to the TLS reverse-proxy host (e.g. media.example.com).
+# Local MinIO for Manufacture artifact storage (default: http://localhost).
+# S3 API:  http://127.0.0.1:59000
+# Console: http://127.0.0.1:59001
+#
+# Presigned URLs default to the same host (S3_PUBLIC_ENDPOINT=127.0.0.1:59000).
+# For a live Instagram publish from this machine, point S3_PUBLIC_ENDPOINT at a
+# temporary public tunnel to port 59000 (cloudflared / ngrok) — no permanent
+# domain or TLS reverse-proxy is required for local/dev.
 services:
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: manufacture
@@ -23,7 +26,7 @@ services:
       start_period: 5s
 
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       minio:
         condition: service_started
