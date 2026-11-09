@@ -131,6 +131,19 @@ class Storage:
         except (BotoCoreError, ClientError) as exc:
             raise StorageError(f"download of {ref} failed: {exc}") from exc
 
+    async def head(self, ref: str) -> dict[str, Any]:
+        """Size, content type and the stored sha256 of an object (for read-back checks)."""
+        try:
+            async with self._client() as s3:
+                h = await s3.head_object(Bucket=self._bucket, Key=self.key_of(ref))
+        except (BotoCoreError, ClientError) as exc:
+            raise StorageError(f"head of {ref} failed: {exc}") from exc
+        return {
+            "size": h["ContentLength"],
+            "content_type": h.get("ContentType"),
+            "sha256": (h.get("Metadata") or {}).get("sha256"),
+        }
+
     async def verify(self, artifacts: list[Artifact]) -> list[str]:
         """Confirm every artifact exists with the announced size. Returns the refs that do not.
 

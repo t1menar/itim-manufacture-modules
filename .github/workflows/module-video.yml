@@ -1,0 +1,41 @@
+name: module-video
+on:
+  pull_request:
+    paths: ["module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
+  push:
+    branches: [main]
+    paths: ["module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: module-video-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: module-video
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: sync
+        run: uv sync
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy (renderer, strict)
+        run: uv run mypy
+      - name: import-linter
+        run: uv run lint-imports
+      # Contract drift: the vendored idea/topic/event/envelope schemas must equal contracts/ (tests/test_ideas.py),
+      # and the generated input/output schemas must match what core validates (tests/test_info.py).
+      - name: contract tests
+        run: uv run pytest -q tests/test_ideas.py tests/test_info.py tests/test_intake.py
+      # Postgres 17 is pulled for the testcontainers fixtures and the capture sandbox; RabbitMQ for the idea relay.
+      - name: pull images used by docker tests
+        run: docker pull postgres:17 && docker pull rabbitmq:4-management
+      - name: pytest (unit, render, docker)
+        run: uv run pytest -q -p no:cacheprovider
