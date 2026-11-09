@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from mf_storage import StorageClient, StorageConfig, StorageError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from review.db import secrets as keys
@@ -15,8 +16,6 @@ from review.db.secrets import get_secret, get_setting
 from review.observability.logging import get_logger
 
 log = get_logger(__name__)
-
-from mf_storage import StorageClient, StorageConfig, StorageError
 
 __all__ = ["StorageClient", "StorageConfig", "StorageError", "load_storage_client"]
 
