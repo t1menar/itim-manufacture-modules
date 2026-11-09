@@ -113,8 +113,17 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	// relay publishes job.requested to the module queue
-	if n, err := e.relay("w1").RunOnce(e.ctx, e.conn); err != nil || n != 1 {
+	r := e.relay("w1")
+	r.OnSent = func(ctx context.Context, id uuid.UUID, body []byte) {
+		if err := e.eng.MarkDispatched(ctx, body); err != nil {
+			t.Error(err)
+		}
+	}
+	if n, err := r.RunOnce(e.ctx, e.conn); err != nil || n != 1 {
 		t.Fatalf("relay: n=%d err=%v", n, err)
+	}
+	if n := e.count(`SELECT count(*) FROM jobs WHERE status = 'dispatched'`); n != 1 {
+		t.Fatalf("dispatched jobs = %d", n)
 	}
 	d := e.get(e.topo.ModuleQueue("vidmod"))
 	var outboxID string
@@ -123,14 +132,14 @@ func TestHappyPathThroughBroker(t *testing.T) {
 		t.Fatalf("AMQP message_id %q != outbox %q", d.MessageId, outboxID)
 	}
 	c := e.consumer()
-	step := func(module, stage string) {
+	step := func(module, stage string, output map[string]any) {
 		var id uuid.UUID
 		var f int
-		if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = $1 AND status = 'queued'`, stage).Scan(&id, &f); err != nil {
-			t.Fatalf("no queued %s job: %v", stage, err)
+		if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = $1 AND status IN ('queued','dispatched','running')`, stage).Scan(&id, &f); err != nil {
+			t.Fatalf("no live %s job: %v", stage, err)
 		}
-		e.moduleEvent(module, "job.progress", id, f, map[string]any{"percent": 50})
-		e.moduleEvent(module, "job.succeeded", id, f, map[string]any{"output": map[string]any{"ok": true}})
+		e.moduleEvent(module, "job.progress", id, f, map[string]any{"percent": 50, "step": "work"})
+		e.moduleEvent(module, "job.succeeded", id, f, map[string]any{"output": output})
 		if err := e.consumeUntil(c, func() bool {
 			return e.count(`SELECT count(*) FROM jobs WHERE id = $1 AND status = 'succeeded'`, id) == 1
 		}); err != nil {
@@ -139,9 +148,12 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	}
 	_ = job
 	_ = fence
-	step("vidmod", "video")
-	step("revmod", "review")
-	step("pubmod", "publish")
+	step("vidmod", "video", map[string]any{"ok": true})
+	step("revmod", "review", map[string]any{
+		"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
+		"decided_at": "2026-01-01T00:00:00Z", "round": 1,
+	})
+	step("pubmod", "publish", map[string]any{"publications": []any{}})
 	if n := e.count(`SELECT count(*) FROM productions WHERE status = 'done'`); n != 1 {
 		t.Fatal("production not done")
 	}

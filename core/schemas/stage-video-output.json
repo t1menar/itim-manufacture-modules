@@ -115,7 +115,63 @@
       }
     },
     "provenance": {
-      "type": "object"
+      "type": "object",
+      "description": "Build and prompt provenance. Runtime prompts are owned by module-video (D16/C40); core does not store them.",
+      "properties": {
+        "prompts": {
+          "type": "object",
+          "description": "step \u2192 \"step@semver\" (module-video settings / image versions)",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "prompt_refs": {
+          "type": "array",
+          "description": "Optional C40 detail: immutable prompt versions used for this job (module records these).",
+          "items": {
+            "type": "object",
+            "required": [
+              "prompt_id",
+              "version",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "prompt_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "settings_version": {
+          "type": "integer"
+        },
+        "settings_versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        }
+      }
     },
     "changes": {
       "type": [

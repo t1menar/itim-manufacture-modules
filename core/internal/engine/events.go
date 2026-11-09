@@ -70,13 +70,18 @@ func (e *Engine) HandleJobEvent(ctx context.Context, tx pgx.Tx, env messaging.En
 		if err := json.Unmarshal(env.Payload, &res); err != nil || len(res.Output) == 0 || res.Output[0] != '{' {
 			return messaging.Invalid, nil
 		}
+		jr := jobRow{liveJob: j}
+		_ = tx.QueryRow(ctx, `SELECT mode, round FROM jobs WHERE id = $1`, j.id).Scan(&jr.mode, &jr.round)
+		if err := e.validateResultOutput(ctx, tx, jr, res.Output); err != nil {
+			return messaging.Invalid, nil
+		}
 		if _, err := tx.Exec(ctx, `UPDATE jobs SET status = 'succeeded', output = $2, finished_at = now(), rev = rev + 1, updated_at = now() WHERE id = $1`, j.id, []byte(res.Output)); err != nil {
 			return "", err
 		}
 		if err := e.event(ctx, tx, j, "job.succeeded", nil); err != nil {
 			return "", err
 		}
-		return messaging.Applied, e.advance(ctx, tx, j)
+		return messaging.Applied, e.afterSuccess(ctx, tx, jr, res.Output)
 	case "job.failed":
 		var f struct {
 			Class   string `json:"class"`
@@ -150,7 +155,16 @@ func (e *Engine) advance(ctx context.Context, tx pgx.Tx, j liveJob) error {
 	}
 	for _, v := range vars {
 		v := v
-		if _, err := e.createJob(ctx, tx, j.spec(next, &v)); err != nil {
+		s := j.spec(next, &v)
+		if next.ReviseTarget != nil {
+			// Entering a review gate: allocate the next round number.
+			var rr int
+			if err := tx.QueryRow(ctx, `UPDATE variants SET review_round = review_round + 1, rev = rev + 1 WHERE id = $1 RETURNING review_round`, v).Scan(&rr); err != nil {
+				return err
+			}
+			s.round = rr
+		}
+		if _, err := e.createJob(ctx, tx, s); err != nil {
 			return err
 		}
 	}
