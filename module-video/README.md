@@ -91,6 +91,6 @@ in `src/mvideo/ideas/schemas/`, a test fails when they drift).
 - **Status consumer**: queue `module.video.idea-status` (quorum, DLQ) bound to `idea.in_production`,
   `idea.done`, `idea.failed`. Inbox dedup on `message_id`; transitions are monotonic and a wrong revision or a
   late event is `stale`.
-- The loops start only when `MODULE_AMQP_URL` is set (`MODULE_AMQP_PREFIX` for test isolation). They need the
-  `aio-pika` package, which is imported lazily and is **not yet in `pyproject.toml`** (needs installing).
+- The loops start only when `MODULE_AMQP_URL` is set (`MODULE_AMQP_PREFIX` for test isolation). They use the
+  `aio-pika` package (imported lazily). Not yet exercised against a real RabbitMQ.
 - Seed ideas by SQL as in `docs/IDEAS.md` section 9; admin HTTP for ideas comes later.
