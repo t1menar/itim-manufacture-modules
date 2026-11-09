@@ -31,11 +31,13 @@ class AmqpConsumer:
         session_factory: async_sessionmaker[Any],
         *,
         notify_handler: Any | None = None,
+        job_service: Any | None = None,
     ) -> None:
         self._url = url
         self._queue = queue
         self._sessions = session_factory
         self._notify = notify_handler
+        self._jobs = job_service
         self._task: asyncio.Task[None] | None = None
         self._conn: aio_pika.RobustConnection | None = None
         self.ready: str = "starting"
@@ -89,6 +91,32 @@ class AmqpConsumer:
                 except json.JSONDecodeError:
                     payload = {}
             await self._notify.handle(str(message_id), payload if isinstance(payload, dict) else {})
+            return
+        if msg_type == "job.requested" and self._jobs is not None:
+            from review.intake import validate_job
+
+            payload = envelope.get("payload") or {}
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    payload = {}
+            try:
+                job = validate_job(payload)
+                await self._jobs.accept(job)
+            except Exception as exc:
+                log.warning("amqp_job_reject", error=str(exc))
+            return
+        if msg_type == "job.cancel_requested" and self._jobs is not None:
+            from uuid import UUID
+
+            job_ref = envelope.get("job") or {}
+            raw_id = job_ref.get("job_id") if isinstance(job_ref, dict) else None
+            if raw_id:
+                try:
+                    await self._jobs.cancel(UUID(str(raw_id)))
+                except Exception as exc:
+                    log.warning("amqp_cancel_failed", error=str(exc))
             return
         async with self._sessions() as session, session.begin():
             claimed = await try_claim(session, str(message_id), msg_type)

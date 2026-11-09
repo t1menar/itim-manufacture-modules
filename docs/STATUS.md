@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## On main
 
-#7–#15 merged (through D21 ideas-in-video spec).
+#7–#16 merged (through module-publish/#14 and module-review/#16 job intake; D21 ideas-in-video spec #15).
 
 ## Accepted decisions
 
@@ -13,8 +13,8 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 | D18 | Admin republish with reason |
 | D16 | Prompts in module-video |
 | D19 | Metadata from module-video |
-| D20 | Bot admin token `mfa_` in `MODULE_CORE_ADMIN_TOKEN` + `X-Admin-Actor: tg:<id>`; no admin-api in MVP |
-| D21 | Ideas/topics only in module-video; `idea.ready` / reverse statuses over RabbitMQ; core stores only `idea_ref` |
+| **D20** | **Review bot = review cards + publish notifications only.** Admin ops on MVP via DB (core admin HTTP from #11 remains). `mfa_` only in env `MODULE_CORE_ADMIN_TOKEN` if/when admin client is wired; bot routing does **not** expose /republish|/module|/retry|/skip|/settings. |
+| **D21** | **Ideas/topics only in module-video; statuses draft→ready→queued→dispatched→…; scheduler publishes `idea.ready` (orchestration hints only); reverse statuses via RabbitMQ; core stores only `idea_ref`; module loads idea by ref; core.`ideas` removed (no data migration); core = orchestration only** |
 | **D22** | **Content revisions in core are an opaque blob + sha256 (no domain field parsing as source of truth)** |
 | **D23** | **Publish intents live in module-publish; core keeps only id/generation for republish. Principle: core = system orchestration, no module domain** |
 
@@ -30,10 +30,9 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #14 | module-publish job intake | owner — wait (touches publish job input / intents) |
-| #16 | module-review job intake | owner — wait |
-| (this) core/ideas-out | D21 implementation | owner — **do not merge until asked** |
+| #17 | core/ideas-out (D21 code + D22/D23) | owner — **do not merge until asked** |
 
 ## module-video owner follow-up (D21)
 
-Job `input.idea {id,text,language}` is replaced by `input.idea_ref {id,rev}`. Module must load the idea document from its DB. Transitional dual-read is optional and not implemented in core.
+Job `input.idea {id,text,language}` is replaced by `input.idea_ref {id,rev}`. Module must load the idea document from its DB. No transitional dual-read of `input.idea` in core or other modules.
+Still later: module-video tables/scheduler; real Telegram/Instagram; admin-api/panel; MinIO/ffprobe.

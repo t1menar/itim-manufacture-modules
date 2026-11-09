@@ -9,29 +9,45 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from review.api.auth import CoreAuth, Unauthorized, unauthorized_response
-from review.api.problems import problem
+from review.api.problems import ProblemError, problem
+from review.intake import validate_job
 
 router = APIRouter(tags=["jobs"])
 
 
 @router.post("/v1/jobs")
 async def accept_job(request: Request, _: CoreAuth) -> Any:
-    await request.body()
-    return problem(
-        501,
-        "not_implemented",
-        "Job intake is implemented in phase 3 (module API + Core client)",
-    )
+    raw = await request.json()
+    job = validate_job(raw)
+    service = request.app.state.job_service
+    if service is None:
+        return problem(501, "not_implemented", "Job service not configured")
+    run = await service.accept(job)
+    return JSONResponse({"job_id": str(run.job_id), "status": run.status}, status_code=202)
 
 
 @router.get("/v1/jobs/{job_id}")
-async def get_job(job_id: UUID, _: CoreAuth) -> Any:
-    return problem(501, "not_implemented", "Job status is implemented in phase 3")
+async def get_job(job_id: UUID, request: Request, _: CoreAuth) -> Any:
+    service = request.app.state.job_service
+    if service is None:
+        return problem(501, "not_implemented", "Job service not configured")
+    doc = await service.status_document(job_id)
+    if doc is None:
+        raise ProblemError(404, "not_found", "Job not found")
+    return doc
 
 
 @router.post("/v1/jobs/{job_id}/cancel")
-async def cancel_job(job_id: UUID, _: CoreAuth) -> Any:
-    return problem(501, "not_implemented", "Cancel is implemented in phase 3")
+async def cancel_job(job_id: UUID, request: Request, _: CoreAuth) -> Any:
+    service = request.app.state.job_service
+    if service is None:
+        return problem(501, "not_implemented", "Job service not configured")
+    outcome, run = await service.cancel(job_id)
+    if outcome == "not_found":
+        raise ProblemError(404, "not_found", "Job not found")
+    if outcome == "finished":
+        return JSONResponse({"job_id": str(job_id), "status": run.status if run else "finished"})
+    return JSONResponse({"job_id": str(job_id), "status": "cancelling"}, status_code=202)
 
 
 @router.post("/v1/notify")

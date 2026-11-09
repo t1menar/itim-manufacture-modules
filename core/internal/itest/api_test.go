@@ -346,6 +346,14 @@ func TestReviewApproveCreatesPublishIntents(t *testing.T) {
 	if len(intents) != 1 {
 		t.Fatalf("request intents=%v", input["intents"])
 	}
+	intent0, _ := intents[0].(map[string]any)
+	if intent0["platform_account_id"] == nil || intent0["platform_account_id"] == "" {
+		t.Fatalf("intent missing platform_account_id: %v", intent0)
+	}
+	upstream, _ := input["upstream"].(map[string]any)
+	if upstream == nil || upstream["content_revision"] == nil {
+		t.Fatalf("publish request missing upstream.content_revision: %v", input["upstream"])
+	}
 	// Idempotent: replaying the same approved result body should not create a second intent.
 	res = e.postCallback(srv, "revmod", "result", rev, rf, map[string]any{
 		"output": map[string]any{

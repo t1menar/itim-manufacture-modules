@@ -10,12 +10,16 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from review import __version__
+from review.admin.allowlist import AdminAllowlist
 from review.api import admin, health, info, jobs
 from review.api.jobs import install_auth_handler
 from review.api.problems import install_problem_handlers
 from review.bootstrap import BootstrapConfig
 from review.clients.core import CoreClient
 from review.db.session import make_engine, ping, session_factory
+from review.jobs.flow import ReviewFlow
+from review.jobs.service import JobService
+from review.jobs.worker import Worker
 from review.notify.handler import NotifyHandler
 from review.observability.logging import get_logger
 from review.observability.metrics import Metrics
@@ -32,6 +36,8 @@ def create_app(
     engine: AsyncEngine | None = None,
     migrate_on_start: bool = False,
     start_amqp: bool = True,
+    start_worker: bool = True,
+    bot: FakeTelegramBot | None = None,
 ) -> FastAPI:
     metrics = Metrics()
     settings_holder = SettingsHolder()
@@ -39,11 +45,21 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
-    bot = FakeTelegramBot()
-    notify_handler = NotifyHandler(factory, bot, config.admin_telegram_ids)
+    telegram = bot or FakeTelegramBot()
+    allowlist = AdminAllowlist(list(config.admin_telegram_ids))
+    flow = ReviewFlow(factory, telegram, core, allowlist, config.admin_telegram_ids)
+    worker = Worker(factory, flow)
+    job_service = JobService(factory, worker)
+    notify_handler = NotifyHandler(factory, telegram, config.admin_telegram_ids)
     consumer: AmqpConsumer | None = None
     if start_amqp and config.amqp_url:
-        consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory, notify_handler=notify_handler)
+        consumer = AmqpConsumer(
+            config.amqp_url,
+            config.amqp_queue,
+            factory,
+            notify_handler=notify_handler,
+            job_service=job_service,
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -51,6 +67,8 @@ def create_app(
             from review.db.migrate import upgrade_head
 
             upgrade_head(config.database_url)
+        if start_worker:
+            worker.start()
         if consumer is not None:
             await consumer.start()
         try:
@@ -58,6 +76,8 @@ def create_app(
         finally:
             if consumer is not None:
                 await consumer.stop()
+            if start_worker:
+                await worker.stop()
             if own_engine:
                 await eng.dispose()
 
@@ -75,8 +95,11 @@ def create_app(
     app.state.engine = eng
     app.state.core = core
     app.state.session_factory = factory
-    app.state.telegram_bot = bot
+    app.state.telegram_bot = telegram
     app.state.notify_handler = notify_handler
+    app.state.job_service = job_service
+    app.state.worker = worker
+    app.state.flow = flow
     app.state.amqp_consumer = consumer
     app.state.db_ready = "ok"
     app.state.amqp_ready = "not_configured" if consumer is None else "starting"
@@ -106,5 +129,4 @@ def create_app(
         return Response(content=body, media_type=content_type)
 
     app.include_router(metrics_router)
-
     return app

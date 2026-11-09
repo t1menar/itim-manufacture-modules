@@ -21,10 +21,7 @@ def config() -> BootstrapConfig:
 
 @pytest.fixture
 def client(config: BootstrapConfig) -> Iterator[TestClient]:
-    # No real DB/AMQP in unit tests: pass a dummy engine path by skipping migrate/amqp
-    # and overriding health checks.
-    app = create_app(config, engine=None, migrate_on_start=False, start_amqp=False)
-    # Avoid connecting: replace health checks and db_ready for unit scope.
+    app = create_app(config, engine=None, migrate_on_start=False, start_amqp=False, start_worker=False)
     app.state.health_checks = []
     app.state.db_ready = "not_implemented"
     app.state.amqp_ready = "not_configured"

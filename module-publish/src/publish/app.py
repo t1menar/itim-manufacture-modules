@@ -16,6 +16,10 @@ from publish.api.problems import install_problem_handlers
 from publish.bootstrap import BootstrapConfig
 from publish.clients.core import CoreClient
 from publish.db.session import make_engine, ping, session_factory
+from publish.instagram.fake import FakeInstagramClient
+from publish.jobs.runner import JobRunner
+from publish.jobs.service import JobService
+from publish.jobs.worker import Worker
 from publish.observability.logging import get_logger
 from publish.observability.metrics import Metrics
 from publish.settings import SettingsHolder
@@ -30,6 +34,8 @@ def create_app(
     engine: AsyncEngine | None = None,
     migrate_on_start: bool = False,
     start_amqp: bool = True,
+    start_worker: bool = True,
+    ig_client: FakeInstagramClient | None = None,
 ) -> FastAPI:
     metrics = Metrics()
     settings_holder = SettingsHolder()
@@ -37,9 +43,13 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
+    ig = ig_client or FakeInstagramClient(dry_run=True)
+    runner = JobRunner(factory=factory, core=core, ig=ig)
+    worker = Worker(factory=factory, runner=runner)
+    job_service = JobService(factory, worker)
     consumer: AmqpConsumer | None = None
     if start_amqp and config.amqp_url:
-        consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory)
+        consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory, job_service=job_service)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -47,6 +57,8 @@ def create_app(
             from publish.db.migrate import upgrade_head
 
             upgrade_head(config.database_url)
+        if start_worker:
+            worker.start()
         if consumer is not None:
             await consumer.start()
         try:
@@ -54,6 +66,8 @@ def create_app(
         finally:
             if consumer is not None:
                 await consumer.stop()
+            if start_worker:
+                await worker.stop()
             if own_engine:
                 await eng.dispose()
 
@@ -69,7 +83,12 @@ def create_app(
     app.state.metrics = metrics
     app.state.settings_holder = settings_holder
     app.state.engine = eng
+    app.state.session_factory = factory
     app.state.core = core
+    app.state.ig = ig
+    app.state.job_service = job_service
+    app.state.worker = worker
+    app.state.runner = runner
     app.state.amqp_consumer = consumer
     app.state.db_ready = "ok"
     app.state.amqp_ready = "not_configured" if consumer is None else "starting"
@@ -99,5 +118,4 @@ def create_app(
         return Response(content=body, media_type=content_type)
 
     app.include_router(metrics_router)
-
     return app

@@ -49,11 +49,10 @@ def test_jobs_require_auth(client: TestClient) -> None:
     assert client.get("/v1/jobs/01900000-0000-7000-8000-000000000001").status_code == 401
 
 
-def test_jobs_return_501_not_fake_success(client: TestClient, auth_header: dict[str, str]) -> None:
+def test_jobs_reject_malformed(client: TestClient, auth_header: dict[str, str]) -> None:
     resp = client.post("/v1/jobs", headers=auth_header, json={"job_id": "x"})
-    assert resp.status_code == 501
+    assert resp.status_code == 422
     assert resp.headers["content-type"].startswith("application/problem+json")
-    assert resp.json()["code"] == "not_implemented"
 
 
 def test_wrong_token_forbiddenish_unauthorized(client: TestClient) -> None:
