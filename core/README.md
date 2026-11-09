@@ -75,6 +75,13 @@ service containers and fails if an integration test is skipped.
 - Review loop: reject → revise on `revise_target` → new review round; after `review.max_rounds` → `needs_attention`/`max_rounds`.
 - `CancelJob` → `cancelled` + `needs_attention`/`cancelled_by_admin`.
 
+## Publish result + notify (this slice)
+
+- Publish `result` callback: `publications[]` → intent `published` / `failed`(+`last_error.retryable`) / `unknown`; skipped → cancelled.
+- Aggregate per variant → `published` (advance) or `needs_attention` (`publish_partial` / `publish_failed` / `publish_outcome_unknown`).
+- `notify_stage` on the snapshot row → stable `notify.requested` outbox (`message_id = sha1(job_id||"notify")`) to the active review module.
+- Publish `fail` (blocked / retries exhausted): open intents → `unknown`, variant `publish_outcome_unknown`, notify `failed`.
+
 ## Not implemented yet (next slices)
 
 - Remaining module reads (§4): credentials, productions, artifacts presign — still 501.

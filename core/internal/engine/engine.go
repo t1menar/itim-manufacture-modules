@@ -71,6 +71,7 @@ type StageRow struct {
 	MaxAttempts  int     `json:"max_attempts"`
 	ReviseTarget *string `json:"revise_target"`
 	MaxRounds    *int    `json:"max_rounds,omitempty"`
+	NotifyStage  *string `json:"notify_stage,omitempty"`
 }
 
 // Tick turns queued ideas into productions (core-05 §2-§3). Ticks are serialized by an
@@ -144,7 +145,7 @@ func (e *Engine) startIdea(ctx context.Context, tx pgx.Tx, ideaID int64) (bool, 
 		return false, err
 	}
 	var snapshot []StageRow
-	rows, err := tx.Query(ctx, `SELECT ps.position, ps.stage_id, s.scope, ps.timeout_s, ps.max_attempts, ps.revise_target, ps.max_rounds
+	rows, err := tx.Query(ctx, `SELECT ps.position, ps.stage_id, s.scope, ps.timeout_s, ps.max_attempts, ps.revise_target, ps.max_rounds, ps.notify_stage
 		FROM pipeline_stages ps JOIN stages s ON s.id = ps.stage_id WHERE ps.pipeline_id = $1 ORDER BY ps.position`, pid)
 	if err != nil {
 		return false, err

@@ -1,7 +1,8 @@
 module.exports = {
+  // 2026-11-09 fake publish runner builds stage-publish-output + result callback; no real Instagram.
   dir: 'module-publish', file: 'module-publish-05-process.docx',
   meta: { title: 'module-publish — Process', subtitle: 'Flows, state machines, Instagram adapter, errors, idempotency, recovery',
-    doc: 'module-publish-05-process', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'module-publish-05-process', version: '0.2', status: 'Draft', date: '2026-11-09' },
   blocks: [
 ['h1', '1. Overview'],
 ['p', 'One publish job handles one variant. In stage 1 that is the single English variant of a production, routed to channel `itim` with one Instagram account; the flows below are written for any number of channels and accounts. All waiting happens inside the job (the Core timeout for `publish` is 30 min, `max_attempts` 3); every step that talks to a platform persists its outcome before the next step starts, so a restart resumes from the last persisted state.'],

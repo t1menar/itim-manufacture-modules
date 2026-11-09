@@ -14,7 +14,8 @@ Specification: `../docs/module-review/` (`module-review-01-description.docx` …
 
 
 - **Phase 1 (this PR):** project skeleton, bootstrap env (exactly four required vars), settings schema + holder, FastAPI `/info` `/health` `/ready` `/metrics`, problem+json, bearer auth on job/admin routes (handlers return **501 not_implemented** until later phases — no fake success), Alembic migration `0001` (`amqp_inbox`, `bot_state`), optional AMQP consumer with inbox dedup when `REVIEW_AMQP_URL` is set, Core HTTP client stub (progress/result/fail with `X-Fence`, heartbeat, settings, credentials), Dockerfile, CI.
-- Not yet: data model for reviews/keys (phase 2), job intake (phase 3), Telegram bot (phase 4+), real notify/summary.
+- **Notify (this PR):** `NotifyHandler` consumes `notify.requested` (HTTP `/v1/notify` + AMQP) with inbox dedup; formats admin text; sends via `MessageSender` (`FakeTelegramBot` in tests — no real Telegram).
+- Not yet: data model for reviews/keys (phase 2), job intake (phase 3), real Telegram polling, Anthropic.
 
 ## Develop
 

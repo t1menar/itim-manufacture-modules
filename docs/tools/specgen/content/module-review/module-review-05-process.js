@@ -1,8 +1,9 @@
 module.exports = {
+  // 2026-11-09 notify: inbox-dedup notify.requested → MessageSender (FakeTelegramBot in tests); no real Telegram.
   dir: 'module-review',
   file: 'module-review-05-process.docx',
   meta: { title: 'module-review — Process', subtitle: 'Flows, state machines, concurrency, recovery and error handling',
-    doc: 'module-review-05-process', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'module-review-05-process', version: '0.2', status: 'Draft', date: '2026-11-09' },
   blocks: [
 ['h1', '1. Principles'],
 ['ul', [

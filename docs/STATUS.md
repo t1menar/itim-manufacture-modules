@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## On main
 
-#7–#10, #6, #11 (admin deactivate/retry/skip). Next: #12 review admin client; then publish-result + notify.
+#7–#12 merged (publish intents, P1 metadata, core gaps, module skeletons, D20 admin deactivate/retry/skip, review admin client).
 
 ## Accepted decisions
 
@@ -19,9 +19,8 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #12 module-review admin | CoreAdminClient + commands + FakeTelegram | after CI |
-| (next) publish result + notify | core intents from publish callback; outbox notify; modules | owner |
+| (this) publish result + notify | core: publications → intents + aggregate + notify outbox; module-publish fake runner; module-review notify + FakeTelegram | owner — **do not merge until green CI + review** |
 
 ## Still later
 
-Real Telegram polling; real Instagram; admin-api/panel.
+Real Telegram polling; real Instagram Login; admin-api/panel; module-video owned by owner.

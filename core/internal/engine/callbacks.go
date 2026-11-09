@@ -321,6 +321,9 @@ func (e *Engine) afterSuccess(ctx context.Context, tx pgx.Tx, j jobRow, output j
 	if j.stageID == "review" {
 		return e.afterReview(ctx, tx, j, output)
 	}
+	if j.stageID == "publish" {
+		return e.afterPublish(ctx, tx, j, output)
+	}
 	// A revise video job succeeding should create a new review round, not skip ahead.
 	if j.mode == "revise" {
 		return e.afterRevise(ctx, tx, j)
@@ -557,11 +560,13 @@ func (e *Engine) CancelJob(ctx context.Context, jobID uuid.UUID, reason string) 
 }
 
 // EnqueueNotify writes a notify.requested command for the review/notify module (at-least-once).
+// message_id is stable per job so retries of the same completion do not duplicate deliveries.
 func (e *Engine) EnqueueNotify(ctx context.Context, tx pgx.Tx, moduleID string, payload json.RawMessage, productionID, jobID uuid.UUID, fence int) error {
+	msgID := uuid.NewSHA1(uuid.NameSpaceOID, append(jobID[:], []byte("notify")...))
 	return messaging.Enqueue(ctx, tx, messaging.OutboxMessage{
 		Exchange: e.Topo.Commands(), RoutingKey: "notify." + moduleID,
 		Envelope: messaging.Envelope{
-			Type: "notify.requested", Producer: "core", ProductionID: &productionID,
+			MessageID: msgID, Type: "notify.requested", Producer: "core", ProductionID: &productionID,
 			Job: &messaging.JobRef{JobID: jobID, Fence: fence}, Payload: payload,
 		},
 	})
