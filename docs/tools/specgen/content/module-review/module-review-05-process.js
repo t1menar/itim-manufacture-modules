@@ -1,4 +1,6 @@
 module.exports = {
+  // 2026-11-09 review cards: sendVideo+Approve/Reject; reject→reason in DB; revise reply_to; publish notify reply.
+  // D20: bot = review+publish notify only; no admin slash cmds.
   // 2026-11-09 notify: inbox-dedup notify.requested → MessageSender (FakeTelegramBot in tests); no real Telegram.
   dir: 'module-review',
   file: 'module-review-05-process.docx',

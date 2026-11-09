@@ -6,23 +6,43 @@ from review.notify.handler import NotifyHandler, format_notify_message
 from review.telegram.fake import FakeTelegramBot
 
 
-def test_format_notify_message() -> None:
+def test_format_notify_published() -> None:
     text = format_notify_message(
         {
             "status": "published",
             "attention_kind": "published",
-            "variant_id": "v1",
+            "title": "My reel",
             "publications": [
                 {
                     "platform": "instagram",
+                    "handle": "@itim",
                     "status": "published",
                     "url": "https://www.instagram.com/reel/x/",
                 }
             ],
         }
     )
-    assert "publish:published" in text
-    assert "instagram:published" in text
+    assert "Опубликовано: My reel" in text
+    assert "instagram @itim" in text
+    assert "https://www.instagram.com/reel/x/" in text
+
+
+def test_format_notify_error() -> None:
+    text = format_notify_message(
+        {
+            "status": "failed",
+            "attention_kind": "partial",
+            "publications": [
+                {
+                    "platform": "instagram",
+                    "status": "failed",
+                    "error_detail": {"code": "rate_limited"},
+                }
+            ],
+        }
+    )
+    assert "Публикация: partial/failed" in text
+    assert "rate_limited" in text
 
 
 @pytest.mark.asyncio
@@ -57,7 +77,7 @@ async def test_notify_handler_dedup_with_fake_bot(monkeypatch: pytest.MonkeyPatc
         "notification_id": "01900000-0000-7000-8000-000000000001",
         "status": "partial",
         "attention_kind": "partial",
-        "variant_id": "v",
+        "variant_id": "01900000-0000-7000-8000-000000000099",
         "publications": [{"platform": "instagram", "status": "failed", "error": "x"}],
     }
     r1 = await handler.handle("mid-1", payload)
@@ -65,4 +85,4 @@ async def test_notify_handler_dedup_with_fake_bot(monkeypatch: pytest.MonkeyPatc
     assert r1.claimed and r1.sent == 2
     assert not r2.claimed and r2.sent == 0
     assert len(bot.sent) == 2
-    assert "publish:partial" in bot.sent[0]["text"]
+    assert "Публикация: partial/partial" in bot.sent[0]["text"]

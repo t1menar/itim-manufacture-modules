@@ -273,7 +273,7 @@ against the running app. ruff, mypy, pytest pass.
 
 Ambiguity: stop and list questions. No Co-Authored-By trailers. Summarize changes.`],
 ['h2', '3.4 Phase 4 — bot access'],
-['table', PT, [['4', 'aiogram polling with lock, update dedupe, i18n, keys, roles, admin commands, groups', '04 §5–6.2, §6.5, §6.8; 05 F2, F3, F13, F14, §6', 'fake-Telegram e2e for redemption, lockout, revoke, /newkey deletion pass', '~1 300 lines']], PW],
+['table', PT, [['4', 'aiogram polling with lock, update dedupe, i18n, keys, roles, review callbacks, groups', '04 §5–6.2, §6.5, §6.8; 05 F2, F3, F13, F14, §6', 'fake-Telegram e2e for redemption, lockout, revoke, /newkey deletion pass', '~1 300 lines']], PW],
 ['code', `Implement phase 4 (bot access) of module-review with aiogram 3.
 
 Context: module-review-04-contracts.docx sections 5 and 6 (texts in 6.1, 6.2, 6.5, 6.8);
