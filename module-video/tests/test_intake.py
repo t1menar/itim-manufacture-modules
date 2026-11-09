@@ -20,7 +20,7 @@ def test_valid_create_job() -> None:
     job = validate_job(job_request())
     assert job.request.stage == "video"
     assert job.settings.agent.auth.mode == "subscription"
-    assert job.input.idea.id == 42
+    assert (job.input.idea_ref.id, job.input.idea_ref.rev) == (42, 1)
 
 
 def test_not_an_object() -> None:
@@ -43,12 +43,6 @@ def test_wrong_stage() -> None:
     assert code_of(job_request(stage="review")) == (422, "stage_unsupported")
 
 
-def test_language_must_be_english() -> None:
-    raw = job_request()
-    raw["input"]["idea"]["language"] = "ru"
-    assert code_of(raw) == (422, "language_unsupported")
-
-
 def test_settings_are_validated_against_the_schema() -> None:
     assert code_of(job_request(settings={"agent": {"image": "nodigest"}})) == (422, "settings_invalid")
     assert code_of(job_request(settings=settings_values(unknown=1))) == (422, "settings_invalid")
@@ -62,7 +56,7 @@ def test_settings_errors_are_listed() -> None:
 
 def test_input_is_validated() -> None:
     raw = job_request()
-    raw["input"]["idea"]["text"] = "hi"
+    raw["input"]["idea_ref"]["rev"] = 0
     assert code_of(raw) == (422, "input_invalid")
 
 

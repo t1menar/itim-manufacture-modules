@@ -36,6 +36,7 @@ class RunContext:
     # revise mode: files of the last succeeded run of the production, and what this run found out
     previous: dict[str, dict[str, Artifact]] = field(default_factory=dict)
     values_changed: list[str] = field(default_factory=list)
+    idea: dict[str, Any] = field(default_factory=dict)  # the idea document loaded by `input.idea_ref`
     prompts: Any = None  # mvideo.agents.prompts.PromptStore; None reads the packaged files
     prompt_cache: dict[str, Any] = field(default_factory=dict)  # step (and `skill`) -> resolved Prompt
     sandbox_used: bool = (

@@ -11,6 +11,7 @@ from mvideo.agents import prompts
 from mvideo.agents.launcher import AgentRequest, AgentResult
 from mvideo.agents.run import run_agent
 from mvideo.agents.workspace import Workspace
+from mvideo.ideas.document import idea_text
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
 from mvideo.pipeline.steps.base import Step
@@ -82,7 +83,7 @@ def common_values(ctx: RunContext) -> dict[str, Any]:
     ch = ctx.input.channels[0]
     d = ctx.settings.video.duration_s
     return {
-        "idea_id": ctx.input.idea.id, "idea_text": ctx.input.idea.text, "channel_name": ch.name or ch.id,
+        "idea_id": ctx.idea["id"], "idea_text": idea_text(ctx.idea), "channel_name": ch.name or ch.id,
         "min_s": int(d.min), "max_s": int(d.max), "reading_wps": reading_wps(ctx),
     }  # fmt: skip
 

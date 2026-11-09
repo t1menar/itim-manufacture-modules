@@ -401,19 +401,9 @@ async def test_second_attempt_with_identical_inputs_reuses_every_step(harness: H
 async def test_changed_idea_text_invalidates_the_cache(harness: Harness) -> None:
     await harness.submit()
     await harness.run_all()
-    other = job_with_text("A completely different idea about vacuum")
-    async with harness.client() as c:
-        assert (await c.post("/v1/jobs", json=other)).status_code == 202
+    await harness.submit(input_text="A completely different idea about vacuum")
     await harness.run_all()
     assert [s.calls for s in harness.steps] == [2] * 6
-
-
-def job_with_text(text: str) -> dict[str, object]:
-    from tests.helpers import job_request
-
-    body = job_request()
-    body["input"]["idea"]["text"] = text  # type: ignore[index]
-    return body
 
 
 async def test_result_carries_metadata_that_validates_against_the_contract(harness: Harness) -> None:

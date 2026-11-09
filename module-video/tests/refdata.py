@@ -61,3 +61,18 @@ def synthetic_source(script: dict[str, Any], research: dict[str, Any]) -> Memory
     for path in paths.values():
         files.setdefault(path, {})
     return MemorySource(files)
+
+
+def idea_document(**overrides: Any) -> dict[str, Any]:
+    """An idea document (contracts/idea.json) for the reference video."""
+    doc: dict[str, Any] = {
+        "id": 42, "rev": 1, "idea_ref": "idea:42:v1",
+        "title": "Detailed implementation of CREATE DATABASE in PostgreSQL",
+        "description": "Show that CREATE DATABASE copies template1; three everyday surprises.",
+        "hook": "CREATE DATABASE creates nothing. It copies.", "audience": None, "language": "en",
+        "tags": ["postgresql", "databases"], "references": [], "constraints": None, "priority": 10,
+        "pipeline_id": None, "notes": None, "author": "db:owner",
+        "topic": {"id": 1, "code": "postgres_internals", "title": "PostgreSQL internals", "rev": 1,
+                  "default_tags": ["postgresql"], "default_platforms": ["instagram"]},
+    }  # fmt: skip
+    return {**doc, **overrides}

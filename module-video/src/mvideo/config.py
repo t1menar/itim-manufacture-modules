@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 REQUIRED_VARS = (
     "VIDEO_DATABASE_URL",
@@ -22,11 +23,32 @@ REQUIRED_VARS = (
     "DOCKER_HOST",
     "VIDEO_AGENT_NETWORK",
 )
-OPTIONAL_VARS = ("OTEL_EXPORTER_OTLP_ENDPOINT",)
+OPTIONAL_VARS = (
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "MODULE_AMQP_URL",  # without it the idea scheduler, relay and status consumer stay off
+    "MODULE_AMQP_PREFIX",
+    "VIDEO_IDEAS_TICK_S",
+    "VIDEO_IDEAS_MAX_DISPATCH",
+    "VIDEO_IDEAS_MAX_IN_FLIGHT",
+    "VIDEO_IDEAS_PAUSED",
+)
 
 
 class ConfigError(Exception):
     """Raised at start-up when bootstrap variables are missing or malformed."""
+
+
+def _number(source: Mapping[str, str], name: str, default: float, kind: type) -> Any:
+    raw = (source.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = kind(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be a number, got {raw!r}") from exc
+    if value <= 0:
+        raise ConfigError(f"{name} must be positive")
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +65,12 @@ class BootstrapConfig:
     docker_host: str
     agent_network: str
     otlp_endpoint: str | None = None
+    amqp_url: str | None = field(default=None, repr=False)
+    amqp_prefix: str = ""
+    ideas_tick_s: float = 5.0
+    ideas_max_dispatch: int = 5
+    ideas_max_in_flight: int = 3
+    ideas_paused: bool = False
 
     @property
     def host(self) -> str:
@@ -79,4 +107,10 @@ class BootstrapConfig:
             docker_host=source["DOCKER_HOST"].strip(),
             agent_network=source["VIDEO_AGENT_NETWORK"].strip(),
             otlp_endpoint=(source.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip() or None,
+            amqp_url=(source.get("MODULE_AMQP_URL") or "").strip() or None,
+            amqp_prefix=(source.get("MODULE_AMQP_PREFIX") or "").strip(),
+            ideas_tick_s=_number(source, "VIDEO_IDEAS_TICK_S", 5.0, float),
+            ideas_max_dispatch=_number(source, "VIDEO_IDEAS_MAX_DISPATCH", 5, int),
+            ideas_max_in_flight=_number(source, "VIDEO_IDEAS_MAX_IN_FLIGHT", 3, int),
+            ideas_paused=(source.get("VIDEO_IDEAS_PAUSED") or "").strip().lower() in ("1", "true", "yes"),
         )

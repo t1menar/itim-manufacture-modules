@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -490,6 +491,10 @@ def _provenance(ctx: RunContext) -> dict[str, Any]:
         return cache[step].version if step in cache else ctx.settings.prompt_versions.get(step, "1.0.0")
 
     out: dict[str, Any] = {
+        "idea": {
+            "idea_ref": ctx.idea.get("idea_ref"),
+            "sha256": hashlib.sha256(json.dumps(ctx.idea, sort_keys=True).encode()).hexdigest(),
+        },
         "prompts": {s: f"{s}@{used(s)}" for s in steps},
         "skill": f"explainer-video@{used('skill')}",
         "model": ctx.settings.model,

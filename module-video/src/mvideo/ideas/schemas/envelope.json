@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "events/envelope.json",
+  "title": "RabbitMQ message envelope (core-04 \u00a715.3, proposed C29-C31)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "type",
+    "schema_version",
+    "occurred_at",
+    "producer",
+    "payload"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "enum": [
+        "job.requested",
+        "job.cancel_requested",
+        "notify.requested",
+        "job.progress",
+        "job.succeeded",
+        "job.failed",
+        "idea.ready",
+        "idea.in_production",
+        "idea.done",
+        "idea.failed"
+      ]
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "type": "string",
+      "pattern": "^(core|module:[a-z0-9][a-z0-9-]{1,39})$"
+    },
+    "production_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "traceparent": {
+      "type": "string"
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "fence"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "pattern": "^job\\."
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "job",
+          "production_id"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture.local/contracts/events/idea.status.json",
+  "title": "idea status payload (D21)",
+  "description": "Core → module-video reverse status. Envelope type one of idea.in_production | idea.done | idea.failed. message_id = UUIDv5(NS, 'idea:<id>:v<rev>:<status>:<production_id>').",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["idea_ref", "production_id", "status"],
+  "properties": {
+    "idea_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rev"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "rev": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "production_id": { "type": "string", "format": "uuid" },
+    "status": { "enum": ["in_production", "done", "failed"] },
+    "failure": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "message": { "type": ["string", "null"], "maxLength": 2000 }
+      },
+      "required": ["code"]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "failed" } } },
+      "then": { "required": ["failure"] }
+    }
+  ]
+}

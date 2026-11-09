@@ -36,6 +36,7 @@ from mvideo.core_client import (
 )
 from mvideo.db import repo
 from mvideo.db.models import ACTIVE_RUN_STATUSES, Run
+from mvideo.ideas import repo as idea_repo
 from mvideo.pipeline.budget import check_agent_run_gate
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import LeaseLost, RunCancelled, StepError
@@ -80,6 +81,7 @@ def input_hash(spec: Step, ctx: RunContext) -> str:
         "model": ctx.settings.models.get(spec.name, ctx.settings.model),  # type: ignore[call-overload]
         "settings": {k: dumped[k] for k in spec.settings_keys},
         "input": ctx.input.model_dump(mode="json", exclude={"upstream"}),
+        "idea": hashlib.sha256(json.dumps(ctx.idea, sort_keys=True).encode()).hexdigest(),
         "upstream": upstream,
         # an edited or re-activated prompt must not hit the step cache
         "prompts": sorted(
@@ -220,6 +222,7 @@ class Runner:
             **self._services,
         )
         try:
+            ctx.idea = await self._load_idea(ctx)
             ctx.credential = await self._fetch_credential(call, settings)
             await self._run_steps(run, ctx, call, cancel, lost)
             body = await self._build_result(run.id, ctx)
@@ -246,6 +249,15 @@ class Runner:
             )
             return
         await self._send_result(run, call, body)
+
+    async def _load_idea(self, ctx: RunContext) -> dict[str, Any]:
+        """The idea document of `input.idea_ref` from this module's database (D21)."""
+        ref = ctx.input.idea_ref
+        async with self._factory() as s:
+            doc = await idea_repo.load_document(s, ref.id, ref.rev)
+        if doc is None:
+            raise StepError("fatal", "input_invalid", f"idea idea:{ref.id}:v{ref.rev} not found")
+        return doc
 
     async def _fetch_credential(self, call: JobCall, settings: VideoSettings) -> Credential:
         ref = settings.agent.auth.credential_ref

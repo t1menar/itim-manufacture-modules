@@ -26,7 +26,7 @@ def new_run(job_id: uuid.UUID | None = None, **kw: Any) -> NewRun:
         mode="create",
         settings_version=7,
         settings={"agent": {"image": "x"}},
-        input={"idea": {"id": 1, "text": "hello world", "language": "en"}},
+        input={"idea_ref": {"id": 1, "rev": 1}},
         deadline=T0 + dt.timedelta(hours=1),
         **kw,
     )

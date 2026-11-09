@@ -40,13 +40,6 @@ def validate_job(raw: Any) -> ValidJob:
             422, "stage_unsupported", f"This module serves stage 'video', not {request.stage!r}"
         )
 
-    idea = request.input.get("idea")
-    language = idea.get("language") if isinstance(idea, dict) else None
-    if language != "en":
-        raise ProblemError(
-            422, "language_unsupported", f"Stage 1 is English only; idea.language is {language!r}"
-        )
-
     try:
         settings = VideoSettings.model_validate(request.settings.values)
     except ValidationError as exc:
