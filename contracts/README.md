@@ -1,11 +1,12 @@
 # Shared contracts (JSON Schema)
 
-Cross-service shapes that are not yet folded into `core/schemas/`.
+Cross-service shapes not yet folded into `core/schemas/`.
 
 | File | Purpose |
 |------|---------|
-| `topic.json` | Topic catalog entry owned by module-video (D21) |
-| `idea.json` | Immutable idea snapshot published to core |
-| `events/idea.ready.json` | Payload of AMQP `idea.ready` |
+| `topic.json` | Topic catalog (module-video only) |
+| `idea.json` | Idea **document** in module-video (not stored in core) |
+| `events/idea.ready.json` | Orchestration payload module-video → core |
+| `events/idea.status.json` | Reverse status core → module-video (`in_production` / `done` / `failed`) |
 
-Authoritative behaviour: `module-video/docs/IDEAS.md`. When core implements the consumer, promote copies into `core/schemas/` and extend the envelope `type` enum.
+Behaviour: `module-video/docs/IDEAS.md` (D21).

@@ -2,11 +2,25 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://manufacture.local/contracts/events/idea.ready.json",
   "title": "idea.ready payload (D21)",
-  "description": "Payload of envelope type idea.ready. message_id = UUIDv5(ns, idea_ref). producer = module:video. exchange manufacture.events, routing key idea.ready.",
+  "description": "Orchestration-only payload. message_id = UUIDv5(NS, 'idea:<id>:v<rev>'). producer = module:video. exchange manufacture.events, routing key idea.ready. Domain idea body is NOT included; module-video loads by idea_ref.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["idea"],
+  "required": ["idea_ref", "language", "priority"],
   "properties": {
-    "idea": { "$ref": "../idea.json" }
+    "idea_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rev"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "rev": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "language": { "const": "en" },
+    "pipeline_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9-]{1,39}$"
+    },
+    "priority": { "type": "integer", "minimum": -100, "maximum": 100 }
   }
 }

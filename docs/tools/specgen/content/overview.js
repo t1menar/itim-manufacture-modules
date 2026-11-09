@@ -28,7 +28,7 @@ module.exports = {
   ['Brand', 'The umbrella name of the content line: **iTim**. Channels belong to a brand.'],
   ['Channel', 'One publishing destination with one language. Stage 1 has one channel, **iTim** (`itim`, English); a Russian-language channel comes later with localization. A channel has platform accounts (Instagram first).'],
   ['Platform account', 'A channel\'s account on a platform (Instagram, later YouTube, TikTok) with its credentials.'],
-  ['Idea', 'A structured backlog item owned by **module-video** (title, description, topic, tags, priority; D21). Core stores only an immutable snapshot on the production. Stage 1: English only.'],
+  ['Idea', 'A structured backlog item owned by **module-video** (title, description, topic, tags, priority; D21). Core stores only opaque `idea_ref` (id+rev); the video module loads the document itself. Stage 1: English only.'],
   ['Production', 'One run of the pipeline for one idea. Identified by `production_id`, which is also the trace id everywhere.'],
   ['Variant', 'One language version of a production. Stage 1 always has exactly one variant, `en`; the concept stays so localization can return without a schema change.'],
   ['Stage', 'A step of the pipeline (`video`, `review`, `publish`, later `intro`, …). A stage has a scope: per production or per variant.'],
@@ -68,7 +68,7 @@ module.exports = {
 ]],
 ['h1', '6. End-to-end process'],
 ['ol', [
-  'The owner adds a topic and an idea in the **module-video database** (MVP; admin panel deferred): title, description, topic, priority (D21). The video-module scheduler publishes `idea.ready`.',
+  'The owner adds a topic and an idea in the **module-video database** (MVP): draft→ready→queued (D21). The video-module scheduler publishes orchestration-only `idea.ready`; the module later loads the idea by `idea_ref`.',
   'The Core takes the next idea, creates a production with one English variant and starts the pipeline stored in the database (stage 1: `video` → `review` → `publish`).',
   'Stage **video** (scope: production). The video module analyses the idea, researches what viewers need and the real source code, writes the script in English, captures real data in a sandbox, renders the video and packages it (loudness, cover, caption text). Result: one video file in MinIO plus a self-check report.',
   'Stage **review** (scope: variant). The review bot sends each variant to the reviewers in Telegram with **Approve** and **Reject** buttons. Reject requires a text reason.',
@@ -97,7 +97,7 @@ module.exports = {
 ['ul', [
   'PostgreSQL 17: one server in stage 1, one database and one role per service; a service can only connect to its own database. Migrations live in each service folder.',
   'MinIO: all files under `s3://manufacture/<production_id>/<stage>/<attempt>/…`. Intermediate files expire after 30 days; final videos, scripts and captured data are kept.',
-  'module-video is the source of truth for ideas and topics (D21). The Core database is the source of truth for productions, variants, jobs and their results (as references to MinIO objects with sha256 and size), holding only an idea snapshot per production.',
+  'module-video is the source of truth for ideas and topics (D21). The Core database is the source of truth for productions, variants, jobs and their results (as references to MinIO objects with sha256 and size), holding only opaque `idea_ref` per production.',
 ]],
 ['h1', '10. Security and access'],
 ['ul', [
@@ -158,7 +158,7 @@ module.exports = {
   ['D18', 'Republish of the same variant to the same account is admin-only and manual: `POST /internal/v1/publish-intents/{id}/republish` with a required reason (and `base_generation` / Idempotency-Key). No automatic republish; generation > 1 only via this path (accepted P2/C38)', 'owner\'s decision 2026-11-09'],
   ['D19', 'Title, description and tags (with per-platform caption/hashtags) are returned by **module-video** in the video stage result as required `variants[].metadata` (accepted P1/C39). There is no separate `content-claude` / module-content stage in the plan.', 'owner\'s decision 2026-11-09'],
   ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin paths that exist use the Telegram bot in module-review with core admin token `mfa_…` **only** in bootstrap env `MODULE_CORE_ADMIN_TOKEN` and `X-Admin-Actor: tg:<telegram_user_id>` for allow-listed admins. Module `mft_` remains for job callbacks. Clarified with D21: the bot\'s product job is review-only; idea/topic backlog is edited in the DB on MVP.', 'owner\'s decision 2026-11-09; auth pattern confirmed'],
-  ['D21', 'Ideas and topics are owned by **module-video** (DB `video`). A scheduler **inside module-video** selects `ready` ideas (`FOR UPDATE SKIP LOCKED`), publishes `idea.ready` via transactional outbox to RabbitMQ topic exchange `manufacture.events` with stable `message_id` = UUIDv5(ns, `idea:<id>:v<rev>`), and never re-sends the same rev (status `dispatched` + unique outbox + consumer inbox). Core consumes the event, creates a production with an immutable `idea_snapshot`, and stops owning table `ideas`. Job `input.idea` keeps `{id,text,language}` for compatibility and gains snapshot fields. MVP: create ideas/topics via SQL. Spec: `module-video/docs/IDEAS.md`, schemas in `contracts/`.', 'owner\'s decision 2026-11-09'],
+  ['D21', 'Ideas and topics live only in **module-video**. Statuses: `draft` → `ready` → `queued` → `dispatched` → `in_production` → `done`/`failed` (plus cancelled/archived). Scheduler in module-video publishes orchestration-only `idea.ready` (idea_ref + language/pipeline/priority) via transactional outbox; reverse statuses `idea.in_production`/`done`/`failed` over RabbitMQ with stable UUIDv5 message_id and module inbox dedup. Core stores only opaque `idea_ref` on the production, never idea body; video job input carries `idea_ref` and the module loads the document from its DB. Table core.`ideas` is removed with **no** data migration. Principle: core orchestrates the system; module domain stays in modules. Spec: `module-video/docs/IDEAS.md`.', 'owner\'s decision 2026-11-09; Q&A closed'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [
