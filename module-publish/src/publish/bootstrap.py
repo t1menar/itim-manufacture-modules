@@ -73,5 +73,6 @@ class BootstrapConfig:
             amqp_url=amqp,
             amqp_queue=queue,
             otlp_endpoint=(source.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip() or None,
-            otel_service_name=(source.get("OTEL_SERVICE_NAME") or "module-publish").strip() or "module-publish",
+            otel_service_name=(source.get("OTEL_SERVICE_NAME") or "module-publish").strip()
+            or "module-publish",
         )
