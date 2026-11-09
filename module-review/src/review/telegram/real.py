@@ -301,30 +301,37 @@ def parse_update(raw: dict[str, Any]) -> TelegramUpdate | None:
         return None
     if "callback_query" in raw and isinstance(raw["callback_query"], dict):
         cq = raw["callback_query"]
-        msg = cq.get("message") if isinstance(cq.get("message"), dict) else {}
-        chat = msg.get("chat") if isinstance(msg.get("chat"), dict) else {}
-        from_user = cq.get("from") if isinstance(cq.get("from"), dict) else {}
+        msg_raw = cq.get("message")
+        msg: dict[str, Any] = msg_raw if isinstance(msg_raw, dict) else {}
+        chat_raw = msg.get("chat")
+        chat: dict[str, Any] = chat_raw if isinstance(chat_raw, dict) else {}
+        from_raw = cq.get("from")
+        from_user: dict[str, Any] = from_raw if isinstance(from_raw, dict) else {}
         chat_id = chat.get("id")
         user_id = from_user.get("id")
         if not isinstance(chat_id, int) or not isinstance(user_id, int):
             return None
+        mid = msg.get("message_id")
         return TelegramUpdate(
             update_id=update_id,
             chat_id=chat_id,
             user_id=user_id,
             callback_data=str(cq["data"]) if cq.get("data") is not None else None,
-            callback_message_id=int(msg["message_id"]) if msg.get("message_id") is not None else None,
+            callback_message_id=int(mid) if mid is not None else None,
             callback_query_id=str(cq["id"]) if cq.get("id") is not None else None,
         )
     if "message" in raw and isinstance(raw["message"], dict):
         msg = raw["message"]
-        chat = msg.get("chat") if isinstance(msg.get("chat"), dict) else {}
-        from_user = msg.get("from") if isinstance(msg.get("from"), dict) else {}
+        chat_raw = msg.get("chat")
+        chat = chat_raw if isinstance(chat_raw, dict) else {}
+        from_raw = msg.get("from")
+        from_user = from_raw if isinstance(from_raw, dict) else {}
         chat_id = chat.get("id")
         user_id = from_user.get("id")
         if not isinstance(chat_id, int) or not isinstance(user_id, int):
             return None
-        reply = msg.get("reply_to_message") if isinstance(msg.get("reply_to_message"), dict) else None
+        reply_raw = msg.get("reply_to_message")
+        reply = reply_raw if isinstance(reply_raw, dict) else None
         reply_id = int(reply["message_id"]) if reply and reply.get("message_id") is not None else None
         text = msg.get("text")
         return TelegramUpdate(
