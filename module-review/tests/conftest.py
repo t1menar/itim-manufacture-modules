@@ -22,9 +22,7 @@ def config() -> BootstrapConfig:
 
 @pytest.fixture
 def client(config: BootstrapConfig) -> Iterator[TestClient]:
-    app = create_app(
-        config, engine=None, migrate_on_start=False, start_amqp=False, start_worker=False
-    )
+    app = create_app(config, engine=None, migrate_on_start=False, start_amqp=False, start_worker=False)
     app.state.health_checks = []
     app.state.db_ready = "not_implemented"
     app.state.amqp_ready = "not_configured"
