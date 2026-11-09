@@ -23,7 +23,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 | PR | Content | Merge? |
 |----|---------|--------|
 | #20 | module-review real Telegram Bot API | owner — wait |
-| (this) | module-publish real Instagram Graph Reels | owner — wait |
+| #21 | module-publish real Instagram Graph Reels | owner — wait |
 
 ## Real integrations
 
