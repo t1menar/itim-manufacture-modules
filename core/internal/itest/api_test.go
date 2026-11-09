@@ -406,7 +406,15 @@ func TestVideoResultCreatesContentRevision(t *testing.T) {
 	}
 	meta, _ := parsed["metadata"].(map[string]any)
 	if meta == nil || meta["title"] != "t-snap" {
-		t.Fatalf("metadata missing in revision: %#v", parsed)
+		t.Fatalf("opaque revision should still carry module fields for consumers: %#v", parsed)
+	}
+	var sum []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT sha256 FROM content_revisions`).Scan(&sum); err != nil {
+		t.Fatal(err)
+	}
+	// sha256 is the fingerprint of the bytes at insert time (jsonb may normalize on read).
+	if len(sum) != 32 {
+		t.Fatalf("sha256 length %d, want 32", len(sum))
 	}
 	if n := e.count(`SELECT count(*) FROM events WHERE type = 'content_revision.created'`); n != 1 {
 		t.Fatal("audit event missing")

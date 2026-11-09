@@ -52,7 +52,8 @@ type Intent struct {
 	PublishedAt       *time.Time
 }
 
-// CreateRevision appends an immutable content revision for the variant (body snapshotted as-is).
+// CreateRevision appends an immutable content revision for the variant.
+// Body is an opaque JSON blob (D22); core hashes it and never interprets domain fields.
 func (s *Store) CreateRevision(ctx context.Context, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
 	var out Revision
 	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
@@ -63,7 +64,7 @@ func (s *Store) CreateRevision(ctx context.Context, variantID, sourceJob uuid.UU
 	return out, err
 }
 
-// CreateRevisionInTx is CreateRevision inside the caller's transaction (video result → revision).
+// CreateRevisionInTx is CreateRevision inside the caller's transaction (video result → opaque revision).
 func (s *Store) CreateRevisionInTx(ctx context.Context, tx pgx.Tx, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
 	if len(body) == 0 || body[0] != '{' {
 		return Revision{}, fmt.Errorf("body must be a JSON object")

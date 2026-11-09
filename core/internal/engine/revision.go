@@ -9,9 +9,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// snapshotVideoRevision writes content_revisions from the video stage result (D19/C39).
-// Body snapshots artifacts + required metadata + provenance. Production-scope video jobs
-// (variant_id NULL) create one revision per production variant, matched by language.
+// snapshotVideoRevision writes content_revisions from the video stage result (D19/C39, D22).
+// The body is an opaque JSON blob (raw variant object + orchestration ids). Core does not
+// interpret metadata / video / post fields as its domain model — stage JSON Schema already
+// validated the result. Production-scope video jobs (variant_id NULL) create one revision
+// per production variant, matched by language when present.
 func (e *Engine) snapshotVideoRevision(ctx context.Context, tx pgx.Tx, j jobRow, output json.RawMessage) error {
 	if e.Publish == nil {
 		return nil
@@ -76,33 +78,7 @@ func (e *Engine) snapshotVideoRevision(ctx context.Context, tx pgx.Tx, j jobRow,
 			}
 			raw = ordered[i]
 		}
-		var v map[string]any
-		if err := json.Unmarshal(raw, &v); err != nil {
-			return err
-		}
-		meta, _ := v["metadata"].(map[string]any)
-		if meta == nil {
-			return ErrOutputInvalid
-		}
-		bodyMap := map[string]any{
-			"variant_id": t.id.String(),
-			"job_id":     j.id.String(),
-			"language":   v["language"],
-			"video":      v["video"],
-			"metadata":   meta,
-		}
-		if len(parsed.Provenance) > 0 {
-			bodyMap["provenance"] = json.RawMessage(parsed.Provenance)
-		}
-		if parsed.Changes != nil {
-			bodyMap["changes"] = *parsed.Changes
-		}
-		for _, key := range []string{"contact_sheet", "cover", "preview", "script_ref", "post", "checks"} {
-			if val, ok := v[key]; ok {
-				bodyMap[key] = val
-			}
-		}
-		body, err := json.Marshal(bodyMap)
+		body, err := opaqueRevisionBody(t.id, j.id, raw, parsed.Provenance, parsed.Changes)
 		if err != nil {
 			return err
 		}
@@ -112,10 +88,31 @@ func (e *Engine) snapshotVideoRevision(ctx context.Context, tx pgx.Tx, j jobRow,
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO events (production_id, variant_id, job_id, type, actor, payload)
 			VALUES ($1, $2, $3, 'content_revision.created', 'system', jsonb_build_object(
-				'content_revision_id', $4::text, 'revision', $5::int))`,
-			j.production, t.id, j.id, rev.ID, rev.Revision); err != nil {
+				'content_revision_id', $4::text, 'revision', $5::int, 'sha256', encode($6::bytea, 'hex')))`,
+			j.production, t.id, j.id, rev.ID, rev.Revision, rev.SHA256); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// opaqueRevisionBody builds the immutable revision blob (D22): the raw variant object plus
+// orchestration ids. Domain keys (metadata, video, …) are copied through without interpretation.
+func opaqueRevisionBody(variantID, jobID uuid.UUID, rawVariant, provenance json.RawMessage, changes *string) (json.RawMessage, error) {
+	var blob map[string]any
+	if err := json.Unmarshal(rawVariant, &blob); err != nil {
+		return nil, err
+	}
+	if blob == nil {
+		blob = map[string]any{}
+	}
+	blob["variant_id"] = variantID.String()
+	blob["job_id"] = jobID.String()
+	if len(provenance) > 0 {
+		blob["provenance"] = json.RawMessage(provenance)
+	}
+	if changes != nil {
+		blob["changes"] = *changes
+	}
+	return json.Marshal(blob)
 }

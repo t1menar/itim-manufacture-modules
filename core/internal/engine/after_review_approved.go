@@ -107,30 +107,7 @@ func revisionBodyFromVideoOutput(variantID, jobID uuid.UUID, output json.RawMess
 	if err := json.Unmarshal(output, &parsed); err != nil || len(parsed.Variants) == 0 {
 		return nil, ErrOutputInvalid
 	}
-	raw := parsed.Variants[0]
-	var v map[string]any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return nil, err
-	}
-	bodyMap := map[string]any{
-		"variant_id": variantID.String(),
-		"job_id":     jobID.String(),
-		"language":   v["language"],
-		"video":      v["video"],
-		"metadata":   v["metadata"],
-	}
-	if len(parsed.Provenance) > 0 {
-		bodyMap["provenance"] = json.RawMessage(parsed.Provenance)
-	}
-	if parsed.Changes != nil {
-		bodyMap["changes"] = *parsed.Changes
-	}
-	for _, key := range []string{"contact_sheet", "cover", "preview", "script_ref", "post", "checks"} {
-		if val, ok := v[key]; ok {
-			bodyMap[key] = val
-		}
-	}
-	return json.Marshal(bodyMap)
+	return opaqueRevisionBody(variantID, jobID, parsed.Variants[0], parsed.Provenance, parsed.Changes)
 }
 
 // CreateFirstPublishJob enqueues the first publish job for generation-1 intents after review approve.
