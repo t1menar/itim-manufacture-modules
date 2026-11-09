@@ -93,7 +93,7 @@ def _docker_host() -> str | None:
         return os.environ["DOCKER_HOST"]
     try:
         out = subprocess.run(
-            ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],  # noqa: S607
+            ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
             capture_output=True, text=True, timeout=10, check=False,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired):

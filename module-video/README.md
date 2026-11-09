@@ -29,3 +29,14 @@ docker build -t module-video:dev .
 Settings never come from the environment: they arrive with each job (settings snapshot). `/info` serves the JSON Schemas generated from `src/mvideo/settings_model.py` and `src/mvideo/contract.py`.
 
 Note: core now carries jobs over RabbitMQ (core-04 section 15). The job intake in B2 follows whichever contract core has implemented; B1 and B3–B6 do not depend on it.
+
+## B8: the real steps
+
+`MVIDEO_PIPELINE=real` replaces the fake pipeline with analysis, research, script (agent steps), capture
+(agent plan, then the sandbox runs it, with fix rounds), render and package (agent writes `post.en.json`,
+the module renders caption and hashtags, muxes, levels and checks). Prompts live in `prompts/<step>/<version>/`
+and are copied verbatim from the spec by `node scripts/extract_prompts.js`; do not edit them by hand.
+
+Not verified yet: a run with the real Claude (needs `CLAUDE_CODE_OAUTH_TOKEN`, see `mvideo agent-smoke`) and the
+full package step on a complete 160 s render. `capture_status` is not derived (the script schema has no
+`expect_error`). Core's `cover`/`contact_sheet` are artifact objects while the module sends refs as strings.

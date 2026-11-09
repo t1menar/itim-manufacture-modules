@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -41,6 +42,7 @@ def create_app(
     health_checks: list[Check] | None = None,
     ready_checks: list[Check] | None = None,
     auth_status: AuthStatus | None = None,
+    services: dict[str, Any] | None = None,
 ) -> FastAPI:
     auth = AuthState()
     worker: Worker | None = None
@@ -65,6 +67,7 @@ def create_app(
             lease_ttl_s=LEASE_TTL_S,
             lease_renew_s=lease_renew_s,
             cancel_poll_s=cancel_poll_s,
+            services=services,
         )
         worker = Worker(factory=factory, runner=runner, poll_s=worker_poll_s, lease_ttl_s=LEASE_TTL_S)
         service = JobService(factory, worker, runner)
@@ -102,7 +105,7 @@ def create_app(
     app.state.service = service
     app.state.worker = worker
     app.state.runner = runner
-    app.state.scratch = None  # ScratchRegistry, set by the real capture step (B8)
+    app.state.scratch = (services or {}).get("scratch")  # ScratchRegistry of the real capture step
     install_problem_handlers(app)
     app.include_router(info.router)
     app.include_router(health.router)

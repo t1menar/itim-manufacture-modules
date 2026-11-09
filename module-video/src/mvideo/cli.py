@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 import uvicorn
@@ -122,16 +123,27 @@ def main() -> None:
         raise SystemExit(2) from exc
     configure_logging()
     storage = Storage(config)
+    engine = create_engine(config.database_url)
+    steps, finalize, services = fake_pipeline(), fake_finalize, None
+    if os.environ.get("MVIDEO_PIPELINE") == "real":
+        from mvideo.db.engine import session_factory
+        from mvideo.pipeline.real import finalize_real, real_pipeline, services_from_env
+
+        steps, finalize = real_pipeline(), finalize_real
+        services = services_from_env(
+            session_factory(engine),
+            f"http://{os.environ.get('MVIDEO_SELF_HOST', 'module-video')}:{config.port}/mcp/sandbox",
+        )
     app = create_app(
         config,
-        engine=create_engine(config.database_url),
+        engine=engine,
         migrate_on_start=True,
         storage=storage,
         core=CoreClient(config.core_url, config.core_token),
-        # Fake steps until the real ones land (phases B4 to B8); they exercise the whole flow.
-        steps=fake_pipeline(),
-        finalize=fake_finalize,
+        steps=steps,
+        finalize=finalize,
         ready_checks=[storage.ready_check],
+        services=services,
     )
     uvicorn.run(app, host=config.host, port=config.port, log_config=None)
 

@@ -84,7 +84,7 @@ def classify(
 def to_error(outcome: Outcome, step: str) -> StepError | None:
     """The StepError for a failing outcome; None when the step has outputs to validate."""
     k = outcome.kind
-    if k == "outputs":
+    if k in ("outputs", "blocked"):  # the step reads outputs, or blocked.json, itself
         return None
     table: dict[str, tuple[str, str]] = {
         "rate_limited": ("transient", "agent_rate_limited"),
@@ -93,7 +93,6 @@ def to_error(outcome: Outcome, step: str) -> StepError | None:
         "budget_exceeded": ("fatal", "budget_exceeded"),
         "unavailable": ("transient", "anthropic_unavailable"),
         "failed": ("fatal", "agent_failed"),
-        "blocked": ("blocked", "blocked"),
     }
     cls, code = table[k]
     msg = outcome.message

@@ -14,6 +14,7 @@ import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -130,6 +131,75 @@ class GitCache:
             await repo.upsert_source(s, url, commit, volume, size)
         await self.evict(settings, keep={volume})
         return volume
+
+    def _helper_blocking(self, argv: list[str], proxy_url: str | None) -> str:
+        """Run `git <argv>` in a helper container and return its stdout."""
+        kwargs: dict[str, Any] = {
+            "entrypoint": ["git"], "detach": True, "user": "root", "read_only": True, "cap_drop": ["ALL"],
+            "tmpfs": {"/tmp": "size=16m"}, "environment": {"HOME": "/tmp"},
+            "security_opt": ["no-new-privileges"],
+            "labels": {"manufacture.module": "video", "manufacture.purpose": "git"},
+        }  # fmt: skip
+        if proxy_url:
+            kwargs |= {"network": self.network, "environment": {"HOME": "/tmp", "HTTPS_PROXY": proxy_url}}
+        else:
+            kwargs["network_mode"] = "none"
+        c = self.client.containers.run(self.image, argv, **kwargs)
+        try:
+            code = c.wait(timeout=300)["StatusCode"]
+            out = c.logs(stdout=True, stderr=False).decode("utf-8", "replace")
+            if code != 0:
+                raise StepError("transient", "source_fetch_failed", c.logs().decode()[-300:], step="analysis")
+            return str(out)
+        finally:
+            c.remove(force=True)
+
+    async def resolve_commit(
+        self, settings: VideoSettings, url: str, ref: str, *, proxy_host: str = "module-video"
+    ) -> str:
+        """The full commit id a ref points at now (`git ls-remote`), pinned for the whole job."""
+        check_allowed(url, settings.sources.allowed_repos)
+        lo, hi = settings.network.proxy_ports
+        listener = await start_listener(settings.network.allow_domains.get("sources", []), (lo, hi))
+        try:
+            out = await asyncio.to_thread(
+                self._helper_blocking, ["ls-remote", url, ref], f"http://{proxy_host}:{listener.port}"
+            )
+        finally:
+            await listener.close()
+        for line in out.splitlines():
+            sha = line.split("\t")[0]
+            if COMMIT.match(sha):
+                return sha
+        raise StepError("blocked", "repo_not_allowed", f"ref {ref} not found in {url}", step="analysis")
+
+    def _fetch_blocking(self, volume: str, paths: list[str], dest: Path) -> None:
+        import io
+        import tarfile
+
+        c = self.client.containers.create(
+            self.image, ["true"], entrypoint=[], network_mode="none", user="root",
+            volumes={volume: {"bind": "/src", "mode": "ro"}},
+        )  # fmt: skip
+        try:
+            for rel in paths:
+                try:
+                    stream, _ = c.get_archive(f"/src/{rel}")
+                except Exception:  # noqa: S112 - a missing file is reported by the validator
+                    continue
+                with tarfile.open(fileobj=io.BytesIO(b"".join(stream))) as tf:
+                    for m in tf.getmembers():
+                        f = tf.extractfile(m) if m.isfile() else None
+                        if f is not None:
+                            target = dest / rel
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            target.write_bytes(f.read())
+        finally:
+            c.remove(force=True)
+
+    async def fetch_files(self, volume: str, paths: list[str], dest: Path) -> None:
+        """Copy `paths` of the pinned checkout to `dest` (the renderer and validator read local files)."""
+        await asyncio.to_thread(self._fetch_blocking, volume, paths, dest)
 
     async def evict(self, settings: VideoSettings, keep: set[str] | None = None) -> list[str]:
         async with self.sessions() as s, s.begin():

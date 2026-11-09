@@ -77,7 +77,7 @@ select = ["E", "F", "I", "B", "UP", "SIM", "S", "ASYNC", "RUF"]
 "src/mvideo/validate/*.py" = ["E501", "RUF001"]
 "src/mvideo/cli.py" = ["E501"]
 "src/mvrender/draw/debugger.py" = ["RUF001"]  # the call-stack separator is a typographic arrow
-"tests/**" = ["S101", "S104", "S105", "S106", "S107", "S108"]
+"tests/**" = ["S101", "S104", "S105", "S106", "S107", "S108", "S607"]
 "src/mvideo/sources/git_cache.py" = ["S108"]  # tmpfs mount point inside the helper container
 "src/mvideo/agents/launcher.py" = ["S108"]
 

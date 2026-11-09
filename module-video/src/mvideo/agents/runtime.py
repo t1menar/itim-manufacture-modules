@@ -38,14 +38,53 @@ def _load_docs(*dirs: Path) -> tuple[dict[str, Any], list[str]]:
     return docs, problems
 
 
+KIND_FILES = {
+    "analysis": "analysis.json", "research": "research.json", "script": "script.en.json",
+    "capture-plan": "capture.plan.json", "capture": "capture.json", "post": "post.en.json",
+    "blocked": "blocked.json", "changes": "changes.en.json",
+}  # fmt: skip
+
+
 def validate_tool(
-    in_dir: Path, out_dir: Path, src_dir: Path | None, settings: dict[str, Any] | None
+    in_dir: Path,
+    out_dir: Path,
+    src_dir: Path | None,
+    settings: dict[str, Any] | None,
+    *,
+    kind: str | None = None,
+    path: str | None = None,
+    old: str | None = None,
 ) -> dict[str, Any]:
-    """Validate the files of /out together with the inputs of /in (the rules span several files)."""
+    """Validate a file of /out together with the inputs of /in (the rules span several files).
+
+    `kind` and `path` follow the runtime prompts (`validate(kind="script", path="/out/script.en.json")`);
+    without them every file in /out is checked. `old` is the previous script for `kind="changes"`.
+    """
     docs, problems = _load_docs(in_dir, out_dir)
     only_out = {n: d for n, d in docs.items() if (out_dir / n).is_file()}
+    if kind is not None:
+        name = KIND_FILES.get(kind)
+        if name is None:
+            return {
+                "ok": False,
+                "issues": [{"message": f"unknown kind {kind!r}; use one of {sorted(KIND_FILES)}"}],
+            }
+        if path is not None and Path(path).name != name:
+            return {
+                "ok": False,
+                "issues": [{"message": f"kind {kind!r} validates {name}, not {Path(path).name}"}],
+            }
+        if name not in only_out:
+            return {"ok": False, "issues": [{"message": f"{name} does not exist in /out"}]}
+        only_out = {name: only_out[name]}
+    if old is not None and Path(old).is_file():
+        docs["_previous_script"] = json.loads(Path(old).read_text(encoding="utf-8"))
     source = DirSource(src_dir) if src_dir and src_dir.is_dir() else None
-    report = validate_documents(docs, source=source, cfg=RuleConfig.from_settings(settings))
+    report = validate_documents(
+        {n: d for n, d in docs.items() if not n.startswith("_")},
+        source=source,
+        cfg=RuleConfig.from_settings(settings),
+    )
     issues = [i.as_dict() for i in report.issues if i.file in only_out or not i.file]
     return {
         "ok": not issues and not problems,
@@ -112,11 +151,23 @@ def build_server(sdk: Any, run: dict[str, Any], in_dir: Path, out_dir: Path, src
     def reply(data: dict[str, Any]) -> dict[str, Any]:
         return {"content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}]}
 
-    @sdk.tool("validate", "Validate the JSON files you wrote to /out against the schemas and rules.", {})
-    async def validate(_args: dict[str, Any]) -> dict[str, Any]:
-        return reply(validate_tool(in_dir, out_dir, src_dir, settings))
+    @sdk.tool(
+        "validate",
+        "Validate a JSON file you wrote to /out against its schema and rules. kind: analysis, research, "
+        "script, capture-plan, post, blocked, changes; path: the file; old: previous script (kind changes).",
+        {"kind": str, "path": str, "old": str},
+    )
+    async def validate(args: dict[str, Any]) -> dict[str, Any]:
+        return reply(
+            validate_tool(
+                in_dir, out_dir, src_dir, settings,
+                kind=args.get("kind") or None, path=args.get("path") or None, old=args.get("old") or None,
+            )
+        )  # fmt: skip
 
-    @sdk.tool("estimate", "Estimate the video length of /out/script.en.json.", {})
+    @sdk.tool(
+        "estimate", "Estimate the video length of the script at `path` (/out/script.en.json).", {"path": str}
+    )
     async def estimate(_args: dict[str, Any]) -> dict[str, Any]:
         return reply(estimate_tool(out_dir, in_dir, settings, float(run.get("reading_wps") or 2.6)))
 

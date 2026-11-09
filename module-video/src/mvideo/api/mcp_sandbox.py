@@ -29,6 +29,7 @@ TOOL = {
         "properties": {
             "session_kind": {"type": "string", "enum": ["psql", "sh"]},
             "text": {"type": "string", "maxLength": 2000},
+            "database": {"type": "string"},
         },
         "required": ["session_kind", "text"],
     },
@@ -43,13 +44,16 @@ class Scratch(Protocol):
 class ScratchRegistry:
     """Tokens of running capture steps and their scratch sandboxes."""
 
-    def __init__(self, factory: Any) -> None:
-        self._factory = factory  # async (step_id) -> Scratch
+    def __init__(self, factory: Any = None) -> None:
+        self._factory = factory  # async (step_id) -> Scratch; a step may bring its own (settings are per job)
+        self._own: dict[str, Any] = {}
         self._steps: dict[str, tuple[str, Scratch | None]] = {}
         self._lock = asyncio.Lock()
 
-    def register(self, step_id: str) -> str:
+    def register(self, step_id: str, factory: Any = None) -> str:
         token = secrets.token_urlsafe(24)
+        if factory is not None:
+            self._own[token] = factory
         self._steps[token] = (step_id, None)
         return token
 
@@ -60,7 +64,7 @@ class ScratchRegistry:
                 return None
             step_id, scratch = entry
             if scratch is None:
-                scratch = await self._factory(step_id)
+                scratch = await (self._own.get(token) or self._factory)(step_id)
                 self._steps[token] = (step_id, scratch)
             return scratch
 

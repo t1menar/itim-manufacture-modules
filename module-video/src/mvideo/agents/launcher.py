@@ -247,6 +247,7 @@ class ReplayLauncher:
     async def run(self, req: AgentRequest) -> AgentResult:
         self.calls.append(req)
         step_dir = self.root / req.step
+        n = len([c for c in self.calls if c.step == req.step])
         name = self.scenario or os.environ.get("MVIDEO_REPLAY_SCENARIO")
         marker = step_dir / "scenario"
         if not name:
@@ -259,7 +260,10 @@ class ReplayLauncher:
         }
         files: dict[str, bytes] = {}
         if name == "ok":
-            for f in sorted((step_dir / "files").glob("*")) if (step_dir / "files").is_dir() else []:
+            # call 1 reads files/, call 2 reads files.2/ (a resume), and so on; the last one repeats
+            dirs = [step_dir / "files"] + [step_dir / f"files.{i}" for i in range(2, n + 1)]
+            chosen = next((d for d in reversed(dirs) if d.is_dir()), None)
+            for f in sorted(chosen.glob("*")) if chosen else []:
                 files[f.name] = f.read_bytes()
         files["_result.json"] = json.dumps(result).encode()
         files["_transcript.jsonl"] = b""

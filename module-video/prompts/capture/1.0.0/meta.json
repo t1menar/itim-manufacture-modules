@@ -1,0 +1,19 @@
+{
+ "id": "capture@1.0.0",
+ "step": "capture",
+ "version": "1.0.0",
+ "placeholders": [
+  "image_key",
+  "session_kinds",
+  "version_expect"
+ ],
+ "declared_placeholders": [
+  "image_key",
+  "version_expect",
+  "session_kinds"
+ ],
+ "input_files": "/in/script.en.json, /in/research.json, /in/image.json (sessions, titles, version expectation), /ref/create_database/capture.plan.json",
+ "output": "/out/capture.plan.json — manufacture.capture-plan/1 (04 §6.1); or /out/blocked.json",
+ "done_when": "validate(kind=\"capture-plan\") returns no errors; every script command appears once as run in order; every capture has one value with why_equal; the plan was tried with sandbox_try where unsure",
+ "tools_network": "Read, Write, Edit, validate, sandbox_try; Anthropic only (the sandbox has no network)"
+}
