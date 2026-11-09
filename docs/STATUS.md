@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## Core stack on main
 
-Landing PR merged: core slices #3–#5 (through admin republish `62f133c`) are on `main` via merge commit of `core/land-on-main`.
+Landing PR merged: core slices #3–#5 (through admin republish `62f133c`) are on `main` via merge commit of `core/land-on-main` (`d2d260a`).
 
 ## Accepted decisions (recent)
 
@@ -18,23 +18,36 @@ Landing PR merged: core slices #3–#5 (through admin republish `62f133c`) are o
 
 | Service | Lang | Status | Notes |
 |---------|------|--------|-------|
-| core | Go | On `main` through republish + video→content_revision snapshot (D19) | |
-| module-video | Python | Owner B0–B6+ on `main` | Must add `metadata` to result (see below) |
-| module-review | Python | PR #6 skeleton | Base retargeted to `main` |
+| core | Go | On `main` through republish; D19 snapshot + schema on PR #8 | Gaps: full JSON Schema on result, review→intents wiring |
+| module-video | Python | Owner through B8 on `main` (`4dee415` metadata, `3693105` B8) | Emits `variants[].metadata` (D19) |
+| module-review | Python | PR #6 skeleton | Base `main`; not merged |
 | module-publish | Python | Not started | |
 | module-content | — | **Rejected (D19)** | Do not implement |
 | admin-api | Go | Not started | |
 | admin-panel | React | Deferred (D13) | |
 
-## Gap: module-video must add for D19/C39
+## D19 / C39 metadata compatibility (PR #8 vs module-video)
 
-Core now **requires** `variants[].metadata` when accepting a video/revise result (creates `content_revisions`). The current video module code does **not** emit it yet.
+Checked against `4dee415` / `3693105` (contract `Metadata` / `PlatformMetadata`, `fake_finalize`, `build_metadata`):
 
-Owner should add (do not treat this list as implemented):
+| Field | module-video | `stage-video-output.json` / core snapshot | Match |
+|-------|--------------|-------------------------------------------|-------|
+| `title` (minLength 1) | yes | required | yes |
+| `description` | yes | required | yes |
+| `topics[]` | yes | required | yes |
+| `platforms.<p>.caption` | yes | required | yes |
+| `platforms.<p>.hashtags` (`^#\S+$`) | yes (`#…`) | required + pattern | yes |
+| `platforms.<p>.fields` | optional | optional | yes |
 
-1. **`Variant.metadata`** in `src/mvideo/contract.py` (`StageOutput`): required object with `title`, `description`, `topics[]`, `platforms.<platform>.{caption, hashtags[], fields?}`.
-2. **Package / finalize path** (`fake_finalize` and the real package agent): fill `metadata` (and keep `post` as the Instagram projection if still used for checks).
-3. **`/info` output_schema** will update automatically from the Pydantic model.
-4. **Tests**: fixture outputs and fake finalize must include `metadata` or core will answer `422 output_invalid`.
+**No core/spec change required for metadata.** Video module code not touched.
 
-Until then, e2e video→core result callbacks that omit `metadata` fail validation on core.
+### Note (not blocking #8; fix on core side when enabling full schema validation)
+
+`contact_sheet` / `cover`: module-video sends **s3:// strings**; core schema currently types them as artifact **objects** `{ref, sha256?}`. Metadata path and `snapshotVideoRevision` accept either. Align schema to `string | object` in the core-gaps PR before strict JSON Schema validation of video results, otherwise e2e would 422.
+
+## Open core gaps (next PRs, do not merge without owner)
+
+1. Full JSON Schema validation of stage `output` on result callback → 422 `output_invalid`.
+2. Review `approved` → idempotent generation-1 `publish_intents` (variant × accounts) + outbox publish job in the same transaction.
+3. Instagram caption/hashtag limits in `system_settings` (small).
+4. module-publish skeleton (fake Instagram Login only).
