@@ -42,9 +42,7 @@ def _job_body(*, job_id: uuid.UUID, account: uuid.UUID, intent: uuid.UUID, callb
                         "ref": "s3://manufacture/t/final.mp4",
                         "sha256": "aa" * 32,
                     },
-                    "metadata": {
-                        "platforms": {"instagram": {"caption": "cap", "hashtags": ["#pg"]}}
-                    },
+                    "metadata": {"platforms": {"instagram": {"caption": "cap", "hashtags": ["#pg"]}}},
                 }
             },
             "intents": [

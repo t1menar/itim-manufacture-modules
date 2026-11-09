@@ -49,9 +49,7 @@ def create_app(
     job_service = JobService(factory, worker)
     consumer: AmqpConsumer | None = None
     if start_amqp and config.amqp_url:
-        consumer = AmqpConsumer(
-            config.amqp_url, config.amqp_queue, factory, job_service=job_service
-        )
+        consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory, job_service=job_service)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

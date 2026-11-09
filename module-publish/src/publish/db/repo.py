@@ -159,9 +159,5 @@ async def store_outcome(
     )
 
 
-async def set_progress(
-    session: AsyncSession, run_id: uuid.UUID, *, percent: int, step: str
-) -> None:
-    await session.execute(
-        update(Run).where(Run.id == run_id).values(percent=percent, step=step)
-    )
+async def set_progress(session: AsyncSession, run_id: uuid.UUID, *, percent: int, step: str) -> None:
+    await session.execute(update(Run).where(Run.id == run_id).values(percent=percent, step=step))

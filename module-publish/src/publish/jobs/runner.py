@@ -251,9 +251,7 @@ class JobRunner:
             )
         log.info("run_succeeded", run_id=str(run_id), job_id=str(job_id), pubs=len(publications))
 
-    async def _progress(
-        self, run_id: uuid.UUID, callback: str, fence: int, percent: int, step: str
-    ) -> None:
+    async def _progress(self, run_id: uuid.UUID, callback: str, fence: int, percent: int, step: str) -> None:
         async with self._factory() as s, s.begin():
             await repo.set_progress(s, run_id, percent=percent, step=step)
         try:
