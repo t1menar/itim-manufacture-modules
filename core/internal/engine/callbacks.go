@@ -504,7 +504,8 @@ func (e *Engine) SweepTimeouts(ctx context.Context, limit int) (int, error) {
 	return n, err
 }
 
-// CancelJob cancels one live job; its scope becomes needs_attention cancelled_by_admin.
+// CancelJob cancels one live job, enqueues a single job.cancel_requested (stable message_id),
+// and marks the scope needs_attention cancelled_by_admin.
 func (e *Engine) CancelJob(ctx context.Context, jobID uuid.UUID, reason string) error {
 	e.defaults()
 	return db.WithTx(ctx, e.Pool, func(tx pgx.Tx) error {
@@ -523,7 +524,52 @@ func (e *Engine) CancelJob(ctx context.Context, jobID uuid.UUID, reason string) 
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE variants SET status = 'needs_attention', attention = $2, rev = rev + 1 WHERE id = ANY($1)`, vars, attention)
+		if _, err := tx.Exec(ctx, `UPDATE variants SET status = 'needs_attention', attention = $2, rev = rev + 1 WHERE id = ANY($1)`, vars, attention); err != nil {
+			return err
+		}
+		if j.moduleID == nil {
+			return nil
+		}
+		payload, _ := json.Marshal(map[string]any{"reason": "cancelled_by_admin"})
+		// Stable message_id: one cancel command per job_id even if CancelJob is retried.
+		msgID := uuid.NewSHA1(uuid.NameSpaceOID, append(j.id[:], []byte("cancel")...))
+		prod := j.production
+		return messaging.Enqueue(ctx, tx, messaging.OutboxMessage{
+			Exchange: e.Topo.Commands(), RoutingKey: "cancel." + *j.moduleID,
+			Envelope: messaging.Envelope{
+				MessageID: msgID, Type: "job.cancel_requested", Producer: "core", ProductionID: &prod,
+				Job: &messaging.JobRef{JobID: j.id, Fence: j.fence}, Payload: payload,
+			},
+		})
+	})
+}
+
+// EnqueueNotify writes a notify.requested command for the review/notify module (at-least-once).
+func (e *Engine) EnqueueNotify(ctx context.Context, tx pgx.Tx, moduleID string, payload json.RawMessage, productionID, jobID uuid.UUID, fence int) error {
+	return messaging.Enqueue(ctx, tx, messaging.OutboxMessage{
+		Exchange: e.Topo.Commands(), RoutingKey: "notify." + moduleID,
+		Envelope: messaging.Envelope{
+			Type: "notify.requested", Producer: "core", ProductionID: &productionID,
+			Job: &messaging.JobRef{JobID: jobID, Fence: fence}, Payload: payload,
+		},
+	})
+}
+
+// ApplyPublishOutcomeUnknown marks the intent unknown and the variant needs_attention
+// (publish_outcome_unknown). It never creates a new generation or re-sends publish.
+func (e *Engine) ApplyPublishOutcomeUnknown(ctx context.Context, intentID, variantID uuid.UUID) error {
+	e.defaults()
+	return db.WithTx(ctx, e.Pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE publish_intents SET status = 'unknown', rev = rev + 1, updated_at = now()
+			WHERE id = $1 AND status IN ('pending','in_progress','unknown')`, intentID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrInvalidState
+		}
+		attention, _ := json.Marshal(map[string]any{"reason": "publish_outcome_unknown", "intent_id": intentID})
+		_, err = tx.Exec(ctx, `UPDATE variants SET status = 'needs_attention', attention = $2, rev = rev + 1 WHERE id = $1`, variantID, attention)
 		return err
 	})
 }
