@@ -13,6 +13,7 @@ RUN uv sync --frozen --no-dev --no-editable
 FROM ${PYTHON_IMAGE}
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin mvideo
 COPY --from=build /app/.venv /app/.venv
+COPY fonts/ /usr/share/fonts/manufacture/
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1
 USER 10001
 EXPOSE 8080

@@ -80,6 +80,7 @@ class TermEvent:
     kind: str  # cmd | out | annotation | wait | mark
     ref: str = ""  # command id or mark name
     dur: float = 0.0  # typing time for cmd
+    payload: Any = None  # the script event (cmd), (command id, line index) (out) or the line (annotation)
 
 
 @dataclass(slots=True)
@@ -123,7 +124,7 @@ def run_terminal(
             cid = str(ev["cmd"])
             t += float(ev.get("pre_s", 0.35))
             dur = typing_s(str(ev["text"]), float(ev.get("cps", timing.default_cps)))
-            tt.events.append(TermEvent(t, "cmd", cid, dur))
+            tt.events.append(TermEvent(t, "cmd", cid, dur, ev))
             tt.typing.append((t, t + dur))
             tt.marks[f"{cid}.typed"] = t + dur
             t += dur + float(ev.get("post_s", 0.25))
@@ -134,8 +135,8 @@ def run_terminal(
             out = ev.get("output") or {}
             gap = float(out.get("gap_s", DEFAULT_GAP_S))
             tt.marks[f"{cid}.output"] = t
-            for _ in range(n):
-                tt.events.append(TermEvent(t, "out"))
+            for k in range(n):
+                tt.events.append(TermEvent(t, "out", cid, 0.0, (cid, k)))
                 t += gap
         elif "wait_s" in ev:
             tt.events.append(TermEvent(t, "wait"))
@@ -144,8 +145,8 @@ def run_terminal(
             tt.marks[str(ev["mark"])] = t
             tt.events.append(TermEvent(t, "mark", str(ev["mark"])))
         elif "annotation" in ev:
-            for _ in ev["annotation"]:
-                tt.events.append(TermEvent(t, "annotation"))
+            for line in ev["annotation"]:
+                tt.events.append(TermEvent(t, "annotation", "", 0.0, line))
                 t += DEFAULT_GAP_S
     tt.end = t
     return tt, consumed

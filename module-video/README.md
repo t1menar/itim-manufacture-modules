@@ -11,7 +11,8 @@ Specification: `../docs/module-video/` (`module-video-01-description.docx` … `
 - B2 done: `POST /v1/jobs`, `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel` (bearer auth), core client behind a swappable `CoreGateway` (HTTP contract 1), runner and worker with leases, step cache, cancel, restart recovery, usage gates. The pipeline is made of fake steps that write small files to S3 until B7/B8. `/ready` reports `auth: missing` until a job has fetched a matching credential.
 - B3 done: JSON Schemas of every agent file (`src/mvideo/validate/schemas`, extracted from the contracts spec), the rules of 04 §4.3, §5.2 and §6.1, `mvideo validate DIR [--src DIR]`, and `mvrender.timing` shared by validator and renderer. The reference scenario is in `reference/create_database/` (ported by hand from the original renderer); its estimated length is within 1 % of the original.
 - Known limits of B3: `caption_fit` and `note_fit` use an estimated glyph width until the renderer brings real font metrics (B4); a typed-but-never-run command (the original hook scene) cannot be expressed, so the hook scene shows an annotation line instead.
-- Next: B4 renderer (needs ffmpeg).
+- B4 done (stills): `mvrender` resolves script + capture + source into frames: palette, fonts (Inter and JetBrains Mono in `fonts/`, copied to `/usr/share/fonts/manufacture` in the image), layout, safe zone, terminal, debugger, diagram elements, glyph and safe-zone checks, `mvrender preview DIR --src DIR --at ...`, `mvrender sheet` (contact sheet with the safe-zone overlay). The reference renders from `reference/create_database/` with source excerpts in `reference/create_database/sources/`; approved frames are in `tests/approved/` (SSIM >= 0.98).
+- Next: B5 cues, sound, parallel encode and loudness (needs ffmpeg).
 
 ## Develop
 

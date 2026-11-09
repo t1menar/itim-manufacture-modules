@@ -16,10 +16,14 @@ dependencies = [
     "aioboto3>=15.5.0",
     "httpx>=0.28.1",
     "jsonschema>=4.23",
+    "pillow>=11",
+    "numpy>=2",
+    "fonttools>=4.50",
 ]
 
 [project.scripts]
 mvideo = "mvideo.cli:main"
+mvrender = "mvrender.cli:main"
 
 [dependency-groups]
 dev = [
@@ -64,12 +68,17 @@ select = ["E", "F", "I", "B", "UP", "SIM", "S", "ASYNC", "RUF"]
 # Validator messages are long f-strings; allowed_symbols holds characters fixed by the spec.
 "src/mvideo/validate/*.py" = ["E501", "RUF001"]
 "src/mvideo/cli.py" = ["E501"]
+"src/mvrender/draw/debugger.py" = ["RUF001"]  # the call-stack separator is a typographic arrow
 "tests/**" = ["S101", "S104", "S105", "S106"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 files = ["src/mvrender"]
+
+[[tool.mypy.overrides]]
+module = ["fontTools.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["mvideo.*"]

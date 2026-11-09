@@ -1209,6 +1209,9 @@
       },
       "appear": {
        "at": "s4-new-oid.line.1405"
+      },
+      "disappear": {
+       "at": "s7-folder.line.166"
       }
      },
      {
