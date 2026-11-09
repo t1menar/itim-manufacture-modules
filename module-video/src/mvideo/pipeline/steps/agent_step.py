@@ -98,6 +98,11 @@ def parse_docs(files: dict[str, bytes]) -> dict[str, Any]:
     return docs
 
 
+def _file_version(ref: str) -> str:
+    """Without a store `active` is the packaged 1.0.0 (tests calling a step directly)."""
+    return "1.0.0" if ref == "active" else ref
+
+
 class AgentStep(Step):
     """One Claude invocation that writes `produces` into /out, with validation and resume."""
 
@@ -120,11 +125,23 @@ class AgentStep(Step):
         return []
 
     # -- machinery ---------------------------------------------------------------------------------
+    async def prepare(self, ctx: RunContext) -> None:
+        """Resolve the prompt and the skill (`active` means the version activated in the module)."""
+        store = ctx.prompts or prompts.PromptStore()
+        for key in (self.name, "skill"):
+            ctx.prompt_cache[key] = await store.get(key, ctx.settings.prompt_versions.get(key, "active"))
+
     def request(self, ctx: RunContext, inputs: dict[str, bytes], values: dict[str, Any]) -> AgentRequest:
-        version = ctx.settings.prompt_versions.get(self.name, "1.0.0")
-        p = prompts.load_prompt(self.name, version)
+        p = ctx.prompt_cache.get(self.name) or prompts.load_prompt(
+            self.name, _file_version(ctx.settings.prompt_versions.get(self.name, "active"))
+        )
         task = prompts.render(p.task_md, values)
-        skill = prompts.load_skill(ctx.settings.prompt_versions.get("skill", "1.0.0"))
+        skill_prompt = ctx.prompt_cache.get("skill")
+        skill = (
+            skill_prompt.claude_md
+            if skill_prompt
+            else prompts.load_skill(_file_version(ctx.settings.prompt_versions.get("skill", "active")))
+        )
         ws = Workspace.build(
             claude_md=p.claude_md, task_md=task, skill_md=skill, inputs=inputs, ref=reference_files()
         )

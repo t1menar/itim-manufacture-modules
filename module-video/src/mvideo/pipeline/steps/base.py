@@ -16,6 +16,9 @@ class Step(ABC):
     uses_agent: bool = False  # agent steps are subject to limits.max_agent_runs_per_hour
     settings_keys: tuple[str, ...] = ()  # settings sections that change this step's output
 
+    async def prepare(self, ctx: RunContext) -> None:  # noqa: B027
+        """Resolve what the step reads besides its inputs (prompt versions) before its input hash is taken."""
+
     @abstractmethod
     async def run(self, ctx: RunContext) -> dict[str, Artifact]:
         """Do the work; return the files produced, already uploaded and confirmed."""

@@ -468,20 +468,7 @@ async def finalize_real(ctx: RunContext) -> tuple[dict[str, Any], list[Artifact]
                 "checks": checks,
             }
         ],
-        "provenance": {
-            "prompts": {
-                s: f"{s}@{ctx.settings.prompt_versions.get(s, '1.0.0')}"
-                for s in (
-                    ("analysis", "research", "script-revise", "capture", "package")
-                    if ctx.mode == "revise"
-                    else ("analysis", "research", "script", "capture", "package")
-                )
-            },
-            "skill": f"explainer-video@{ctx.settings.prompt_versions.get('skill', '1.0.0')}",
-            "model": ctx.settings.model,
-            "auth_mode": ctx.settings.agent.auth.mode,
-            "cost_mode": ctx.settings.resolved_cost_mode(),
-        },
+        "provenance": _provenance(ctx),
         "changes": await _changes_text(ctx),
     }
     return output, [a for files in ctx.outputs.values() for a in files.values()]
@@ -492,3 +479,28 @@ async def _changes_text(ctx: RunContext) -> str | None:
         return None
     changes = json.loads(await ctx.storage.get_bytes(ctx.files("script")["changes.en.json"].ref))
     return render_changes(changes, ctx.values_changed, ctx.settings.revise.changes_max_chars)
+
+
+def _provenance(ctx: RunContext) -> dict[str, Any]:
+    steps = ("analysis", "research", "script-revise", "capture", "package") if ctx.mode == "revise" else (
+        "analysis", "research", "script", "capture", "package")  # fmt: skip
+    cache = ctx.prompt_cache
+
+    def used(step: str) -> str:
+        return cache[step].version if step in cache else ctx.settings.prompt_versions.get(step, "1.0.0")
+
+    out: dict[str, Any] = {
+        "prompts": {s: f"{s}@{used(s)}" for s in steps},
+        "skill": f"explainer-video@{used('skill')}",
+        "model": ctx.settings.model,
+        "auth_mode": ctx.settings.agent.auth.mode,
+        "cost_mode": ctx.settings.resolved_cost_mode(),
+    }
+    refs = [
+        {"prompt_id": p.id, "version": p.version, "sha256": p.sha256}
+        for k, p in cache.items()
+        if k in steps or k == "skill"
+    ]
+    if refs:
+        out["prompt_refs"] = refs
+    return out

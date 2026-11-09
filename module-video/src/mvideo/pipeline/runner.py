@@ -72,14 +72,19 @@ def _utcnow() -> dt.datetime:
 def input_hash(spec: Step, ctx: RunContext) -> str:
     """sha256 over step name, version, model, the settings it depends on, the job input and the
     sha256 of every file produced by earlier steps (05 section 8)."""
+    dumped = ctx.settings.model_dump(mode="json")  # sections are models or dicts of models
     upstream = sorted(a.sha256 for files in ctx.outputs.values() for a in files.values())
     payload = {
         "step": spec.name,
         "version": spec.version,
         "model": ctx.settings.models.get(spec.name, ctx.settings.model),  # type: ignore[call-overload]
-        "settings": {k: getattr(ctx.settings, k).model_dump(mode="json") for k in spec.settings_keys},
+        "settings": {k: dumped[k] for k in spec.settings_keys},
         "input": ctx.input.model_dump(mode="json", exclude={"upstream"}),
         "upstream": upstream,
+        # an edited or re-activated prompt must not hit the step cache
+        "prompts": sorted(
+            f"{k}:{v.sha256}" for k, v in ctx.prompt_cache.items() if k in (spec.name, "skill")
+        ),
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -286,6 +291,7 @@ class Runner:
             if self._clock() >= run.deadline - dt.timedelta(seconds=DEADLINE_MARGIN_S):
                 raise StepError("transient", "deadline", "job deadline reached", step=spec.name)
 
+            await spec.prepare(ctx)
             digest = input_hash(spec, ctx)
             async with self._factory() as s, s.begin():
                 hit = await repo.find_reusable_step(s, spec.name, digest)
@@ -324,6 +330,7 @@ class Runner:
             async with self._factory() as s, s.begin():
                 await repo.upsert_step(
                     s, run.id, spec.name, 1, input_hash=digest, status="succeeded",
+                    prompt_version=getattr(ctx.prompt_cache.get(spec.name), "version", None),
                     outputs={n: a.as_dict() for n, a in produced.items()}, finished_at=finished,
                     duration_s=(finished - started).total_seconds(),
                 )  # fmt: skip

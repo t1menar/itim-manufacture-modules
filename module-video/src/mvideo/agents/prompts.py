@@ -7,11 +7,13 @@ the step before any token is spent.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 PROMPTS_ROOT = Path(__file__).resolve().parents[3] / "prompts"
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
@@ -32,6 +34,18 @@ class Prompt:
     @property
     def id(self) -> str:
         return f"{self.step}@{self.version}"
+
+    @property
+    def sha256(self) -> str:
+        return digest(self.claude_md, self.task_md)
+
+
+def digest(claude_md: str, task_md: str = "") -> str:
+    return hashlib.sha256(f"{claude_md}\0{task_md}".encode()).hexdigest()
+
+
+def placeholders_of(template: str) -> list[str]:
+    return sorted(set(PLACEHOLDER.findall(template)))
 
 
 def load_prompt(step: str, version: str, root: Path = PROMPTS_ROOT) -> Prompt:
@@ -55,3 +69,61 @@ def render(template: str, values: Mapping[str, object]) -> str:
     if missing:
         raise PromptError(f"missing placeholder values: {', '.join(missing)}")
     return PLACEHOLDER.sub(lambda m: str(values[m.group(1)]), template)
+
+
+SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+ACTIVE = "active"
+
+
+def semver_key(version: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in version.split("."))
+
+
+class PromptStore:
+    """Prompts from database `video` (editable, immutable versions) with the packaged files as the seed.
+
+    `factory=None` reads the files only (tests and tools without a database). `"active"` as a version
+    resolves to the activated version of the step.
+    """
+
+    def __init__(self, factory: Any = None, root: Path = PROMPTS_ROOT) -> None:
+        self._factory = factory
+        self._root = root
+
+    async def resolve(self, step: str, version: str) -> str:
+        if version != ACTIVE:
+            return version
+        if self._factory is None:
+            versions = sorted(
+                (p.name for p in (self._root / step).iterdir() if SEMVER.match(p.name)), key=semver_key
+            )
+            if not versions:
+                raise PromptError(f"no prompt versions of {step!r}")
+            return versions[-1]
+        from mvideo.db import prompts_repo
+
+        async with self._factory() as s:
+            active = await prompts_repo.get_active(s, step)
+        if active is None:
+            raise PromptError(f"no active prompt version for {step!r}")
+        return str(active.version)
+
+    async def get(self, step: str, version: str) -> Prompt:
+        version = await self.resolve(step, version)
+        if self._factory is None:
+            return (
+                load_skill_prompt(version, self._root)
+                if step == "skill"
+                else load_prompt(step, version, self._root)
+            )
+        from mvideo.db import prompts_repo
+
+        async with self._factory() as s:
+            row = await prompts_repo.get_version(s, step, version)
+        if row is None:
+            raise PromptError(f"prompt {step}@{version} not found")
+        return Prompt(step, version, row.claude_md, row.task_md, tuple(row.placeholders))
+
+
+def load_skill_prompt(version: str, root: Path) -> Prompt:
+    return Prompt("skill", version, load_skill(version, root), "", ())

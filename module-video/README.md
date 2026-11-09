@@ -50,3 +50,20 @@ Analysis and research come from the last succeeded run of the production; the pi
 re-resolved. `output.changes` is rendered from `changes.en.json` plus "values changed".
 
 Not verified: golden-revise-1..4 against the real Claude (replay and unit tests only).
+
+## Editable prompts (D16 / C40)
+
+Runtime prompts live in database `video` (`prompt_versions`, `prompt_active`, `prompt_audit`). The files in
+`prompts/` are only the seed: at startup every packaged version the database lacks is inserted and, for a step
+with no active version, the newest is activated. Existing rows are never overwritten.
+
+- Versions are immutable. To change a prompt, create a new version and activate it:
+  `POST /admin/v1/prompts/{step}` `{version, claude_md, task_md, note}`, then
+  `PUT /admin/v1/prompts/{step}/active` `{version}` with `If-Match: <revision>` (revision from
+  `GET /admin/v1/prompts`). `GET /admin/v1/prompts/{step}/{version}` returns the text,
+  `GET /admin/v1/prompts/audit` the history. Same bearer token as `/v1/jobs`; `X-Actor` names the editor.
+- `settings.prompt_versions[step]` is `active` (default) or a pinned `MAJOR.MINOR.PATCH` (golden runs pin).
+- A new version may only use placeholders the step already supplies. Placeholders are `{name}`, as in the
+  reviewed spec (the contract text says `{{name}}`; unresolved, see the open questions).
+- The resolved version and sha256 go to `provenance.prompts` and `provenance.prompt_refs`, and into the step's
+  input hash, so an edited prompt never hits the step cache.
