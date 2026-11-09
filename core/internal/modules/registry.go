@@ -283,6 +283,23 @@ func (r *Registry) Activate(ctx context.Context, moduleID string, replace bool) 
 	})
 }
 
+// Deactivate clears active for the module (does not disable registration).
+func (r *Registry) Deactivate(ctx context.Context, moduleID string) error {
+	tag, err := r.Pool.Exec(ctx, `UPDATE modules SET active = false, rev = rev + 1, updated_at = now()
+		WHERE id = $1 AND active`, moduleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		var exists bool
+		_ = r.Pool.QueryRow(ctx, `SELECT true FROM modules WHERE id = $1`, moduleID).Scan(&exists)
+		if !exists {
+			return ErrNotFound
+		}
+	}
+	return nil
+}
+
 func issueToken() (string, error) {
 	b := make([]byte, 32)
 	for i := range b {

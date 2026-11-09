@@ -6,6 +6,10 @@ Specification: `../docs/module-review/` (`module-review-01-description.docx` …
 
 ## Status
 
+**D20:** core admin token is **only** bootstrap env `MODULE_CORE_ADMIN_TOKEN` (`mfa_…`). Do **not** store it as a Core credentials ref. Allowlist: `REVIEW_ADMIN_TELEGRAM_IDS`. Actor header: `X-Admin-Actor: tg:<telegram_user_id>`.
+
+
+
 - **D20 admin (this PR):** `CoreAdminClient` (`mfa_` + `X-Admin-Actor: tg:<id>`), allowlist, command router, `FakeTelegramBot`. Optional bootstrap: `MODULE_CORE_ADMIN_TOKEN`, `REVIEW_ADMIN_TELEGRAM_IDS`.
 
 
