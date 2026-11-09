@@ -41,9 +41,14 @@ class Worker:
         async with self._factory() as s, s.begin():
             runs = await repo.claim_runs(s, "review-worker-1", limit=free)
         for run in runs:
-            task = asyncio.create_task(self._flow.deliver_card(run.id), name=f"review-{run.id}")
-            self._tasks[run.id] = task
-            task.add_done_callback(lambda _t, rid=run.id: self._tasks.pop(rid, None))
+            rid = run.id
+
+            def _done(_t: asyncio.Task[None], run_id: uuid.UUID = rid) -> None:
+                self._tasks.pop(run_id, None)
+
+            task = asyncio.create_task(self._flow.deliver_card(rid), name=f"review-{rid}")
+            self._tasks[rid] = task
+            task.add_done_callback(_done)
         return [r.id for r in runs]
 
     async def drain(self) -> None:

@@ -28,7 +28,8 @@ class NotifyResult:
 def format_notify_message(payload: dict[str, Any]) -> str:
     status = str(payload.get("status") or "unknown")
     kind = str(payload.get("attention_kind") or status)
-    channel = payload.get("channel") if isinstance(payload.get("channel"), dict) else {}
+    raw_channel = payload.get("channel")
+    channel: dict[str, Any] = raw_channel if isinstance(raw_channel, dict) else {}
     pubs = payload.get("publications") or []
     title = ""
     if isinstance(payload.get("title"), str):
