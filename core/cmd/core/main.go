@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/t1menar/manufacture/core/internal/auth"
 	"github.com/t1menar/manufacture/core/internal/bootstrap"
@@ -26,6 +27,7 @@ import (
 	"github.com/t1menar/manufacture/core/internal/httpapi"
 	"github.com/t1menar/manufacture/core/internal/messaging"
 	"github.com/t1menar/manufacture/core/internal/modules"
+	"github.com/t1menar/manufacture/core/internal/publish"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -75,6 +77,10 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 	reg := &modules.Registry{Pool: pool, Key: master}
 	creds := &credentials.Store{Pool: pool, Key: credentials.MasterKey{Version: cfg.MasterKey.Version, Key: cfg.MasterKey.Key}}
 	eng := &engine.Engine{Pool: pool, Topo: topo, Log: log, Settings: store}
+	pub := &publish.Store{Pool: pool, OnIntentCreated: func(ctx context.Context, tx pgx.Tx, intent publish.Intent) error {
+		_, err := eng.CreateRepublishJob(ctx, tx, intent.VariantID, intent.ID, intent.ContentRevisionID, intent.Generation)
+		return err
+	}}
 	if u, err := store.CallbackBaseURL(ctx); err == nil {
 		eng.CallbackBaseURL = u
 	}
@@ -97,7 +103,7 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 			"db":     func(c context.Context) error { return pool.Ping(c) },
 			"broker": conn.Check,
 		},
-		Auth: authenticator, Engine: eng, Settings: store, Modules: reg, Credentials: creds,
+		Auth: authenticator, Engine: eng, Settings: store, Modules: reg, Credentials: creds, Publish: pub,
 	}
 	srv := &http.Server{
 		Addr: cfg.ListenAddr, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,

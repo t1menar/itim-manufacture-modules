@@ -155,11 +155,11 @@ module.exports = {
   ['D15', 'Title, description and tags are generated; tags and captions may differ per platform; they are part of the reviewed content revision (core-04 §16)', 'owner\'s decision 2026-11-08'],
   ['D16', 'Runtime prompts are stored in the database of the module that runs them (module-video), as immutable versions with activation, audit and a per-job snapshot recorded in the module result provenance. Core keeps no prompts table — only an optional shared substitution helper. A runtime prompt is a recipe for model output; it does not replace the executable renderer, and build prompts for Claude Code are separate documents', 'owner\'s decision 2026-11-08; clarified 2026-11-09 (no prompts table in core)'],
   ['D17', 'No duplicate work at database level: one live production per idea, one live job per variant, unique publish intents (core-04 C32, C38)', 'owner\'s decision 2026-11-08'],
+  ['D18', 'Republish of the same variant to the same account is admin-only and manual: `POST /internal/v1/publish-intents/{id}/republish` with a required reason (and `base_generation` / Idempotency-Key). No automatic republish; generation > 1 only via this path (accepted P2/C38)', 'owner\'s decision 2026-11-09'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [
   ['P1', 'Separate stage `metadata` with module `content-claude` (Python) between `video` and `review`', 'the owner\'s video module returns an optional `metadata` object'],
-  ['P2', 'Republishing the same variant to the same account is disabled (`publish.allow_republish = false`); when enabled it needs an explicit admin action with a reason (new generation)', 'allow republish for admins by default'],
   ['P3', 'RabbitMQ flow mapping of core-04 §15.1 (commands and job events over the broker, reads over HTTP) as module contract 2', 'keep HTTP for job events and use the broker only for commands'],
   ['P4', 'Conditional write codes of core-04 C34 (`412` for `If-Match`, `409` for business conflicts)', '—'],
 ], [0.4, 3.6, 2.6]],

@@ -54,7 +54,7 @@ service containers and fails if an integration test is skipped.
 ## Publish intents / cancel / notify (this slice)
 
 - **Content revisions** + **publish_intents** with unique `(variant_id, platform_account_id, generation)`.
-  Generation 1 on approval; snapshot of `content_revision_id` is immutable. No auto-republish (P2 not accepted).
+  Generation 1 on approval; snapshot of `content_revision_id` is immutable. Admin republish (D18/C38): `POST /internal/v1/publish-intents/{id}/republish` with required reason + `base_generation`; no auto-republish.
 - Unknown publish outcome → intent `unknown` + variant `needs_attention`/`publish_outcome_unknown` (reconcile first; never blind resend).
 - **Cancel** enqueues one `job.cancel_requested` with a stable `message_id`; **notify** via `notify.requested` outbox.
 

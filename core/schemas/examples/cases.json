@@ -45,6 +45,16 @@
       "schema": "stage-video-output.json",
       "example": "video-output.with-prompt-versions.json",
       "valid": true
+    },
+    {
+      "example": "republish-request.ok.json",
+      "schema": "admin/republish-request.json",
+      "valid": true
+    },
+    {
+      "example": "republish-request.whitespace-reason.json",
+      "schema": "admin/republish-request.json",
+      "valid": false
     }
   ]
 }

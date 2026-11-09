@@ -1,6 +1,7 @@
 package itest
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,13 @@ import (
 )
 
 func (e *env) publishStore() *publish.Store {
-	return &publish.Store{Pool: e.pool}
+	return &publish.Store{
+		Pool: e.pool,
+		OnIntentCreated: func(ctx context.Context, tx pgx.Tx, intent publish.Intent) error {
+			_, err := e.eng.CreateRepublishJob(ctx, tx, intent.VariantID, intent.ID, intent.ContentRevisionID, intent.Generation)
+			return err
+		},
+	}
 }
 
 func (e *env) seedAccount() (variant, account uuid.UUID, job uuid.UUID) {
