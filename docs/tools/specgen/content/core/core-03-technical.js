@@ -422,8 +422,9 @@ cols([
   ['`CORE_LISTEN_ADDR`', '`:8080`', 'HTTP listen address (API, callbacks, `/metrics`, `/health`)'],
   ['`CORE_MASTER_KEY`', '`1:base64(32 bytes)`', 'current master key with its version'],
   ['`CORE_MASTER_KEY_PREVIOUS`', '`0:base64(...)`', 'optional; present only during key rotation'],
+  ['`CORE_AMQP_URL`', '`amqp://core:***@rabbitmq:5672/`', 'RabbitMQ connection URL (D11; required when the broker is enabled)'],
 ], [1.6, 2.6, 2.4]],
-['p', 'The process refuses to start if a required variable is missing or the key is not 32 bytes. No other environment variable is read; OpenTelemetry endpoint, log level and every limit come from core settings.'],
+['p', 'The process refuses to start if a required variable is missing or the key is not 32 bytes. `CORE_AMQP_URL` is required for the RabbitMQ outbox/inbox path (accepted D11). No other environment variable is read; OpenTelemetry endpoint, log level and every limit come from core settings.'],
 ['h2', '4.2 Core settings (in the database, versioned)'],
 ['p', 'The full JSON Schema with defaults is in `core-04-contracts` §11. Main keys: `default_language`, `scheduler.*`, `workers.*`, `dispatch.*`, `retry.*`, `review.max_rounds`, `health.*`, `callbacks.base_url`, `notify.*`, `storage.*`, `credentials.expiry_warning_days`, `retention.*`, `telemetry.*`, `channel_settings_schema`. Loops read the current settings at the start of each tick (cached for at most 5 s), so a change takes effect without restart, except `workers.count` and `telemetry.*` which apply on restart.'],
 ['h1', '5. Deployment'],
@@ -447,6 +448,7 @@ core:
   environment:
     CORE_DATABASE_URL: \${CORE_DATABASE_URL}
     CORE_LISTEN_ADDR: ":8080"
+    CORE_AMQP_URL: \${CORE_AMQP_URL}
     CORE_MASTER_KEY: \${CORE_MASTER_KEY}
   depends_on: { postgres: { condition: service_healthy }, minio: { condition: service_started } }
   healthcheck: { test: ["CMD", "/core", "healthcheck"], interval: 10s, timeout: 3s, retries: 3 }

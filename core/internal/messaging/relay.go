@@ -28,6 +28,8 @@ type Relay struct {
 	// AfterConfirm is a test hook called after the broker confirm and before the row is marked
 	// sent. Returning an error simulates a crash in that window.
 	AfterConfirm func(messageID uuid.UUID) error
+	// OnSent runs after the outbox row is marked sent (confirm already received).
+	OnSent func(ctx context.Context, messageID uuid.UUID, body []byte)
 }
 
 var errUnroutable = errors.New("unroutable: no queue bound for routing key")
@@ -170,6 +172,8 @@ func (r *Relay) publishOne(ctx context.Context, ch *amqp.Channel, returns <-chan
 	}
 	if tag.RowsAffected() == 0 {
 		r.Log.Warn("outbox lease lost before mark; another relay will re-publish the same message_id", "message_id", c.messageID)
+	} else if r.OnSent != nil {
+		r.OnSent(ctx, c.messageID, c.body)
 	}
 	return nil
 }

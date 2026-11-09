@@ -6,8 +6,9 @@ info:
     Machine-readable subset of docs/core/core-04-contracts.docx (source:
     docs/tools/specgen/content/core/core-04-contracts.js). This file is NOT complete:
     it covers the unauthenticated probes (section 1.1), module callbacks (section 3)
-    and module reads and writes on core (section 4). The admin-api endpoints of
-    section 2 are listed in core/api/README.md as a remaining checklist.
+    and module reads and writes on core (section 4). Callbacks require header X-Fence
+    (execution ownership, §15.5); a stale fence yields 409 job_not_current. The admin-api
+    endpoints of section 2 are listed in core/api/README.md as a remaining checklist.
     core-04 stays authoritative until this file covers it fully.
 servers:
   - url: http://core:8080
@@ -28,7 +29,7 @@ paths:
         '200': {description: ready}
         '503': {$ref: '#/components/responses/Problem'}
   /internal/v1/jobs/{job_id}/progress:
-    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}]
+    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}, {$ref: '#/components/parameters/Fence'}]
     post:
       operationId: jobProgress
       requestBody: {required: true, content: {application/json: {schema: {$ref: '../schemas/progress.json'}}}}
@@ -39,7 +40,7 @@ paths:
         '409': {$ref: '#/components/responses/Problem'}
         '422': {$ref: '#/components/responses/Problem'}
   /internal/v1/jobs/{job_id}/result:
-    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}]
+    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}, {$ref: '#/components/parameters/Fence'}]
     post:
       operationId: jobResult
       requestBody: {required: true, content: {application/json: {schema: {$ref: '../schemas/result.json'}}}}
@@ -50,7 +51,7 @@ paths:
         '409': {description: 'job_terminal or job_not_current', $ref: '#/components/responses/Problem'}
         '422': {description: 'output_invalid; the job stays live until its deadline', $ref: '#/components/responses/Problem'}
   /internal/v1/jobs/{job_id}/fail:
-    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}]
+    parameters: [{$ref: '#/components/parameters/JobId'}, {$ref: '#/components/parameters/ProductionId'}, {$ref: '#/components/parameters/Fence'}]
     post:
       operationId: jobFail
       requestBody: {required: true, content: {application/json: {schema: {$ref: '../schemas/fail.json'}}}}
@@ -104,12 +105,46 @@ paths:
         '200': {description: current settings, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {type: object, required: [module_id, version, values, valid]}}}}
         '304': {description: not modified}
         '403': {$ref: '#/components/responses/Problem'}
+  /internal/v1/modules/{id}/settings:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}, description: 'module id, or reserved owner "core" / "admin-api"'}
+    get:
+      operationId: readSettings
+      description: Admin principal. Module tokens receive 403.
+      responses:
+        '200': {description: current settings, headers: {ETag: {schema: {type: string}}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      operationId: putSettings
+      description: |
+        Admin principal. Body uses base_version → 409 settings_version_conflict when stale.
+        If-Match mismatch → 412 version_mismatch (C34). This slice implements owner=core only.
+      parameters:
+        - {name: If-Match, in: header, required: false, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values, base_version]
+              properties:
+                values: {type: object}
+                base_version: {type: integer, minimum: 0}
+                comment: {type: string}
+      responses:
+        '201': {description: new current version}
+        '409': {description: settings_version_conflict, $ref: '#/components/responses/Problem'}
+        '412': {description: version_mismatch, $ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer, description: 'module token mft_... (admin-api token mfa_... is rejected with 403 on these routes)'}
   parameters:
     JobId: {name: job_id, in: path, required: true, schema: {type: string, format: uuid}}
     ProductionId: {name: X-Production-Id, in: header, required: false, schema: {type: string, format: uuid}}
+    Fence: {name: X-Fence, in: header, required: true, schema: {type: integer, minimum: 1}, description: 'execution ownership (core-04 §15.5); stale fence → 409 job_not_current'}
   responses:
     Problem:
       description: RFC 9457 problem; code from core-04 section 10
