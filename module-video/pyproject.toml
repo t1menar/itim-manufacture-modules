@@ -23,6 +23,10 @@ dependencies = [
     "docker>=7.2.0",
 ]
 
+[project.optional-dependencies]
+# only the agent image needs the SDK; the version is recorded in provenance
+agent = ["claude-agent-sdk==0.2.179"]
+
 [project.scripts]
 mvideo = "mvideo.cli:main"
 mvrender = "mvrender.cli:main"
@@ -73,7 +77,9 @@ select = ["E", "F", "I", "B", "UP", "SIM", "S", "ASYNC", "RUF"]
 "src/mvideo/validate/*.py" = ["E501", "RUF001"]
 "src/mvideo/cli.py" = ["E501"]
 "src/mvrender/draw/debugger.py" = ["RUF001"]  # the call-stack separator is a typographic arrow
-"tests/**" = ["S101", "S104", "S105", "S106"]
+"tests/**" = ["S101", "S104", "S105", "S106", "S107", "S108", "S607"]
+"src/mvideo/sources/git_cache.py" = ["S108"]  # tmpfs mount point inside the helper container
+"src/mvideo/agents/launcher.py" = ["S108"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -5,12 +5,13 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from mvideo import __version__
-from mvideo.api import health, info, jobs
+from mvideo.api import health, info, jobs, mcp_sandbox
 from mvideo.api.health import AuthStatus, Check
 from mvideo.api.problems import install_problem_handlers
 from mvideo.config import BootstrapConfig
@@ -41,6 +42,8 @@ def create_app(
     health_checks: list[Check] | None = None,
     ready_checks: list[Check] | None = None,
     auth_status: AuthStatus | None = None,
+    services: dict[str, Any] | None = None,
+    revise_steps: list[Step] | None = None,
 ) -> FastAPI:
     auth = AuthState()
     worker: Worker | None = None
@@ -65,6 +68,8 @@ def create_app(
             lease_ttl_s=LEASE_TTL_S,
             lease_renew_s=lease_renew_s,
             cancel_poll_s=cancel_poll_s,
+            services=services,
+            revise_steps=revise_steps,
         )
         worker = Worker(factory=factory, runner=runner, poll_s=worker_poll_s, lease_ttl_s=LEASE_TTL_S)
         service = JobService(factory, worker, runner)
@@ -102,8 +107,10 @@ def create_app(
     app.state.service = service
     app.state.worker = worker
     app.state.runner = runner
+    app.state.scratch = (services or {}).get("scratch")  # ScratchRegistry of the real capture step
     install_problem_handlers(app)
     app.include_router(info.router)
     app.include_router(health.router)
     app.include_router(jobs.router)
+    app.include_router(mcp_sandbox.router)
     return app

@@ -1,0 +1,31 @@
+{
+ "id": "script@1.0.0",
+ "step": "script",
+ "version": "1.0.0",
+ "placeholders": [
+  "channel_name",
+  "commit",
+  "fix_report",
+  "idea_text",
+  "max_s",
+  "min_s",
+  "reading_wps"
+ ],
+ "declared_placeholders": [
+  "channel_name",
+  "idea_text",
+  "commit",
+  "min_s",
+  "max_s",
+  "reading_wps",
+  "caption_max_lines",
+  "hook_max_lines",
+  "note_max_lines",
+  "style_rules",
+  "fix_report"
+ ],
+ "input_files": "/in/idea.json, /in/analysis.json, /in/research.json, /in/channel.json, /in/limits.json, /src, /ref/create_database/script.en.json",
+ "output": "/out/script.en.json — manufacture.scenario/1 (04 §4.2) + rules 04 §4.3; /out/notes.md; or /out/blocked.json",
+ "done_when": "validate(kind=\"script\") returns no errors; estimate within {min_s}–{max_s}; every must-explain term noted at first use",
+ "tools_network": "Read, Glob, Grep, Write, Edit, validate, estimate; Anthropic only"
+}

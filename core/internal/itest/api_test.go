@@ -95,7 +95,7 @@ func TestDuplicateCallbackAppliedOnce(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	srv := e.api()
-	body := map[string]any{"output": map[string]any{"ok": true}, "artifacts": []any{}}
+	body := map[string]any{"output": videoStageOutput("dup"), "artifacts": []any{}}
 	res := e.postCallback(srv, "vidmod", "result", job, fence, body)
 	if res.StatusCode != 200 {
 		t.Fatalf("first: %d %s", res.StatusCode, problemCode(t, res))
@@ -119,7 +119,7 @@ func TestResultWithoutDecisionAndWhitespaceReason(t *testing.T) {
 	job, fence := e.startedJob()
 	srv := e.api()
 	// finish video so we get a review job
-	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": map[string]any{"ok": true}, "artifacts": []any{}})
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("review"), "artifacts": []any{}})
 	res.Body.Close()
 	var rev uuid.UUID
 	var rf int
@@ -152,7 +152,7 @@ func TestRejectThreeTimesNeedsAttentionMaxRounds(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	srv := e.api()
-	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": map[string]any{"v": 1}, "artifacts": []any{}})
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("r1"), "artifacts": []any{}})
 	res.Body.Close()
 
 	for round := 1; round <= 3; round++ {
@@ -179,7 +179,7 @@ func TestRejectThreeTimesNeedsAttentionMaxRounds(t *testing.T) {
 			if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'video' AND mode = 'revise' AND status IN ('queued','dispatched','running')`).Scan(&vid, &vf); err != nil {
 				t.Fatalf("revise after round %d: %v", round, err)
 			}
-			res = e.postCallback(srv, "vidmod", "result", vid, vf, map[string]any{"output": map[string]any{"v": round + 1}, "artifacts": []any{}})
+			res = e.postCallback(srv, "vidmod", "result", vid, vf, map[string]any{"output": videoStageOutput(fmt.Sprintf("rev%d", round)), "artifacts": []any{}})
 			if res.StatusCode != 200 {
 				t.Fatalf("revise result: %d %s", res.StatusCode, problemCode(t, res))
 			}
@@ -292,5 +292,133 @@ func TestDispatchedAfterConfirm(t *testing.T) {
 	_ = e.pool.QueryRow(e.ctx, `SELECT status, deadline FROM jobs`).Scan(&status, &deadline)
 	if status != "dispatched" || deadline == nil {
 		t.Fatalf("status=%s deadline=%v", status, deadline)
+	}
+}
+
+func TestReviewApproveCreatesPublishIntents(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	account := uuid.Must(uuid.NewV7())
+	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
+		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("approve"), "artifacts": []any{}})
+	if res.StatusCode != 200 {
+		t.Fatalf("video: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	var rev uuid.UUID
+	var rf int
+	if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'review'`).Scan(&rev, &rf); err != nil {
+		t.Fatal(err)
+	}
+	res = e.postCallback(srv, "revmod", "result", rev, rf, map[string]any{
+		"output": map[string]any{
+			"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
+			"decided_at": "2026-01-01T00:00:00Z", "round": 1,
+		},
+		"artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("approve: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM publish_intents WHERE platform_account_id = $1 AND generation = 1 AND status = 'pending'`, account); n != 1 {
+		t.Fatalf("intents=%d", n)
+	}
+	if n := e.count(`SELECT count(*) FROM content_revisions WHERE approved_round = 1`); n != 1 {
+		t.Fatal("revision not approved")
+	}
+	if n := e.count(`SELECT count(*) FROM jobs WHERE stage_id = 'publish' AND status = 'queued'`); n != 1 {
+		t.Fatal("publish job missing")
+	}
+	var req []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT request FROM jobs WHERE stage_id = 'publish'`).Scan(&req); err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(req, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	input, _ := parsed["input"].(map[string]any)
+	intents, _ := input["intents"].([]any)
+	if len(intents) != 1 {
+		t.Fatalf("request intents=%v", input["intents"])
+	}
+	// Idempotent: replaying the same approved result body should not create a second intent.
+	res = e.postCallback(srv, "revmod", "result", rev, rf, map[string]any{
+		"output": map[string]any{
+			"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
+			"decided_at": "2026-01-01T00:00:00Z", "round": 1,
+		},
+		"artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("dup approve: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM publish_intents`); n != 1 {
+		t.Fatalf("intents after dup=%d", n)
+	}
+}
+
+func TestSystemSettingsIncludeInstagramLimits(t *testing.T) {
+	e := setup(t)
+	lim, err := e.settings.InstagramLimits(e.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lim.MaxCaptionChars != 2200 || lim.MaxHashtags != 30 {
+		t.Fatalf("%+v", lim)
+	}
+}
+
+func TestVideoResultCreatesContentRevision(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{
+		"output": videoStageOutput("snap"), "artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("%d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM content_revisions`); n != 1 {
+		t.Fatalf("revisions=%d", n)
+	}
+	var body []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT body FROM content_revisions`).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := parsed["metadata"].(map[string]any)
+	if meta == nil || meta["title"] != "t-snap" {
+		t.Fatalf("metadata missing in revision: %#v", parsed)
+	}
+	if n := e.count(`SELECT count(*) FROM events WHERE type = 'content_revision.created'`); n != 1 {
+		t.Fatal("audit event missing")
+	}
+}
+
+func TestVideoResultWithoutMetadataRejected(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{
+		"output": map[string]any{"variants": []any{map[string]any{"language": "en", "video": map[string]any{"ref": "s3://x"}}}}, "artifacts": []any{},
+	})
+	if res.StatusCode != 422 || problemCode(t, res) != "output_invalid" {
+		t.Fatalf("want 422 output_invalid, got %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM content_revisions`); n != 0 {
+		t.Fatal("must not create revision")
+	}
+	if n := e.count(`SELECT count(*) FROM jobs WHERE id = $1 AND status IN ('queued','dispatched','running')`, job); n != 1 {
+		t.Fatal("job must stay live on invalid output")
 	}
 }

@@ -1,0 +1,21 @@
+{
+ "id": "research@1.0.0",
+ "step": "research",
+ "version": "1.0.0",
+ "placeholders": [
+  "commit",
+  "idea_text",
+  "ref",
+  "repo"
+ ],
+ "declared_placeholders": [
+  "idea_text",
+  "commit",
+  "repo",
+  "ref"
+ ],
+ "input_files": "/in/idea.json, /in/analysis.json, /src (repository at {commit}), /ref/create_database/research.json",
+ "output": "/out/research.json — manufacture.research/1 (04 §5.2); or /out/blocked.json",
+ "done_when": "validate passes including cite_valid and call_path_valid; ≥ 3 viewer questions with sources; every fact cited; every capture need has a \"how\"",
+ "tools_network": "Read, Glob, Grep, Write, WebFetch, WebSearch, validate, source_line; Anthropic + allow_domains.research"
+}

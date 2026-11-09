@@ -22,7 +22,7 @@ module.exports = {
   'Core: pipeline engine, module registry, channels and routing, settings, credentials\nAdmin API (Go) and admin panel (web)\nModule **video**: idea → finished English video\nModule **review**: Telegram bot with access keys, approve / reject with a text reason\nModule **publish**: Instagram Reels (primary platform)\nMetrics, logs and traces for all services',
   'Localization (translated copies) and a Russian-language channel\nIntro module (channel intro is created later, plugged in as a module)\nSeveral modules on one stage running in parallel, with merged output\nYouTube Shorts and TikTok publishing adapters\nReach analytics and A/B testing\nAutomatic idea generation; voice rejection reasons\nSecrets in Vault',
 ]], [1, 1]],
-['note', '**MVP scope (accepted 2026-11-08):** everything listed in stage 1 except the web UI. `admin-panel` is deferred; admin-api with authentication, roles, audit and settings, and the modules review and publish, stay in full scope. The video module is written by the owner with Claude Code; the other services implement its contract and test it with a fake module.'],
+['note', '**MVP scope (updated 2026-11-09, D20):** stage-1 backend without web UI and without **admin-api**. Administration is the Telegram bot (module-review) plus direct database access. `admin-panel` and `admin-api` are deferred. Modules video (owner), review and publish stay in scope. The video module is written by the owner with Claude Code; the other services implement its contract and test it with a fake module.'],
 ['h1', '3. Glossary'],
 ['table', ['Term', 'Meaning'], [
   ['Brand', 'The umbrella name of the content line: **iTim**. Channels belong to a brand.'],
@@ -52,7 +52,7 @@ module.exports = {
 ['p', 'Stage 1 consists of six services. All of them live in one public git repository, `github.com/t1menar/manufacture` (local copy `~/projects/manufacture/`): each service is a top-level folder, and `docs/` has a folder with the same name holding its specification. Services are still built, versioned and deployed independently.'],
 ['table', ['Service', 'Language', 'Responsibility', 'Own database'], [
   ['`core`', 'Go', 'Pipeline engine, job queue, module registry, channels and routing, ideas and productions, module settings, credentials store.', '`core`'],
-  ['`admin-api`', 'Go', 'Single entry point for the admin panel: login, 2FA, roles, audit; exposes and proxies all administrative operations.', '`admin`'],
+  ['`admin-api` (deferred D20)', 'Go', 'Single entry point for the admin panel: login, 2FA, roles, audit; exposes and proxies all administrative operations.', '`admin`'],
   ['`admin-panel`', 'TypeScript (React)', 'Web client for all configuration and monitoring. No business logic.', '—'],
   ['`module-video`', 'Python', 'Stage `video`: analysis, research, script, capture, render, package. Uses Claude Code.', '`video`'],
   ['`module-review`', 'Python', 'Stage `review`: Telegram bot, access keys, approve / reject with reason, notifications.', '`review`'],
@@ -132,7 +132,7 @@ module.exports = {
 ], [2, 1.6, 2.6]],
 ['h1', '13. Roadmap'],
 ['table', ['Stage', 'Content', 'Done when'], [
-  ['1. Foundation', 'Core, admin-api, admin-panel; modules video, review, publish (Instagram); metrics', 'An idea entered in the panel becomes an English video, is reviewed in Telegram and is published to the iTim Instagram account; a rejection with a reason returns a corrected version.'],
+  ['1. Foundation', 'Core; modules video, review, publish (Instagram); metrics. admin-api and admin-panel deferred (D13/D20). Admin via Telegram bot + DB.', 'An idea (seeded or inserted in DB) becomes an English video, is reviewed in Telegram and is published to the iTim Instagram account; a rejection with a reason returns a corrected version.'],
   ['2. Extensibility', 'Localization (`localize` stage, RU channel); intro module; parallel modules per stage with merge; YouTube and TikTok adapters', 'A second module on a stage is registered and run in parallel without Core code changes.'],
   ['3. Growth', 'Reach analytics, A/B tests, idea generation, Vault, voice reasons', 'Metrics from published posts influence which ideas are produced next.'],
 ], [1, 2.5, 3.5]],
@@ -156,10 +156,11 @@ module.exports = {
   ['D16', 'Runtime prompts are stored in the database of the module that runs them (module-video), as immutable versions with activation, audit and a per-job snapshot recorded in the module result provenance. Core keeps no prompts table — only an optional shared substitution helper. A runtime prompt is a recipe for model output; it does not replace the executable renderer, and build prompts for Claude Code are separate documents', 'owner\'s decision 2026-11-08; clarified 2026-11-09 (no prompts table in core)'],
   ['D17', 'No duplicate work at database level: one live production per idea, one live job per variant, unique publish intents (core-04 C32, C38)', 'owner\'s decision 2026-11-08'],
   ['D18', 'Republish of the same variant to the same account is admin-only and manual: `POST /internal/v1/publish-intents/{id}/republish` with a required reason (and `base_generation` / Idempotency-Key). No automatic republish; generation > 1 only via this path (accepted P2/C38)', 'owner\'s decision 2026-11-09'],
+  ['D19', 'Title, description and tags (with per-platform caption/hashtags) are returned by **module-video** in the video stage result as required `variants[].metadata` (accepted P1/C39). There is no separate `content-claude` / module-content stage in the plan.', 'owner\'s decision 2026-11-09'],
+  ['D20', 'MVP excludes **admin-api** and **admin-panel**. Operational admin for MVP is the Telegram bot in module-review (using core admin token `mfa_` with `X-Admin-Actor` = Telegram admin id) plus database access. admin-api returns later with the panel.', 'owner\'s decision 2026-11-09'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [
-  ['P1', 'Separate stage `metadata` with module `content-claude` (Python) between `video` and `review`', 'the owner\'s video module returns an optional `metadata` object'],
   ['P3', 'RabbitMQ flow mapping of core-04 §15.1 (commands and job events over the broker, reads over HTTP) as module contract 2', 'keep HTTP for job events and use the broker only for commands'],
   ['P4', 'Conditional write codes of core-04 C34 (`412` for `If-Match`, `409` for business conflicts)', '—'],
 ], [0.4, 3.6, 2.6]],
@@ -168,7 +169,7 @@ module.exports = {
   'Where does the system run: home server, VPS or cloud? It defines render speed and how MinIO gets a public URL for Instagram.',
   'Who besides the owner gets Telegram review keys, and with which role?',
   'Instagram account of `itim`: confirm it is a professional (Business or Creator) account usable with Instagram Login (D14).',
-  'Caption and hashtag rules per channel: now generated (D15); who generates them is P1 (separate module or the video module)?',
+  'Caption and hashtag rules per channel: generated by module-video (D15/D19); verify Instagram limits against current documentation before setting adapter defaults.',
   'Current Instagram limits for captions and hashtags, and whether Reels have a separate title field: verify against official documentation before setting adapter defaults.',
   'RabbitMQ hosting and credentials in Compose (one vhost per environment); the broker credentials are bootstrap env of each service.',
 ]],

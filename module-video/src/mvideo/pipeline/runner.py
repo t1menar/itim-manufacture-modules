@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import hashlib
+import inspect
 import json
 import time
 import uuid
@@ -51,7 +52,7 @@ RENEW_TOKEN_MESSAGE = (
 )
 EXPECTED_KIND = {"subscription": "claude_oauth_token", "api_key": "anthropic_api_key"}
 
-Finalize = Callable[[RunContext], tuple[dict[str, Any], list[Artifact]]]
+Finalize = Callable[[RunContext], Any]  # sync or async: returns (output, artifacts)
 
 
 class AuthState:
@@ -102,7 +103,11 @@ class Runner:
         lease_renew_s: float = 20.0,
         cancel_poll_s: float = 2.0,
         clock: Callable[[], dt.datetime] = _utcnow,
+        services: dict[str, Any] | None = None,
+        revise_steps: list[Step] | None = None,
     ) -> None:
+        self._revise_steps = revise_steps  # None: revise runs the same steps (fakes)
+        self._services = services or {}  # launcher, source, docker, ... for RunContext
         self._factory = factory
         self._storage = storage
         self._core = core
@@ -207,6 +212,7 @@ class Runner:
             input=JobInput.model_validate(run.input),
             settings=settings,
             storage=self._storage,
+            **self._services,
         )
         try:
             ctx.credential = await self._fetch_credential(call, settings)
@@ -268,8 +274,10 @@ class Runner:
                 if row.name not in existing or row.try_ > existing[row.name].try_:
                     existing[row.name] = row
         limits = ctx.settings.limits
+        if ctx.mode == "revise":
+            await self._load_previous(run, ctx)
 
-        for spec in self._steps:
+        for spec in self._revise_steps if ctx.mode == "revise" and self._revise_steps else self._steps:
             self._check_control(cancel, lost)
             row = existing.get(spec.name)
             if row is not None and row.status in ("succeeded", "reused"):
@@ -325,6 +333,21 @@ class Runner:
             ctx.outputs[spec.name] = produced
             await self._progress(call, spec.hi, spec.name, f"{spec.name} finished")
 
+    async def _load_previous(self, run: Run, ctx: RunContext) -> None:
+        """Revise: files of the last succeeded run; analysis and research stay as they were."""
+        async with self._factory() as s:
+            prev = await repo.previous_outputs(s, run.production_id, run.id)
+        need = ("analysis", "research", "capture", "package")
+        if prev is None or any(n not in prev for n in need):
+            raise StepError(
+                "fatal", "input_invalid", "no succeeded previous run to revise", step="script-revise"
+            )
+        ctx.previous = {name: _artifacts(files) for name, files in prev.items()}
+        if ctx.input.previous is None:
+            raise StepError("fatal", "input_invalid", "revise needs input.previous", step="script-revise")
+        ctx.previous["script"] = {"script.en.json": Artifact(ctx.input.previous.script_ref, "", 0, "json")}
+        ctx.outputs["analysis"], ctx.outputs["research"] = ctx.previous["analysis"], ctx.previous["research"]
+
     async def _race(
         self, spec: Step, ctx: RunContext, cancel: asyncio.Event, lost: asyncio.Event
     ) -> dict[str, Artifact]:
@@ -364,7 +387,8 @@ class Runner:
     # ---- outcome -----------------------------------------------------------------------------
 
     async def _build_result(self, run_id: uuid.UUID, ctx: RunContext) -> dict[str, Any]:
-        output, artifacts = self._finalize(ctx)
+        built = self._finalize(ctx)
+        output, artifacts = await built if inspect.isawaitable(built) else built
         StageOutput.model_validate(output)  # our own bug must not reach the core as a 422
         problems = await self._storage.verify(artifacts)
         if problems:
