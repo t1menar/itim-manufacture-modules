@@ -10,6 +10,24 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
+class ProblemError(Exception):
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        title: str,
+        *,
+        detail: str | None = None,
+        errors: list[Any] | None = None,
+    ) -> None:
+        super().__init__(title)
+        self.status = status
+        self.code = code
+        self.title = title
+        self.detail = detail
+        self.errors = errors
+
+
 def problem(
     status: int,
     code: str,
@@ -32,6 +50,13 @@ def problem(
 
 
 def install_problem_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ProblemError)
+    async def problem_exc(_: Request, exc: ProblemError) -> JSONResponse:
+        extra: dict[str, Any] = {}
+        if exc.errors is not None:
+            extra["errors"] = exc.errors
+        return problem(exc.status, exc.code, exc.title, detail=exc.detail, extra=extra or None)
+
     @app.exception_handler(StarletteHTTPException)
     async def http_exc(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         code = "not_found" if exc.status_code == 404 else "http_error"

@@ -5,6 +5,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 ## On main
 
 #7–#13 merged (publish intents, P1 metadata, core gaps, module skeletons, D20 admin, publish result + notify).
+#15 merged (D21 ideas-in-video spec).
 
 ## Accepted decisions
 
@@ -20,10 +21,10 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #14 | module-publish job intake | owner — wait |
-| #15 | D21 ideas-in-video spec | owner — **do not merge until asked** |
-| #16 | module-review job intake | owner — wait |
+| #14 | module-publish job intake | merging |
+| #16 | module-review job intake | after #14 |
+| #17 | core/ideas-out (D21 code + D22/D23) | owner — wait |
 
 ## Still later
 
-Core drop `ideas` + consumer `idea.ready`; module-video tables/scheduler (owner); real Telegram/Instagram; admin-api/panel; further core domain carve-out (see audit).
+Core drop `ideas` + consumer `idea.ready`; module-video tables/scheduler (owner); real Telegram/Instagram; admin-api/panel; MinIO/ffprobe validation beyond structural checks.

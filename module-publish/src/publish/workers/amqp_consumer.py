@@ -1,10 +1,4 @@
-"""AMQP command consumer with DB inbox dedup (module contract 2 path).
-
-When PUBLISH_AMQP_URL is unset the consumer is not started. Deliveries are
-acknowledged after a successful inbox claim; duplicates are acked without re-work.
-Job application itself is not implemented in phase 1 — claimed messages are logged
-and left for phase 3 (explicit not_implemented in the HTTP twin).
-"""
+"""AMQP command consumer with DB inbox dedup — job.requested / job.cancel_requested."""
 
 from __future__ import annotations
 
@@ -12,12 +6,14 @@ import asyncio
 import contextlib
 import json
 from typing import Any
+from uuid import UUID
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from publish.db.inbox import try_claim
+from publish.intake import validate_job
 from publish.observability.logging import get_logger
 
 log = get_logger(__name__)
@@ -29,10 +25,13 @@ class AmqpConsumer:
         url: str,
         queue: str,
         session_factory: async_sessionmaker[Any],
+        *,
+        job_service: Any | None = None,
     ) -> None:
         self._url = url
         self._queue = queue
         self._sessions = session_factory
+        self._jobs = job_service
         self._task: asyncio.Task[None] | None = None
         self._conn: aio_pika.RobustConnection | None = None
         self.ready: str = "starting"
@@ -83,9 +82,30 @@ class AmqpConsumer:
         if not claimed:
             log.info("amqp_duplicate", message_id=str(message_id), type=msg_type)
             return
-        log.info(
-            "amqp_claimed_unhandled",
-            message_id=str(message_id),
-            type=msg_type,
-            note="job application not_implemented until phase 3",
-        )
+
+        if msg_type == "job.requested" and self._jobs is not None:
+            payload = envelope.get("payload") or {}
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    payload = {}
+            try:
+                job = validate_job(payload)
+                await self._jobs.accept(job)
+                log.info("amqp_job_accepted", job_id=str(job.request.job_id))
+            except Exception as exc:
+                log.warning("amqp_job_reject", error=str(exc))
+            return
+
+        if msg_type == "job.cancel_requested" and self._jobs is not None:
+            job_ref = envelope.get("job") or {}
+            raw_id = job_ref.get("job_id") if isinstance(job_ref, dict) else None
+            if raw_id:
+                try:
+                    await self._jobs.cancel(UUID(str(raw_id)))
+                except Exception as exc:
+                    log.warning("amqp_cancel_failed", error=str(exc))
+            return
+
+        log.info("amqp_claimed_unhandled", message_id=str(message_id), type=msg_type)
