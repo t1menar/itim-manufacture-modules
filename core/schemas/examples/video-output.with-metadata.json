@@ -1,0 +1,42 @@
+{
+  "variants": [
+    {
+      "language": "en",
+      "video": {
+        "ref": "s3://manufacture/p/v/1/final.mp4",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "duration_s": 61.0,
+        "size": 1000,
+        "width": 1080,
+        "height": 1920,
+        "fps": 60
+      },
+      "metadata": {
+        "title": "How CREATE DATABASE works",
+        "description": "It copies template1.",
+        "topics": [
+          "postgres"
+        ],
+        "platforms": {
+          "instagram": {
+            "caption": "Hook\u2026",
+            "hashtags": [
+              "#postgresql"
+            ]
+          }
+        }
+      },
+      "post": {
+        "caption": "Hook\u2026",
+        "hashtags": [
+          "#postgresql"
+        ]
+      }
+    }
+  ],
+  "provenance": {
+    "prompts": {
+      "script": "script@1.0.0"
+    }
+  }
+}

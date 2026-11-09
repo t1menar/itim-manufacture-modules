@@ -81,6 +81,7 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 		_, err := eng.CreateRepublishJob(ctx, tx, intent.VariantID, intent.ID, intent.ContentRevisionID, intent.Generation)
 		return err
 	}}
+	eng.Publish = pub
 	if u, err := store.CallbackBaseURL(ctx); err == nil {
 		eng.CallbackBaseURL = u
 	}

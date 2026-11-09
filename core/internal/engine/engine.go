@@ -19,6 +19,7 @@ import (
 
 	"github.com/t1menar/manufacture/core/internal/db"
 	"github.com/t1menar/manufacture/core/internal/messaging"
+	"github.com/t1menar/manufacture/core/internal/publish"
 )
 
 type Engine struct {
@@ -30,6 +31,7 @@ type Engine struct {
 	DefaultLanguage string
 	CallbackBaseURL string
 	Settings        SettingsSource // optional; nil keeps struct defaults
+	Publish         *publish.Store // optional; video success snapshots a content revision (D19)
 	reviewMaxRounds int
 }
 

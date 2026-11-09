@@ -26,6 +26,7 @@ import (
 	"github.com/t1menar/manufacture/core/internal/engine"
 	"github.com/t1menar/manufacture/core/internal/messaging"
 	"github.com/t1menar/manufacture/core/internal/modules"
+	"github.com/t1menar/manufacture/core/internal/publish"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -136,6 +137,7 @@ func setup(t *testing.T) *env {
 			t.Fatal(err)
 		}
 	}
+	e.eng.Publish = &publish.Store{Pool: pool}
 	return e
 }
 
@@ -288,4 +290,24 @@ func (e *env) get(q string) amqp.Delivery {
 		e.t.Fatalf("get %s: ok=%v err=%v", q, ok, err)
 	}
 	return d
+}
+
+func videoStageOutput(tag string) map[string]any {
+	return map[string]any{
+		"variants": []any{map[string]any{
+			"language": "en",
+			"video": map[string]any{
+				"ref": "s3://manufacture/t/final.mp4", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				"duration_s": 61.0, "size": 1000, "width": 1080, "height": 1920, "fps": 60,
+			},
+			"post": map[string]any{"caption": "c", "hashtags": []any{"#pg"}},
+			"metadata": map[string]any{
+				"title": "t-" + tag, "description": "d-" + tag, "topics": []any{"postgres"},
+				"platforms": map[string]any{
+					"instagram": map[string]any{"caption": "cap-" + tag, "hashtags": []any{"#postgresql"}},
+				},
+			},
+		}},
+		"provenance": map[string]any{"prompts": map[string]any{"script": "script@1.0.0"}},
+	}
 }

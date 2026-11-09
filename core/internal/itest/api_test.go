@@ -95,7 +95,7 @@ func TestDuplicateCallbackAppliedOnce(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	srv := e.api()
-	body := map[string]any{"output": map[string]any{"ok": true}, "artifacts": []any{}}
+	body := map[string]any{"output": videoStageOutput("dup"), "artifacts": []any{}}
 	res := e.postCallback(srv, "vidmod", "result", job, fence, body)
 	if res.StatusCode != 200 {
 		t.Fatalf("first: %d %s", res.StatusCode, problemCode(t, res))
@@ -119,7 +119,7 @@ func TestResultWithoutDecisionAndWhitespaceReason(t *testing.T) {
 	job, fence := e.startedJob()
 	srv := e.api()
 	// finish video so we get a review job
-	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": map[string]any{"ok": true}, "artifacts": []any{}})
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("review"), "artifacts": []any{}})
 	res.Body.Close()
 	var rev uuid.UUID
 	var rf int
@@ -152,7 +152,7 @@ func TestRejectThreeTimesNeedsAttentionMaxRounds(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	srv := e.api()
-	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": map[string]any{"v": 1}, "artifacts": []any{}})
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("r1"), "artifacts": []any{}})
 	res.Body.Close()
 
 	for round := 1; round <= 3; round++ {
@@ -179,7 +179,7 @@ func TestRejectThreeTimesNeedsAttentionMaxRounds(t *testing.T) {
 			if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'video' AND mode = 'revise' AND status IN ('queued','dispatched','running')`).Scan(&vid, &vf); err != nil {
 				t.Fatalf("revise after round %d: %v", round, err)
 			}
-			res = e.postCallback(srv, "vidmod", "result", vid, vf, map[string]any{"output": map[string]any{"v": round + 1}, "artifacts": []any{}})
+			res = e.postCallback(srv, "vidmod", "result", vid, vf, map[string]any{"output": videoStageOutput(fmt.Sprintf("rev%d", round)), "artifacts": []any{}})
 			if res.StatusCode != 200 {
 				t.Fatalf("revise result: %d %s", res.StatusCode, problemCode(t, res))
 			}
@@ -292,5 +292,55 @@ func TestDispatchedAfterConfirm(t *testing.T) {
 	_ = e.pool.QueryRow(e.ctx, `SELECT status, deadline FROM jobs`).Scan(&status, &deadline)
 	if status != "dispatched" || deadline == nil {
 		t.Fatalf("status=%s deadline=%v", status, deadline)
+	}
+}
+
+func TestVideoResultCreatesContentRevision(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{
+		"output": videoStageOutput("snap"), "artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("%d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM content_revisions`); n != 1 {
+		t.Fatalf("revisions=%d", n)
+	}
+	var body []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT body FROM content_revisions`).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := parsed["metadata"].(map[string]any)
+	if meta == nil || meta["title"] != "t-snap" {
+		t.Fatalf("metadata missing in revision: %#v", parsed)
+	}
+	if n := e.count(`SELECT count(*) FROM events WHERE type = 'content_revision.created'`); n != 1 {
+		t.Fatal("audit event missing")
+	}
+}
+
+func TestVideoResultWithoutMetadataRejected(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{
+		"output": map[string]any{"variants": []any{map[string]any{"language": "en", "video": map[string]any{"ref": "s3://x"}}}}, "artifacts": []any{},
+	})
+	if res.StatusCode != 422 || problemCode(t, res) != "output_invalid" {
+		t.Fatalf("want 422 output_invalid, got %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM content_revisions`); n != 0 {
+		t.Fatal("must not create revision")
+	}
+	if n := e.count(`SELECT count(*) FROM jobs WHERE id = $1 AND status IN ('queued','dispatched','running')`, job); n != 1 {
+		t.Fatal("job must stay live on invalid output")
 	}
 }

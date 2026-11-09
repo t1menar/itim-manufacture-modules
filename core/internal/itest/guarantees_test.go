@@ -148,7 +148,7 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	}
 	_ = job
 	_ = fence
-	step("vidmod", "video", map[string]any{"ok": true})
+	step("vidmod", "video", videoStageOutput("g"))
 	step("revmod", "review", map[string]any{
 		"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
 		"decided_at": "2026-01-01T00:00:00Z", "round": 1,
@@ -206,7 +206,7 @@ func TestDuplicateEventAppliedOnce(t *testing.T) {
 	_ = e.pool.QueryRow(e.ctx, `SELECT production_id FROM jobs`).Scan(&prod)
 	body := mustJSON(messaging.Envelope{MessageID: id, Type: "job.succeeded", SchemaVersion: 1, OccurredAt: time.Now().UTC(),
 		Producer: "module:vidmod", ProductionID: &prod, Job: &messaging.JobRef{JobID: job, Fence: fence},
-		Payload: json.RawMessage(`{"output":{"ok":true}}`)})
+		Payload: json.RawMessage(`{"output":{"variants":[{"language":"en","video":{"ref":"s3://x","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","duration_s":1,"size":1,"width":1,"height":1,"fps":1},"post":{"caption":"c","hashtags":["#pg"]},"metadata":{"title":"t","description":"d","topics":["postgres"],"platforms":{"instagram":{"caption":"c","hashtags":["#postgresql"]}}}}],"provenance":{}}}`)})
 	e.publishRaw(id.String(), body)
 	e.publishRaw(id.String(), body)
 	if err := e.consumeUntil(e.consumer(), func() bool { return e.queueLen(e.topo.CoreEvents()) == 0 }); err != nil {
@@ -224,7 +224,7 @@ func TestDuplicateEventAppliedOnce(t *testing.T) {
 func TestConsumerCrashBeforeCommitRedelivers(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
-	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
+	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	c := e.consumer()
 	c.BeforeCommit = func(messaging.Envelope) error { return errors.New("crash") }
 	if err := c.Consume(e.ctx, e.conn); err == nil {
@@ -244,7 +244,7 @@ func TestConsumerCrashBeforeCommitRedelivers(t *testing.T) {
 func TestConsumerCrashAfterCommitBeforeAckDedups(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
-	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
+	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	c := e.consumer()
 	c.AfterCommit = func(messaging.Envelope) error { return errors.New("crash") }
 	if err := c.Consume(e.ctx, e.conn); err == nil {

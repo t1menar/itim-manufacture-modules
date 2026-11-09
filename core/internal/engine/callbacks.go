@@ -279,6 +279,21 @@ func callbackMessageID(jobID uuid.UUID, kind string, body []byte) uuid.UUID {
 
 func (e *Engine) validateResultOutput(ctx context.Context, tx pgx.Tx, j jobRow, output json.RawMessage) error {
 	// Stage-specific checks for this slice. Full JSON Schema validation is a later slice.
+	if j.stageID == "video" {
+		var o struct {
+			Variants []struct {
+				Metadata json.RawMessage `json:"metadata"`
+			} `json:"variants"`
+		}
+		if err := json.Unmarshal(output, &o); err != nil || len(o.Variants) == 0 {
+			return ErrOutputInvalid
+		}
+		for _, v := range o.Variants {
+			if len(v.Metadata) == 0 || v.Metadata[0] != '{' {
+				return ErrOutputInvalid
+			}
+		}
+	}
 	if j.stageID == "review" {
 		var o struct {
 			Decision string  `json:"decision"`
@@ -306,6 +321,11 @@ func (e *Engine) validateResultOutput(ctx context.Context, tx pgx.Tx, j jobRow, 
 
 // afterSuccess advances the pipeline, or runs the review revise loop when decision=rejected.
 func (e *Engine) afterSuccess(ctx context.Context, tx pgx.Tx, j jobRow, output json.RawMessage) error {
+	if j.stageID == "video" {
+		if err := e.snapshotVideoRevision(ctx, tx, j, output); err != nil {
+			return err
+		}
+	}
 	if j.stageID == "review" {
 		return e.afterReview(ctx, tx, j, output)
 	}
