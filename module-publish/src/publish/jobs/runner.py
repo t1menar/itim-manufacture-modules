@@ -53,7 +53,11 @@ class JobRunner:
                     s,
                     run_id,
                     status="failed",
-                    error={"class": "fatal", "message": "internal runner crash", "details": {"code": "internal"}},
+                    error={
+                        "class": "fatal",
+                        "message": "internal runner crash",
+                        "details": {"code": "internal"},
+                    },
                     now=self._clock(),
                 )
 
@@ -74,7 +78,11 @@ class JobRunner:
                     s,
                     run_id,
                     status="failed",
-                    error={"class": "fatal", "message": "missing callback", "details": {"code": "callback_missing"}},
+                    error={
+                        "class": "fatal",
+                        "message": "missing callback",
+                        "details": {"code": "callback_missing"},
+                    },
                     now=self._clock(),
                 )
             return
@@ -116,7 +124,9 @@ class JobRunner:
                 continue
             item = dict(raw)
             if not item.get("platform_account_id"):
-                item["platform_account_id"] = item.get("account_id") or str(item.get("intent_id") or uuid.uuid4())
+                item["platform_account_id"] = item.get("account_id") or str(
+                    item.get("intent_id") or uuid.uuid4()
+                )
             normalized.append(item)
 
         await self._progress(run_id, callback, fence, 40, "publish")
@@ -149,7 +159,9 @@ class JobRunner:
                             "handle": item.get("handle"),
                             "external_post_id": result.external_post_id,
                             "url": result.url,
-                            "published_at": result.published_at.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "published_at": result.published_at.astimezone(dt.UTC).strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            ),
                             "status": "published",
                             "error": None,
                             "dry_run": bool(getattr(self._ig, "dry_run", True)),

@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from publish.app import create_app
 from publish.bootstrap import BootstrapConfig
 from publish.db.migrate import upgrade_head
-from publish.db.session import session_factory
 from publish.instagram.fake import FakeInstagramClient
 from publish.intake import validate_job
 
@@ -71,7 +70,6 @@ async def test_accept_run_publish_result_callback() -> None:
     url = os.environ["PUBLISH_TEST_DATABASE_URL"]
     upgrade_head(url)
     engine = create_async_engine(url)
-    factory = session_factory(engine)
 
     job_id = uuid.uuid4()
     account = uuid.uuid4()
