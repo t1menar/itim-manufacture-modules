@@ -20,9 +20,23 @@ REQUIRED_VARS = (
 OPTIONAL_VARS = (
     "REVIEW_AMQP_URL",
     "REVIEW_AMQP_QUEUE",
+    "MODULE_CORE_ADMIN_TOKEN",  # mfa_ only here — never Core credentials ref (D20)
+    "REVIEW_ADMIN_TELEGRAM_IDS",
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
 )
+
+
+def _parse_ids(raw: str) -> tuple[int, ...]:
+    raw = raw.strip()
+    if not raw:
+        return ()
+    out: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part:
+            out.append(int(part))
+    return tuple(out)
 
 
 class ConfigError(Exception):
@@ -39,6 +53,8 @@ class BootstrapConfig:
     amqp_queue: str = "module.review-telegram.commands"
     otlp_endpoint: str | None = None
     otel_service_name: str = "module-review"
+    core_admin_token: str | None = field(default=None, repr=False)
+    admin_telegram_ids: tuple[int, ...] = ()
 
     @property
     def host(self) -> str:
@@ -74,4 +90,6 @@ class BootstrapConfig:
             amqp_queue=queue,
             otlp_endpoint=(source.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip() or None,
             otel_service_name=(source.get("OTEL_SERVICE_NAME") or "module-review").strip() or "module-review",
+            core_admin_token=(source.get("MODULE_CORE_ADMIN_TOKEN") or "").strip() or None,
+            admin_telegram_ids=_parse_ids(source.get("REVIEW_ADMIN_TELEGRAM_IDS") or ""),
         )
