@@ -43,9 +43,7 @@ def create_app(
     notify_handler = NotifyHandler(factory, bot, config.admin_telegram_ids)
     consumer: AmqpConsumer | None = None
     if start_amqp and config.amqp_url:
-        consumer = AmqpConsumer(
-            config.amqp_url, config.amqp_queue, factory, notify_handler=notify_handler
-        )
+        consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory, notify_handler=notify_handler)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
