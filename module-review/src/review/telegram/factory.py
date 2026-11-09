@@ -11,7 +11,10 @@ from review.telegram.real import RealTelegramBot
 def build_telegram_bot(config: BootstrapConfig) -> TelegramBot:
     if config.telegram_mode == "real":
         if not config.telegram_bot_token:
-            raise ConfigError("REVIEW_TELEGRAM_BOT_TOKEN required for real mode")
+            raise ConfigError(
+                "Telegram bot token missing: insert module_secrets key "
+                "'telegram.bot_token' or set REVIEW_TELEGRAM_BOT_TOKEN (dev fallback)"
+            )
         return RealTelegramBot(
             config.telegram_bot_token,
             api_base=config.telegram_api_base,

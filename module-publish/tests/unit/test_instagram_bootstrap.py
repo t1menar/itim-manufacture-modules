@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from publish.bootstrap import BootstrapConfig, ConfigError
+from publish.bootstrap import BootstrapConfig
 
 
 def _base(**extra: str) -> dict[str, str]:
@@ -23,9 +21,11 @@ def test_fake_default() -> None:
     assert cfg.instagram_mode == "fake"
 
 
-def test_real_requires_token() -> None:
-    with pytest.raises(ConfigError, match="ACCESS_TOKEN"):
-        BootstrapConfig.from_env(_base(PUBLISH_INSTAGRAM_MODE="real"))
+def test_real_allows_missing_env_token_for_db() -> None:
+    """Per-account platform_accounts.access_token is preferred; env optional."""
+    cfg = BootstrapConfig.from_env(_base(PUBLISH_INSTAGRAM_MODE="real"))
+    assert cfg.instagram_mode == "real"
+    assert cfg.instagram_access_token is None
 
 
 def test_real_ok() -> None:

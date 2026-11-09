@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,7 +31,7 @@ DEFAULT_GRAPH_BASE = "https://graph.instagram.com"
 @dataclass(frozen=True, slots=True)
 class AccountAuth:
     ig_user_id: str
-    access_token: str  # never log
+    access_token: str = field(repr=False)
 
 
 AccountResolver = Callable[[str], Awaitable[AccountAuth]]

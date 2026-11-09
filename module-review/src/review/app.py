@@ -14,7 +14,7 @@ from review.admin.allowlist import AdminAllowlist
 from review.api import admin, health, info, jobs
 from review.api.jobs import install_auth_handler
 from review.api.problems import install_problem_handlers
-from review.bootstrap import BootstrapConfig
+from review.bootstrap import BootstrapConfig, ConfigError
 from review.clients.core import CoreClient
 from review.db.session import make_engine, ping, session_factory
 from review.jobs.flow import ReviewFlow
@@ -23,9 +23,11 @@ from review.jobs.worker import Worker
 from review.notify.handler import NotifyHandler
 from review.observability.logging import get_logger
 from review.observability.metrics import Metrics
+from review.runtime_config import apply_overlay_to_bootstrap, load_runtime_overlay
 from review.settings import SettingsHolder
 from review.telegram.bot import TelegramBot
 from review.telegram.factory import build_telegram_bot
+from review.telegram.fake import FakeTelegramBot
 from review.telegram.poller import TelegramPoller
 from review.telegram.real import RealTelegramBot
 from review.workers.amqp_consumer import AmqpConsumer
@@ -41,6 +43,7 @@ def create_app(
     start_amqp: bool = True,
     start_worker: bool = True,
     bot: TelegramBot | None = None,
+    load_db_secrets: bool = True,
 ) -> FastAPI:
     metrics = Metrics()
     settings_holder = SettingsHolder()
@@ -48,7 +51,8 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
-    telegram = bot or build_telegram_bot(config)
+    # Initial bot from env/bootstrap; may be replaced after DB overlay in lifespan.
+    telegram = bot or _safe_build_bot(config)
     allowlist = AdminAllowlist(list(config.admin_telegram_ids))
     chat_ids = config.reviewer_chat_ids
     flow = ReviewFlow(factory, telegram, core, allowlist, chat_ids)
@@ -75,10 +79,42 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        nonlocal telegram, allowlist, chat_ids, flow, worker, notify_handler, poller
         if migrate_on_start:
             from review.db.migrate import upgrade_head
 
             upgrade_head(config.database_url)
+        if load_db_secrets and bot is None:
+            try:
+                overlay = await load_runtime_overlay(factory, config)
+                effective = apply_overlay_to_bootstrap(config, overlay)
+                telegram = build_telegram_bot(effective)
+                allowlist = AdminAllowlist(list(overlay.admin_telegram_ids))
+                chat_ids = overlay.reviewer_chat_ids
+                flow = ReviewFlow(factory, telegram, core, allowlist, chat_ids)
+                worker = Worker(factory, flow)
+                notify_handler = NotifyHandler(factory, telegram, chat_ids)
+                poller = None
+                if isinstance(telegram, RealTelegramBot):
+                    poller = TelegramPoller(
+                        factory,
+                        telegram,
+                        flow.handle_update,
+                        allowed_chat_ids=set(chat_ids) if chat_ids else None,
+                    )
+                app.state.config = effective
+                app.state.telegram_bot = telegram
+                app.state.notify_handler = notify_handler
+                app.state.job_service = JobService(factory, worker)
+                app.state.worker = worker
+                app.state.flow = flow
+                app.state.telegram_poller = poller
+                log.info("runtime_config_loaded", telegram_mode=overlay.telegram_mode)
+            except ConfigError:
+                raise
+            except Exception:
+                # Tables may be absent in unit tests without migrate — keep env bootstrap.
+                log.warning("runtime_config_db_skipped")
         if start_worker:
             worker.start(use_fake_poll=poller is None)
             if poller is not None:
@@ -147,3 +183,10 @@ def create_app(
 
     app.include_router(metrics_router)
     return app
+
+
+def _safe_build_bot(config: BootstrapConfig) -> TelegramBot:
+    """Build from env; if real+missing token, Fake until DB overlay in lifespan."""
+    if config.telegram_mode == "real" and not config.telegram_bot_token:
+        return FakeTelegramBot()
+    return build_telegram_bot(config)

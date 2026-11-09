@@ -76,3 +76,23 @@ class PendingReject(Base):
     card_message_id: Mapped[int | None] = mapped_column(Integer)
     asked_message_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+
+
+class ModuleSecret(Base):
+    """Secret key/value owned by module-review (never log or return via API)."""
+
+    __tablename__ = "module_secrets"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+
+
+class ModuleSetting(Base):
+    """Non-secret JSON settings (admin ids, chat ids, S3 endpoints, modes)."""
+
+    __tablename__ = "module_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))

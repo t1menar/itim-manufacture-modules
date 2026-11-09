@@ -86,6 +86,7 @@ class PlatformAccount(Base):
     external_id: Mapped[str | None] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    access_token: Mapped[str | None] = mapped_column(Text, default=None)  # never log / API
     created_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
 
@@ -114,3 +115,23 @@ class PublishIntent(Base):
     published_at: Mapped[dt.datetime | None]
     last_error: Mapped[dict[str, Any] | None]
     created_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+
+
+class ModuleSecret(Base):
+    """Secret key/value owned by module-publish (never log or return via API)."""
+
+    __tablename__ = "module_secrets"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+
+
+class ModuleSetting(Base):
+    """Non-secret JSON settings (S3 endpoints, modes)."""
+
+    __tablename__ = "module_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from review.bootstrap import BootstrapConfig, ConfigError
+from review.bootstrap import BootstrapConfig
 
 
 def _base(**extra: str) -> dict[str, str]:
@@ -24,9 +22,11 @@ def test_fake_default() -> None:
     assert cfg.telegram_bot_token is None
 
 
-def test_real_requires_token() -> None:
-    with pytest.raises(ConfigError, match="TELEGRAM_BOT_TOKEN"):
-        BootstrapConfig.from_env(_base(REVIEW_TELEGRAM_MODE="real"))
+def test_real_allows_missing_env_token_for_db() -> None:
+    """Token may come only from module_secrets; env is optional fallback."""
+    cfg = BootstrapConfig.from_env(_base(REVIEW_TELEGRAM_MODE="real"))
+    assert cfg.telegram_mode == "real"
+    assert cfg.telegram_bot_token is None
 
 
 def test_real_ok() -> None:
@@ -40,5 +40,5 @@ def test_real_ok() -> None:
     )
     assert cfg.telegram_mode == "real"
     assert cfg.telegram_bot_token == "123:ABC"
-    assert "token" not in repr(cfg).lower() or "***" in repr(cfg) or "123:ABC" not in repr(cfg)
+    assert "123:ABC" not in repr(cfg)
     assert cfg.reviewer_chat_ids == (9,)
