@@ -46,7 +46,8 @@ async def cancel_job(job_id: UUID, request: Request, _: CoreAuth) -> Any:
     if outcome == "not_found":
         raise ProblemError(404, "not_found", "Job not found")
     if outcome == "finished":
-        return JSONResponse({"job_id": str(job_id), "status": run.status if run else "finished"}, status_code=200)
+        status = run.status if run else "finished"
+        return JSONResponse({"job_id": str(job_id), "status": status}, status_code=200)
     return JSONResponse({"job_id": str(job_id), "status": "cancelling"}, status_code=202)
 
 
