@@ -96,6 +96,50 @@ paths:
         '200': {description: signed URL, content: {application/json: {schema: {type: object, required: [url, expires_at], properties: {url: {type: string, format: uri}, expires_at: {type: string, format: date-time}}}}}}
         '403': {$ref: '#/components/responses/Problem'}
         '422': {$ref: '#/components/responses/Problem'}
+  /internal/v1/modules:
+    post:
+      operationId: registerModule
+      description: Admin principal. Idempotent when id+endpoint+stage match; token shown once on create.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, name, stage, endpoint]
+              properties:
+                id: {type: string}
+                name: {type: string}
+                stage: {type: string}
+                endpoint: {type: string, format: uri}
+                enabled: {type: boolean}
+                manifest: {description: 'Optional offline /info body for tests; production probes the endpoint', type: object}
+      responses:
+        '201': {description: created with token}
+        '200': {description: idempotent replay (token omitted)}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /internal/v1/modules/{id}/token:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    post:
+      operationId: rotateModuleToken
+      responses:
+        '200': {description: new token; previous valid until prev_token_expires_at}
+        '404': {$ref: '#/components/responses/Problem'}
+  /internal/v1/modules/{id}/activate:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    post:
+      operationId: activateModule
+      requestBody: {content: {application/json: {schema: {type: object, properties: {replace: {type: boolean}}}}}}
+      responses:
+        '200': {description: activated}
+        '409': {description: module_not_ready, $ref: '#/components/responses/Problem'}
+  /internal/v1/modules/self/heartbeat:
+    post:
+      operationId: moduleHeartbeat
+      responses:
+        '200': {description: last_seen_at updated}
+        '401': {$ref: '#/components/responses/Problem'}
   /internal/v1/modules/self/settings:
     get:
       operationId: moduleOwnSettings

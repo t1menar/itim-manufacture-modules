@@ -51,6 +51,14 @@ go test -race -count=1 ./...     # each test creates its own database and queue 
 CI (`.github/workflows/core.yml`) runs gofmt, vet, and the race-enabled tests against `postgres:17` and `rabbitmq:4`
 service containers and fails if an integration test is skipped.
 
+## Registry / credentials / prompts (this slice)
+
+- **Module registry:** `POST /internal/v1/modules` (admin, idempotent), token rotate, activate, `POST …/self/heartbeat`;
+  offline sweeper marks `health=down` when `last_seen_at` is stale; dispatcher only assigns to `active AND health=up`.
+- **Credentials:** AES-256-GCM (`CORE_MASTER_KEY`), random nonce, AAD=`ref||key_version`; module read with access checks; access log; secrets never logged.
+- **Prompts (MVP in core DB):** immutable versions, activate with If-Match-style check, safe `{{var}}` substitution, snapshot into `jobs.request.prompts`.
+  Spec D16 places prompts in the **module** DB — core holds an MVP copy until the video module owns them; no admin HTTP for prompts in this slice.
+
 ## This slice also adds
 
 - Module callbacks `POST /internal/v1/jobs/{id}/progress|result|fail` with Bearer `mft_...`, required `X-Fence`,

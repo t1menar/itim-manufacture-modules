@@ -20,10 +20,13 @@ import (
 
 	"github.com/t1menar/manufacture/core/internal/auth"
 	"github.com/t1menar/manufacture/core/internal/bootstrap"
+	"github.com/t1menar/manufacture/core/internal/credentials"
 	"github.com/t1menar/manufacture/core/internal/db"
 	"github.com/t1menar/manufacture/core/internal/engine"
 	"github.com/t1menar/manufacture/core/internal/httpapi"
 	"github.com/t1menar/manufacture/core/internal/messaging"
+	"github.com/t1menar/manufacture/core/internal/modules"
+	"github.com/t1menar/manufacture/core/internal/prompts"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -69,7 +72,11 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 	topo := messaging.Topology{}
 	conn := &messaging.Conn{URL: cfg.AMQPURL, Topo: topo, Log: log}
 	store := &settings.Store{Pool: pool}
-	eng := &engine.Engine{Pool: pool, Topo: topo, Log: log, Settings: store}
+	promptStore := &prompts.Store{Pool: pool}
+	master := modules.MasterKey{Version: cfg.MasterKey.Version, Key: cfg.MasterKey.Key}
+	reg := &modules.Registry{Pool: pool, Key: master}
+	creds := &credentials.Store{Pool: pool, Key: credentials.MasterKey{Version: cfg.MasterKey.Version, Key: cfg.MasterKey.Key}}
+	eng := &engine.Engine{Pool: pool, Topo: topo, Log: log, Settings: store, Prompts: promptStore}
 	if u, err := store.CallbackBaseURL(ctx); err == nil {
 		eng.CallbackBaseURL = u
 	}
@@ -92,7 +99,7 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 			"db":     func(c context.Context) error { return pool.Ping(c) },
 			"broker": conn.Check,
 		},
-		Auth: authenticator, Engine: eng, Settings: store,
+		Auth: authenticator, Engine: eng, Settings: store, Modules: reg, Credentials: creds,
 	}
 	srv := &http.Server{
 		Addr: cfg.ListenAddr, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
@@ -140,6 +147,11 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 				log.Warn("timeout sweeper", "err", err)
 			} else if n > 0 {
 				log.Info("timed out jobs", "count", n)
+			}
+			if n, err := reg.MarkOffline(loops, 90*time.Second); err != nil && loops.Err() == nil {
+				log.Warn("module offline sweeper", "err", err)
+			} else if n > 0 {
+				log.Info("modules marked down", "count", n)
 			}
 			select {
 			case <-loops.Done():
