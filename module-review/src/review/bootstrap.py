@@ -22,6 +22,10 @@ OPTIONAL_VARS = (
     "REVIEW_AMQP_QUEUE",
     "MODULE_CORE_ADMIN_TOKEN",  # mfa_ only here — never Core credentials ref (D20)
     "REVIEW_ADMIN_TELEGRAM_IDS",
+    "REVIEW_CHAT_IDS",
+    "REVIEW_TELEGRAM_MODE",  # fake | real
+    "REVIEW_TELEGRAM_BOT_TOKEN",  # required when mode=real; never log
+    "REVIEW_TELEGRAM_API_BASE",  # override for tests / local mock
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
 )
@@ -55,6 +59,10 @@ class BootstrapConfig:
     otel_service_name: str = "module-review"
     core_admin_token: str | None = field(default=None, repr=False)
     admin_telegram_ids: tuple[int, ...] = ()
+    chat_ids: tuple[int, ...] = ()
+    telegram_mode: str = "fake"
+    telegram_bot_token: str | None = field(default=None, repr=False)
+    telegram_api_base: str = "https://api.telegram.org"
 
     @property
     def host(self) -> str:
@@ -63,6 +71,10 @@ class BootstrapConfig:
     @property
     def port(self) -> int:
         return int(self.listen_addr.rpartition(":")[2])
+
+    @property
+    def reviewer_chat_ids(self) -> tuple[int, ...]:
+        return self.chat_ids or self.admin_telegram_ids
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> BootstrapConfig:
@@ -81,6 +93,15 @@ class BootstrapConfig:
             raise ConfigError(f"REVIEW_LISTEN_ADDR must look like host:port, got {listen_addr!r}")
         amqp = (source.get("REVIEW_AMQP_URL") or "").strip() or None
         queue = (source.get("REVIEW_AMQP_QUEUE") or "").strip() or "module.review-telegram.commands"
+        mode = (source.get("REVIEW_TELEGRAM_MODE") or "fake").strip().lower() or "fake"
+        if mode not in {"fake", "real"}:
+            raise ConfigError("REVIEW_TELEGRAM_MODE must be 'fake' or 'real'")
+        token = (source.get("REVIEW_TELEGRAM_BOT_TOKEN") or "").strip() or None
+        if mode == "real" and not token:
+            raise ConfigError("REVIEW_TELEGRAM_BOT_TOKEN is required when REVIEW_TELEGRAM_MODE=real")
+        api_base = (source.get("REVIEW_TELEGRAM_API_BASE") or "https://api.telegram.org").strip()
+        admin_ids = _parse_ids(source.get("REVIEW_ADMIN_TELEGRAM_IDS") or "")
+        chat_ids = _parse_ids(source.get("REVIEW_CHAT_IDS") or "")
         return cls(
             database_url=source["REVIEW_DATABASE_URL"].strip(),
             listen_addr=listen_addr,
@@ -91,5 +112,9 @@ class BootstrapConfig:
             otlp_endpoint=(source.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip() or None,
             otel_service_name=(source.get("OTEL_SERVICE_NAME") or "module-review").strip() or "module-review",
             core_admin_token=(source.get("MODULE_CORE_ADMIN_TOKEN") or "").strip() or None,
-            admin_telegram_ids=_parse_ids(source.get("REVIEW_ADMIN_TELEGRAM_IDS") or ""),
+            admin_telegram_ids=admin_ids,
+            chat_ids=chat_ids,
+            telegram_mode=mode,
+            telegram_bot_token=token,
+            telegram_api_base=api_base.rstrip("/"),
         )

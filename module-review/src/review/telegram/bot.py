@@ -1,4 +1,4 @@
-"""Telegram bot abstraction. Production long-poll implementation must never run in tests."""
+"""Telegram bot abstraction. Real long-poll is selected by REVIEW_TELEGRAM_MODE."""
 
 from __future__ import annotations
 
@@ -29,4 +29,12 @@ class TelegramBot(Protocol):
 
     async def edit_message_reply_markup(
         self, chat_id: int, message_id: int, reply_markup: dict[str, Any] | None = None
+    ) -> None: ...
+
+    async def answer_callback_query(
+        self,
+        callback_query_id: str,
+        *,
+        text: str | None = None,
+        show_alert: bool = False,
     ) -> None: ...
