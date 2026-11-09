@@ -47,3 +47,16 @@ def test_foreign_reference_is_rejected(env: dict[str, str]) -> None:
     store = Storage(BootstrapConfig.from_env(env))
     with pytest.raises(ValueError, match="not a reference"):
         store.key_of("s3://other-bucket/x")
+
+
+async def test_video_is_stored_with_type_and_digest(storage: Storage, tmp_path: Path) -> None:
+    path = tmp_path / "final.en.mp4"
+    path.write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"v" * 1000)
+    art = await storage.put_file(
+        "p/video/1/package/final.en.mp4", path, kind="video", content_type="video/mp4"
+    )
+    assert await storage.head(art.ref) == {
+        "size": art.size,
+        "content_type": "video/mp4",
+        "sha256": art.sha256,
+    }

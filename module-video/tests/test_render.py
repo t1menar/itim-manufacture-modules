@@ -70,6 +70,8 @@ def test_previews_match_the_approved_frames(ctx: RenderContext, t: int) -> None:
     img, _ = render_frame(ctx, float(t))
     assert img.size == (1080, 1920)
     path = APPROVED / f"frame_{t:03d}.png"
+    if os.environ.get("CI") and not path.exists():
+        pytest.fail(f"approved frame {path.name} is missing; generate it locally with UPDATE_APPROVED=1")
     if os.environ.get("UPDATE_APPROVED") or not path.exists():
         APPROVED.mkdir(exist_ok=True)
         img.save(path)

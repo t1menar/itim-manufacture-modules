@@ -388,10 +388,10 @@ class PackageStep(AgentStep):
                 raise StepError("fatal", "check_failed", "package checks failed", step=self.name,
                                 details={"checks": failed})  # fmt: skip
             arts["final.en.mp4"] = await ctx.storage.put_file(
-                ctx.key(self.name, "final.en.mp4"), final, kind="video"
+                ctx.key(self.name, "final.en.mp4"), final, kind="video", content_type="video/mp4"
             )
             arts["cover.en.jpg"] = await ctx.storage.put_file(
-                ctx.key(self.name, "cover.en.jpg"), cover, kind="image"
+                ctx.key(self.name, "cover.en.jpg"), cover, kind="image", content_type="image/jpeg"
             )
             duration = round(frames / info.fps, 3)
             size, width, height, fps = final.stat().st_size, info.width, info.height, int(info.fps)

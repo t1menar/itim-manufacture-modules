@@ -14,6 +14,7 @@ from mvideo.db.models import Base
 TABLES = {
     "runs", "steps", "checks", "sandbox_runs", "agent_runs", "source_cache", "usage_log", "golden_runs",
     "prompt_versions", "prompt_active", "prompt_audit",
+    "credentials",
     "topics", "ideas", "idea_revisions", "idea_outbox", "amqp_inbox",
 }  # fmt: skip
 
@@ -32,7 +33,7 @@ async def test_upgrade_head_on_empty_database(empty_db_url: str) -> None:
         assert await table_names(engine) == TABLES
         async with engine.connect() as conn:
             version = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar_one()
-        assert version == "0004"
+        assert version == "0005"
     finally:
         await engine.dispose()
 
