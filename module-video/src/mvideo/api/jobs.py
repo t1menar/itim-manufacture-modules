@@ -36,7 +36,7 @@ async def create_job(request: Request) -> JSONResponse:
         raw: Any = await request.json()
     except ValueError as exc:
         raise ProblemError(422, "input_invalid", "Request body is not valid JSON") from exc
-    job = validate_job(raw)
+    job = validate_job(raw, await _service(request).local_credentials())
     run = await _service(request).accept(job, request.headers.get("traceparent"))
     return JSONResponse({"job_id": str(run.job_id), "status": run.status}, status_code=202)
 

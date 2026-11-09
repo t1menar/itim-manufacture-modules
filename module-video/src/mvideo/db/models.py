@@ -279,6 +279,20 @@ class PromptAudit(Base):
     note: Mapped[str | None] = mapped_column(Text)
 
 
+class StoredCredential(Base):
+    """A secret kept by this module (Claude token or API key); the API never returns it."""
+
+    __tablename__ = "credentials"
+
+    ref: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    value: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    updated_by: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
+
+
 IDEA_STATUSES = (
     "draft", "ready", "queued", "dispatched", "in_production", "done", "failed", "cancelled", "archived",
 )  # fmt: skip
