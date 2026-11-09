@@ -63,6 +63,7 @@ module.exports = {
   ['Publication', 'One post of a variant to one platform account, with link and status.'],
   ['Module', 'A registered service implementing a stage; one active module per stage in stage 1.'],
   ['Settings version', 'An immutable snapshot of a module\'s settings with author, time and comment; the current version is sent with every job.'],
+  ['Billed vs estimated cost', 'Billed cost is what the model provider charged; estimated cost is an estimate (for example subscription use through a Claude OAuth token). The panel shows them separately and never adds them.'],
   ['Credential', 'A secret stored encrypted in the core; the panel knows only name, kind, last 4 characters, expiry, allowed modules.'],
   ['Access key', 'A single-use secret that binds one Telegram user to the review bot with a role.'],
   ['Step-up', 'A fresh password + TOTP check that admin-api requires before sensitive actions (credential writes, role changes, module token rotation, 2FA reset, new recovery codes); valid for a short window (default 5 min).'],
