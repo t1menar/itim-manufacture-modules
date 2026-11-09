@@ -1,4 +1,5 @@
 module.exports = {
+  // 2026-11-09 job intake: runs+lease, HTTP/AMQP accept, Fake IG, callbacks X-Fence, unknown→reconcile.
   // 2026-11-09 fake publish runner builds stage-publish-output + result callback; no real Instagram.
   dir: 'module-publish', file: 'module-publish-05-process.docx',
   meta: { title: 'module-publish — Process', subtitle: 'Flows, state machines, Instagram adapter, errors, idempotency, recovery',

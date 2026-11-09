@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## On main
 
-#7–#12 merged (publish intents, P1 metadata, core gaps, module skeletons, D20 admin deactivate/retry/skip, review admin client).
+#7–#13 merged (intents, metadata, modules, D20 admin, publish-result+notify).
 
 ## Accepted decisions
 
@@ -19,8 +19,9 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| (this) publish result + notify | core: publications → intents + aggregate + notify outbox; module-publish fake runner; module-review notify + FakeTelegram | owner — **do not merge until green CI + review** |
+| (A) module-publish job intake | HTTP+AMQP accept, runs+lease, Fake IG runner, callbacks | owner |
+| (B) module-review job intake | review sessions, Fake Telegram cards, approve/reject | owner — after A CI |
 
 ## Still later
 
-Real Telegram polling; real Instagram Login; admin-api/panel; module-video owned by owner.
+Real Telegram polling; real Instagram Login; admin-api/panel; MinIO/ffprobe validation beyond structural checks.
