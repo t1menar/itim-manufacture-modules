@@ -24,7 +24,7 @@ def _load(name: str) -> dict[str, Any]:
 @router.get("/info")
 async def info() -> dict[str, Any]:
     return {
-        "name": "Publish (Instagram, fake Login API)",
+        "name": "Publish (Instagram Graph API / fake)",
         "version": __version__,
         "contract": 1,
         "stages": ["publish"],

@@ -13,6 +13,7 @@ from publish.clients.core import CoreClient
 from publish.db import repo
 from publish.domain.runner import result_callback_body, run_publish_intents
 from publish.instagram.base import InstagramClient, UnknownOutcomeError
+from publish.instagram.real import InstagramAPIError
 from publish.observability.logging import get_logger
 from publish.storage.artifacts import ArtifactError, verify_content_revision
 
@@ -126,7 +127,7 @@ class JobRunner:
                 channel_ids.append(ch)
         async with self._factory() as s:
             accounts = await repo.list_enabled_accounts(s, channel_ids=channel_ids or None)
-        account_by_channel: dict[str, list] = {}
+        account_by_channel: dict[str, list[Any]] = {}
         for acc in accounts:
             account_by_channel.setdefault(acc.channel_id, []).append(acc)
         default_accounts = accounts
@@ -232,6 +233,21 @@ class JobRunner:
                                 "intent_id": intent_id,
                             }
                         )
+                except InstagramAPIError as exc:
+                    publications.append(
+                        {
+                            "platform": "instagram",
+                            "platform_account_id": account_id,
+                            "status": "failed",
+                            "error": str(exc),
+                            "error_detail": {
+                                "code": exc.classified.code,
+                                "retryable": exc.classified.retryable,
+                                "message": exc.classified.message,
+                            },
+                            "intent_id": intent_id,
+                        }
+                    )
                 except Exception as exc:
                     publications.append(
                         {
