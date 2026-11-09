@@ -96,6 +96,10 @@ class Run(Base):
     created_at: Mapped[dt.datetime] = mapped_column(server_default=_now_default())
     started_at: Mapped[dt.datetime | None]
     finished_at: Mapped[dt.datetime | None]
+    # Added in revision 0002: needed to send callbacks after a restart.
+    callback_base_url: Mapped[str | None] = mapped_column(Text)
+    credential_refs: Mapped[list[str] | None] = mapped_column(JSONB)
+    traceparent: Mapped[str | None] = mapped_column(Text)
 
 
 class Step(Base):

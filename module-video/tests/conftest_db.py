@@ -15,6 +15,7 @@ from testcontainers.community.postgres import PostgresContainer
 from mvideo.db.engine import create_engine, session_factory
 from mvideo.db.migrate import upgrade
 from mvideo.db.models import Base
+from mvideo.storage import Storage
 
 POSTGRES_IMAGE = "postgres:17"
 
@@ -82,3 +83,41 @@ def factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 async def session(factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:
     async with factory() as s:
         yield s
+
+
+# ---- object storage -----------------------------------------------------------------------------
+# The official MinIO images are no longer pullable (Docker Hub has none, quay.io answers 401), so
+# tests use moto, an in-process S3 server that speaks the same API (path-style, multipart, HEAD).
+
+
+@pytest.fixture(scope="session")
+def minio_config() -> Iterator[dict[str, str]]:
+    import socket
+
+    from moto.server import ThreadedMotoServer
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = ThreadedMotoServer(ip_address="127.0.0.1", port=port, verbose=False)
+    server.start()
+    try:
+        yield {"endpoint": f"http://127.0.0.1:{port}", "access_key": "test", "secret_key": "test"}
+    finally:
+        server.stop()
+
+
+@pytest_asyncio.fixture
+async def storage(minio_config: dict[str, str], env: dict[str, str]) -> Storage:
+    from mvideo.config import BootstrapConfig
+    from mvideo.storage import Storage
+
+    env.update(
+        S3_ENDPOINT=minio_config["endpoint"],
+        S3_ACCESS_KEY=minio_config["access_key"],
+        S3_SECRET_KEY=minio_config["secret_key"],
+        S3_BUCKET="manufacture",
+    )
+    store = Storage(BootstrapConfig.from_env(env))
+    await store.ensure_bucket()
+    return store

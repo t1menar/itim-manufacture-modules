@@ -13,11 +13,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mvideo.db.models import ACTIVE_RUN_STATUSES, Run, Step
+from mvideo.db.models import ACTIVE_RUN_STATUSES, Run, Step, UsageLog
 from mvideo.ids import uuid7
 
 LEASE_TTL_S = 60  # 05 section 2: lease renewed every 20 s, taken for 60 s
@@ -39,6 +39,9 @@ class NewRun:
     deadline: dt.datetime
     variant_id: uuid.UUID | None = None
     language: str = "en"
+    callback_base_url: str | None = None
+    credential_refs: list[str] | None = None
+    traceparent: str | None = None
 
 
 async def create_run(session: AsyncSession, new: NewRun) -> tuple[Run, bool]:
@@ -60,6 +63,9 @@ async def create_run(session: AsyncSession, new: NewRun) -> tuple[Run, bool]:
             settings=new.settings,
             input=new.input,
             deadline=new.deadline,
+            callback_base_url=new.callback_base_url,
+            credential_refs=new.credential_refs,
+            traceparent=new.traceparent,
         )
         .on_conflict_do_nothing(index_elements=["job_id"])
         .returning(Run.id)
@@ -260,3 +266,84 @@ async def add_cost(
             )
         )
     return total
+
+
+async def list_steps(session: AsyncSession, run_id: uuid.UUID) -> list[Step]:
+    result = await session.execute(
+        select(Step).where(Step.run_id == run_id).order_by(Step.started_at.nulls_last(), Step.id)
+    )
+    return list(result.scalars())
+
+
+async def update_progress(
+    session: AsyncSession, run_id: uuid.UUID, *, step: str | None, percent: int, message: str | None = None
+) -> None:
+    del message  # progress text is transient: it goes to the core, not to the database
+    await session.execute(update(Run).where(Run.id == run_id).values(current_step=step, percent=percent))
+
+
+async def request_cancel(session: AsyncSession, run_id: uuid.UUID) -> Run | None:
+    """Flag an active run for cancellation. Returns the run, or None if it is missing or finished."""
+    stmt = (
+        update(Run)
+        .where(Run.id == run_id, Run.status.in_(ACTIVE_RUN_STATUSES))
+        .values(cancel_requested=True, status="cancelling")
+        .returning(Run.id)
+    )
+    if (await session.execute(stmt)).scalar_one_or_none() is None:
+        return None
+    return await get_run(session, run_id)
+
+
+async def store_outcome(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+    *,
+    result: dict[str, Any] | None = None,
+    error: dict[str, Any] | None = None,
+) -> None:
+    """Persist the final payload BEFORE the callback is sent, so a restart can re-send it (05 section 8)."""
+    values: dict[str, Any] = {}
+    if result is not None:
+        values["result"] = result
+    if error is not None:
+        values["error"] = error
+    await session.execute(update(Run).where(Run.id == run_id).values(**values))
+
+
+async def finish_run(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+    status: str,
+    *,
+    now: dt.datetime | None = None,
+) -> None:
+    """Move a run to a final status, stamp the finish time and drop the lease."""
+    await session.execute(
+        update(Run)
+        .where(Run.id == run_id)
+        .values(status=status, finished_at=_now(now), lease_owner=None, lease_until=None)
+    )
+
+
+async def log_usage(
+    session: AsyncSession,
+    kind: str,
+    run_id: uuid.UUID | None,
+    *,
+    step: str | None = None,
+    at: dt.datetime | None = None,
+) -> None:
+    await session.execute(
+        UsageLog.__table__.insert().values(kind=kind, run_id=run_id, step=step, at=_now(at))
+    )
+
+
+async def count_usage(session: AsyncSession, kind: str, since: dt.datetime) -> int:
+    stmt = select(func.count()).select_from(UsageLog).where(UsageLog.kind == kind, UsageLog.at >= since)
+    return int((await session.execute(stmt)).scalar_one())
+
+
+async def oldest_usage(session: AsyncSession, kind: str, since: dt.datetime) -> dt.datetime | None:
+    stmt = select(func.min(UsageLog.at)).where(UsageLog.kind == kind, UsageLog.at >= since)
+    return (await session.execute(stmt)).scalar_one()

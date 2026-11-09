@@ -14,8 +14,18 @@ TYPE_PREFIX = "urn:manufacture:problem:"
 
 
 class ProblemError(Exception):
-    def __init__(self, status: int, code: str, title: str, detail: str = "", **extra: Any) -> None:
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        title: str,
+        detail: str = "",
+        *,
+        headers: dict[str, str] | None = None,
+        **extra: Any,
+    ) -> None:
         super().__init__(f"{code}: {title}")
+        self.headers = headers or {}
         self.status = status
         self.code = code
         self.title = title
@@ -23,7 +33,15 @@ class ProblemError(Exception):
         self.extra = extra
 
 
-def problem_response(status: int, code: str, title: str, detail: str = "", **extra: Any) -> JSONResponse:
+def problem_response(
+    status: int,
+    code: str,
+    title: str,
+    detail: str = "",
+    *,
+    headers: dict[str, str] | None = None,
+    **extra: Any,
+) -> JSONResponse:
     body: dict[str, Any] = {
         "type": f"{TYPE_PREFIX}{code}",
         "title": title,
@@ -32,13 +50,13 @@ def problem_response(status: int, code: str, title: str, detail: str = "", **ext
         "code": code,
         **extra,
     }
-    return JSONResponse(body, status_code=status, media_type=PROBLEM_JSON)
+    return JSONResponse(body, status_code=status, media_type=PROBLEM_JSON, headers=headers)
 
 
 def install_problem_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProblemError)
     async def _problem(_: Request, exc: ProblemError) -> JSONResponse:
-        return problem_response(exc.status, exc.code, exc.title, exc.detail, **exc.extra)
+        return problem_response(exc.status, exc.code, exc.title, exc.detail, headers=exc.headers, **exc.extra)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:

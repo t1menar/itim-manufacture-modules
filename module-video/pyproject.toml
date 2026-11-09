@@ -13,6 +13,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.32.0",
     "alembic>=1.20.1",
+    "aioboto3>=15.5.0",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]
@@ -27,7 +29,9 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "import-linter>=2.1",
+    "respx>=0.23.1",
     "testcontainers[postgres]>=4.8",
+    "moto[server]>=5",
 ]
 
 [build-system]

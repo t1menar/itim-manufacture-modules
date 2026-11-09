@@ -56,5 +56,5 @@ def test_unknown_path_is_problem_json(client: TestClient) -> None:
     assert body["type"].startswith("urn:manufacture:problem:")
 
 
-def test_jobs_are_not_implemented_yet(client: TestClient) -> None:
-    assert client.post("/v1/jobs", json={}).status_code == 404
+def test_job_routes_need_a_bearer_token(client: TestClient) -> None:
+    assert client.post("/v1/jobs", json={}).status_code == 401

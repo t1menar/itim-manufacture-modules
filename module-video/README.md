@@ -8,7 +8,8 @@ Specification: `../docs/module-video/` (`module-video-01-description.docx` … `
 
 - B0 done: service skeleton, `/info` `/health` `/ready` `/metrics`, bootstrap config, settings and contract models.
 - B1 done: database `video` (8 tables, one Alembic revision run at start-up under an advisory lock), async repositories (idempotent `create_run`, leases, step upsert and reuse lookup, `add_cost`).
-- Next: B2 job API (see the messaging note below), B3 schemas and validator, B4 renderer.
+- B2 done: `POST /v1/jobs`, `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel` (bearer auth), core client behind a swappable `CoreGateway` (HTTP contract 1), runner and worker with leases, step cache, cancel, restart recovery, usage gates. The pipeline is made of fake steps that write small files to S3 until B7/B8. `/ready` reports `auth: missing` until a job has fetched a matching credential.
+- Next: B3 schemas and validator, B4 renderer (needs ffmpeg).
 
 ## Develop
 

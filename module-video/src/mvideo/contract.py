@@ -6,9 +6,10 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 
 class ChannelSettings(BaseModel):
@@ -93,3 +94,28 @@ def input_schema() -> dict[str, Any]:
 
 def output_schema() -> dict[str, Any]:
     return StageOutput.model_json_schema()
+
+
+class Callback(BaseModel):
+    base_url: str
+
+
+class SettingsSnapshot(BaseModel):
+    version: int
+    values: dict[str, Any]
+
+
+class JobRequest(BaseModel):
+    """The canonical job request (AUTHORING section 4) as the module reads it."""
+
+    job_id: uuid.UUID
+    attempt: Annotated[int, Field(ge=1)]
+    production_id: uuid.UUID
+    stage: str
+    mode: Literal["create", "revise"]
+    variant: dict[str, Any] | None = None
+    input: dict[str, Any]
+    settings: SettingsSnapshot
+    credentials: list[str] = []
+    callback: Callback
+    deadline: AwareDatetime
