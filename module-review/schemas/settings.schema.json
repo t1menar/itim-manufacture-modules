@@ -1,0 +1,487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture/schemas/review-telegram/settings/1",
+  "title": "review-telegram settings",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(s|m|h|d)$"
+    },
+    "role": {
+      "enum": [
+        "admin",
+        "reviewer",
+        "observer"
+      ]
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/role"
+      },
+      "uniqueItems": true
+    },
+    "hhmm": {
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+    },
+    "cred": {
+      "type": "string",
+      "pattern": "^cred:[a-z0-9-]+$"
+    }
+  },
+  "properties": {
+    "timezone": {
+      "type": "string",
+      "default": "UTC",
+      "description": "IANA zone for dates, quiet hours, summary schedule"
+    },
+    "settings_poll_interval": {
+      "$ref": "#/$defs/duration",
+      "default": "60s"
+    },
+    "keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "ttl_default": {
+          "$ref": "#/$defs/duration",
+          "default": "7d"
+        },
+        "ttl_max": {
+          "$ref": "#/$defs/duration",
+          "default": "30d"
+        },
+        "newkey_message_ttl": {
+          "$ref": "#/$defs/duration",
+          "default": "10m"
+        },
+        "bad_attempts_max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 5
+        },
+        "bad_attempts_window": {
+          "$ref": "#/$defs/duration",
+          "default": "1h"
+        },
+        "lockout": {
+          "$ref": "#/$defs/duration",
+          "default": "24h"
+        },
+        "bot_issuable_roles": {
+          "$ref": "#/$defs/roles",
+          "default": [
+            "reviewer",
+            "observer",
+            "admin"
+          ]
+        }
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "denied_reply_interval": {
+          "$ref": "#/$defs/duration",
+          "default": "10m"
+        },
+        "leave_groups": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "deciding_roles": {
+          "$ref": "#/$defs/roles",
+          "default": [
+            "admin",
+            "reviewer"
+          ]
+        },
+        "card_roles": {
+          "$ref": "#/$defs/roles",
+          "default": [
+            "admin",
+            "reviewer"
+          ]
+        },
+        "notify_roles": {
+          "$ref": "#/$defs/roles",
+          "default": [
+            "admin",
+            "reviewer",
+            "observer"
+          ]
+        },
+        "confirm_approve": {
+          "type": "boolean",
+          "default": false
+        },
+        "reason_min_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 10
+        },
+        "reason_max_length": {
+          "type": "integer",
+          "minimum": 50,
+          "maximum": 3500,
+          "default": 2000
+        },
+        "reason_timeout": {
+          "$ref": "#/$defs/duration",
+          "default": "30m"
+        },
+        "accept_unreplied_reason": {
+          "type": "boolean",
+          "default": true
+        },
+        "stale_press_max_age": {
+          "$ref": "#/$defs/duration",
+          "default": "10m"
+        },
+        "send_pending_to_new_reviewers": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "show_checks": {
+          "type": "boolean",
+          "default": true
+        },
+        "send_contact_sheet": {
+          "type": "boolean",
+          "default": true
+        },
+        "original_link": {
+          "type": "boolean",
+          "default": true
+        },
+        "changes_max_chars": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 3500,
+          "default": 1500
+        }
+      }
+    },
+    "reminders": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "after": {
+          "$ref": "#/$defs/duration",
+          "default": "24h"
+        },
+        "repeat_every": {
+          "$ref": "#/$defs/duration",
+          "default": "24h"
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 3
+        },
+        "quiet_hours": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "$ref": "#/$defs/hhmm"
+                },
+                "end": {
+                  "$ref": "#/$defs/hhmm"
+                }
+              }
+            }
+          ],
+          "default": null
+        }
+      }
+    },
+    "telegram": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "bot_credential": {
+          "$ref": "#/$defs/cred",
+          "default": "cred:telegram-review-bot"
+        },
+        "mode": {
+          "enum": [
+            "polling"
+          ],
+          "default": "polling",
+          "description": "webhook reserved for later"
+        },
+        "poll_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 30
+        },
+        "upload_limit_mb": {
+          "type": "number",
+          "minimum": 1,
+          "default": 50,
+          "description": "verify against current documentation"
+        },
+        "caption_max_chars": {
+          "type": "integer",
+          "default": 1024,
+          "description": "verify against current documentation"
+        },
+        "message_max_chars": {
+          "type": "integer",
+          "default": 4096,
+          "description": "verify against current documentation"
+        },
+        "callback_data_max_bytes": {
+          "type": "integer",
+          "default": 64,
+          "description": "verify against current documentation"
+        },
+        "per_chat_interval_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1000,
+          "description": "verify against current documentation"
+        },
+        "global_per_second": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 25,
+          "description": "verify against current documentation"
+        },
+        "request_timeout_s": {
+          "type": "integer",
+          "default": 60
+        },
+        "upload_timeout_s": {
+          "type": "integer",
+          "default": 300
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "format": "uri",
+          "default": "http://minio:9000"
+        },
+        "public_endpoint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "default": null,
+          "description": "endpoint reachable from reviewers' phones; null disables links"
+        },
+        "region": {
+          "type": "string",
+          "default": "us-east-1"
+        },
+        "credential": {
+          "$ref": "#/$defs/cred",
+          "default": "cred:minio-review"
+        },
+        "link_ttl": {
+          "$ref": "#/$defs/duration",
+          "default": "72h",
+          "description": "S3 SigV4 maximum is 7d, verify"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "weekday": {
+          "enum": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "default": "mon"
+        },
+        "time": {
+          "$ref": "#/$defs/hhmm",
+          "default": "09:00"
+        },
+        "window": {
+          "$ref": "#/$defs/duration",
+          "default": "7d"
+        },
+        "recipient_roles": {
+          "$ref": "#/$defs/roles",
+          "default": [
+            "admin"
+          ]
+        },
+        "credential": {
+          "$ref": "#/$defs/cred",
+          "default": "cred:anthropic-review"
+        },
+        "model": {
+          "type": "string",
+          "default": "claude-opus-5-5"
+        },
+        "effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "medium"
+        },
+        "prompt_version": {
+          "type": "string",
+          "pattern": "^rejection-summary@[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "default": "rejection-summary@1.0.0"
+        },
+        "max_reasons": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000,
+          "default": 300
+        },
+        "max_tokens": {
+          "type": "integer",
+          "default": 16000
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration",
+          "default": "180s"
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 2
+        },
+        "refusal_fallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "server-side fallback beta, verify"
+        },
+        "price_in_per_mtok": {
+          "type": "number",
+          "default": 4.0,
+          "description": "USD, verify"
+        },
+        "price_out_per_mtok": {
+          "type": "number",
+          "default": 20.0,
+          "description": "USD, verify"
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 20,
+          "default": [
+            {
+              "id": "facts",
+              "description": "a fact, number, version or claim is wrong, unsupported or outdated"
+            },
+            {
+              "id": "code",
+              "description": "wrong code line, highlight, command, output or file reference on screen"
+            },
+            {
+              "id": "text",
+              "description": "caption wording, typos, grammar, unclear explanation, unexplained jargon"
+            },
+            {
+              "id": "pacing",
+              "description": "too fast or slow, reading time, total length, scene duration"
+            },
+            {
+              "id": "visual",
+              "description": "layout, overflow, safe zone, fonts, colors, animation glitches"
+            },
+            {
+              "id": "audio",
+              "description": "loudness, sound cues, sync of sound and animation"
+            },
+            {
+              "id": "structure",
+              "description": "hook, order of scenes, missing or unnecessary part, weak ending"
+            },
+            {
+              "id": "post",
+              "description": "Instagram caption, hashtags, cover frame"
+            },
+            {
+              "id": "other",
+              "description": "anything that fits none of the above"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "description"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z_]{1,23}$"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 300
+              }
+            }
+          },
+          "description": "default list in section 8.2"
+        }
+      }
+    }
+  }
+}

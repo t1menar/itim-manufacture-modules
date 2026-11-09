@@ -1,0 +1,22 @@
+# Snippet for Compose (03 §6). Not a full stack — wire into the repo compose later.
+services:
+  module-review:
+    image: module-review:dev
+    command: ["migrate", "&&", "serve"]  # prefer entrypoint wrapper in real compose
+    environment:
+      REVIEW_DATABASE_URL: postgresql+asyncpg://review:review@postgres:5432/review
+      REVIEW_LISTEN_ADDR: 0.0.0.0:8080
+      MODULE_CORE_URL: http://core:8080
+      MODULE_CORE_TOKEN: ${MODULE_REVIEW_TOKEN}
+      REVIEW_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+      OTEL_SERVICE_NAME: module-review
+    read_only: true
+    tmpfs: ["/tmp/review:size=128m"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      core: { condition: service_started }
+    deploy:
+      replicas: 1
+      resources:
+        limits: { memory: 256m, cpus: "0.5" }
+    restart: unless-stopped
