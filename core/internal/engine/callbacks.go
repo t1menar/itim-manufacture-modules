@@ -15,6 +15,7 @@ import (
 
 	"github.com/t1menar/manufacture/core/internal/db"
 	"github.com/t1menar/manufacture/core/internal/messaging"
+	"github.com/t1menar/manufacture/core/internal/schema"
 )
 
 // Callback errors map to HTTP problem codes (core-04 §3, §10).
@@ -278,21 +279,12 @@ func callbackMessageID(jobID uuid.UUID, kind string, body []byte) uuid.UUID {
 }
 
 func (e *Engine) validateResultOutput(ctx context.Context, tx pgx.Tx, j jobRow, output json.RawMessage) error {
-	// Stage-specific checks for this slice. Full JSON Schema validation is a later slice.
-	if j.stageID == "video" {
-		var o struct {
-			Variants []struct {
-				Metadata json.RawMessage `json:"metadata"`
-			} `json:"variants"`
-		}
-		if err := json.Unmarshal(output, &o); err != nil || len(o.Variants) == 0 {
-			return ErrOutputInvalid
-		}
-		for _, v := range o.Variants {
-			if len(v.Metadata) == 0 || v.Metadata[0] != '{' {
-				return ErrOutputInvalid
-			}
-		}
+	var asAny any
+	if err := json.Unmarshal(output, &asAny); err != nil {
+		return ErrOutputInvalid
+	}
+	if err := schema.ValidateStageOutput(j.stageID, asAny); err != nil {
+		return fmt.Errorf("%w: %v", ErrOutputInvalid, err)
 	}
 	if j.stageID == "review" {
 		var o struct {
@@ -378,7 +370,7 @@ func (e *Engine) afterReview(ctx context.Context, tx pgx.Tx, j jobRow, output js
 		if _, err := tx.Exec(ctx, `UPDATE variants SET status = 'approved', rev = rev + 1 WHERE id = $1`, *j.variant); err != nil {
 			return err
 		}
-		return e.advance(ctx, tx, j.liveJob)
+		return e.afterReviewApproved(ctx, tx, j, o.Round, output)
 	}
 	// rejected → revise or needs_attention max_rounds
 	var reviewRound, extra, maxOverride *int

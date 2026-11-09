@@ -62,10 +62,28 @@
             }
           },
           "contact_sheet": {
-            "$ref": "#/$defs/artifact"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^s3://"
+              },
+              {
+                "$ref": "#/$defs/artifact"
+              }
+            ],
+            "description": "s3 URI string (module-video) or artifact object {ref,sha256?}"
           },
           "cover": {
-            "$ref": "#/$defs/artifact"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^s3://"
+              },
+              {
+                "$ref": "#/$defs/artifact"
+              }
+            ],
+            "description": "s3 URI string (module-video) or artifact object {ref,sha256?}"
           },
           "preview": {
             "type": "object",

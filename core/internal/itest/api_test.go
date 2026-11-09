@@ -295,6 +295,84 @@ func TestDispatchedAfterConfirm(t *testing.T) {
 	}
 }
 
+func TestReviewApproveCreatesPublishIntents(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	account := uuid.Must(uuid.NewV7())
+	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
+		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("approve"), "artifacts": []any{}})
+	if res.StatusCode != 200 {
+		t.Fatalf("video: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	var rev uuid.UUID
+	var rf int
+	if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'review'`).Scan(&rev, &rf); err != nil {
+		t.Fatal(err)
+	}
+	res = e.postCallback(srv, "revmod", "result", rev, rf, map[string]any{
+		"output": map[string]any{
+			"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
+			"decided_at": "2026-01-01T00:00:00Z", "round": 1,
+		},
+		"artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("approve: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM publish_intents WHERE platform_account_id = $1 AND generation = 1 AND status = 'pending'`, account); n != 1 {
+		t.Fatalf("intents=%d", n)
+	}
+	if n := e.count(`SELECT count(*) FROM content_revisions WHERE approved_round = 1`); n != 1 {
+		t.Fatal("revision not approved")
+	}
+	if n := e.count(`SELECT count(*) FROM jobs WHERE stage_id = 'publish' AND status = 'queued'`); n != 1 {
+		t.Fatal("publish job missing")
+	}
+	var req []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT request FROM jobs WHERE stage_id = 'publish'`).Scan(&req); err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(req, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	input, _ := parsed["input"].(map[string]any)
+	intents, _ := input["intents"].([]any)
+	if len(intents) != 1 {
+		t.Fatalf("request intents=%v", input["intents"])
+	}
+	// Idempotent: replaying the same approved result body should not create a second intent.
+	res = e.postCallback(srv, "revmod", "result", rev, rf, map[string]any{
+		"output": map[string]any{
+			"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
+			"decided_at": "2026-01-01T00:00:00Z", "round": 1,
+		},
+		"artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("dup approve: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	if n := e.count(`SELECT count(*) FROM publish_intents`); n != 1 {
+		t.Fatalf("intents after dup=%d", n)
+	}
+}
+
+func TestSystemSettingsIncludeInstagramLimits(t *testing.T) {
+	e := setup(t)
+	lim, err := e.settings.InstagramLimits(e.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lim.MaxCaptionChars != 2200 || lim.MaxHashtags != 30 {
+		t.Fatalf("%+v", lim)
+	}
+}
+
 func TestVideoResultCreatesContentRevision(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()

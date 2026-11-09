@@ -300,7 +300,9 @@ func videoStageOutput(tag string) map[string]any {
 				"ref": "s3://manufacture/t/final.mp4", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				"duration_s": 61.0, "size": 1000, "width": 1080, "height": 1920, "fps": 60,
 			},
-			"post": map[string]any{"caption": "c", "hashtags": []any{"#pg"}},
+			"contact_sheet": "s3://manufacture/t/sheet.jpg",
+			"cover":         "s3://manufacture/t/cover.jpg",
+			"post":          map[string]any{"caption": "c-" + tag, "hashtags": []any{"#pg"}},
 			"metadata": map[string]any{
 				"title": "t-" + tag, "description": "d-" + tag, "topics": []any{"postgres"},
 				"platforms": map[string]any{

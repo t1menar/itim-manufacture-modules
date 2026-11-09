@@ -112,6 +112,9 @@ func TestTwoWorkersRaceOnOneVariant(t *testing.T) {
 func TestHappyPathThroughBroker(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
+	account := uuid.Must(uuid.NewV7())
+	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
+		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
 	// relay publishes job.requested to the module queue
 	r := e.relay("w1")
 	r.OnSent = func(ctx context.Context, id uuid.UUID, body []byte) {
@@ -148,12 +151,22 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	}
 	_ = job
 	_ = fence
-	step("vidmod", "video", videoStageOutput("g"))
+	step("vidmod", "video", videoStageOutput("happy"))
 	step("revmod", "review", map[string]any{
 		"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
 		"decided_at": "2026-01-01T00:00:00Z", "round": 1,
 	})
-	step("pubmod", "publish", map[string]any{"publications": []any{}})
+	if n := e.count(`SELECT count(*) FROM publish_intents WHERE generation = 1`); n != 1 {
+		t.Fatalf("intents after approve = %d", n)
+	}
+	if n := e.count(`SELECT count(*) FROM outbox WHERE status = 'pending' OR status = 'sent'`); n < 2 {
+		t.Fatalf("expected publish job.requested in outbox, outbox rows=%d", n)
+	}
+	step("pubmod", "publish", map[string]any{"publications": []any{map[string]any{
+		"platform": "instagram", "platform_account_id": account.String(), "handle": "@itim",
+		"external_post_id": "1789", "url": "https://www.instagram.com/reel/example/",
+		"published_at": "2026-11-08T17:02:11Z", "status": "published",
+	}}})
 	if n := e.count(`SELECT count(*) FROM productions WHERE status = 'done'`); n != 1 {
 		t.Fatal("production not done")
 	}
@@ -274,7 +287,7 @@ func TestTakeoverFencesStaleEvents(t *testing.T) {
 	if n := e.count(`SELECT count(DISTINCT message_id) FROM outbox`); n != 2 {
 		t.Fatal("takeover must enqueue a new request")
 	}
-	old := e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
+	old := e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	stale := e.moduleEvent("vidmod2", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
 	if err := e.consumeUntil(e.consumer(), func() bool { return e.count(`SELECT count(*) FROM inbox`) == 2 }); err != nil {
 		t.Fatal(err)

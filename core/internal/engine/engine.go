@@ -30,8 +30,8 @@ type Engine struct {
 	MaxConcurrent   int // overridden by settings.scheduler.max_concurrent_productions when Settings is set
 	DefaultLanguage string
 	CallbackBaseURL string
+	Publish         *publish.Store // optional; video success → revision (D19); review approve → intents
 	Settings        SettingsSource // optional; nil keeps struct defaults
-	Publish         *publish.Store // optional; video success snapshots a content revision (D19)
 	reviewMaxRounds int
 }
 
