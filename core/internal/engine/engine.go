@@ -30,13 +30,7 @@ type Engine struct {
 	DefaultLanguage string
 	CallbackBaseURL string
 	Settings        SettingsSource // optional; nil keeps struct defaults
-	Prompts         PromptSnap     // optional; snapshots active prompts into the job request
 	reviewMaxRounds int
-}
-
-// PromptSnap returns active prompt snapshots for a module (prompt_id, version, sha256, body).
-type PromptSnap interface {
-	SnapshotActiveTx(ctx context.Context, tx pgx.Tx, owner string) ([]map[string]any, error)
 }
 
 // SettingsSource reads versioned core settings without importing the settings package (avoids cycles).
@@ -255,12 +249,6 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if s.variant != nil {
 		variant = map[string]any{"id": s.variant.String(), "language": s.language}
 	}
-	prompts := []map[string]any{}
-	if e.Prompts != nil {
-		if snap, err := e.Prompts.SnapshotActiveTx(ctx, tx, moduleID); err == nil && snap != nil {
-			prompts = snap
-		}
-	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
@@ -270,7 +258,6 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 		},
 		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
 		"credentials": []string{},
-		"prompts":     prompts, // immutable snapshot; later activation changes do not rewrite this
 		"callback":    map[string]any{"base_url": fmt.Sprintf("%s/internal/v1/jobs/%s", e.CallbackBaseURL, jobID)},
 		"deadline":    time.Now().UTC().Add(time.Duration(s.stage.TimeoutS) * time.Second).Format(time.RFC3339),
 	}

@@ -35,4 +35,4 @@ Not covered yet (core-04 §2, admin-api principal):
 - Admin: `POST /modules`, `POST /modules/{id}/token`, `POST /modules/{id}/activate`
 - Module: `POST /modules/self/heartbeat` (updates `last_seen_at`)
 - Credentials GET already listed; implementation wired
-- Prompts: no core HTTP (D16: module-owned); service layer + job snapshot only
+- Prompts: no core HTTP and no core table (D16/C40: module-video owns storage); core ships `internal/prompts` substitution helper only

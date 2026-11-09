@@ -26,7 +26,6 @@ import (
 	"github.com/t1menar/manufacture/core/internal/httpapi"
 	"github.com/t1menar/manufacture/core/internal/messaging"
 	"github.com/t1menar/manufacture/core/internal/modules"
-	"github.com/t1menar/manufacture/core/internal/prompts"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -72,11 +71,10 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 	topo := messaging.Topology{}
 	conn := &messaging.Conn{URL: cfg.AMQPURL, Topo: topo, Log: log}
 	store := &settings.Store{Pool: pool}
-	promptStore := &prompts.Store{Pool: pool}
 	master := modules.MasterKey{Version: cfg.MasterKey.Version, Key: cfg.MasterKey.Key}
 	reg := &modules.Registry{Pool: pool, Key: master}
 	creds := &credentials.Store{Pool: pool, Key: credentials.MasterKey{Version: cfg.MasterKey.Version, Key: cfg.MasterKey.Key}}
-	eng := &engine.Engine{Pool: pool, Topo: topo, Log: log, Settings: store, Prompts: promptStore}
+	eng := &engine.Engine{Pool: pool, Topo: topo, Log: log, Settings: store}
 	if u, err := store.CallbackBaseURL(ctx); err == nil {
 		eng.CallbackBaseURL = u
 	}

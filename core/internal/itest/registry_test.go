@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/t1menar/manufacture/core/internal/crypto"
 	"github.com/t1menar/manufacture/core/internal/httpapi"
 	"github.com/t1menar/manufacture/core/internal/modules"
-	"github.com/t1menar/manufacture/core/internal/prompts"
 )
 
 func (e *env) apiFull() *httptest.Server {
@@ -140,62 +138,5 @@ func TestCredentialsAccessControlAndCrypto(t *testing.T) {
 	_, _, err = e.creds.Read(e.ctx, "cred:test-key", "vidmod", nil)
 	if err == nil || !errors.Is(err, crypto.ErrDecrypt) {
 		t.Fatalf("want decrypt error, got %v", err)
-	}
-}
-
-func TestPromptSnapshotAndActivation(t *testing.T) {
-	e := setup(t)
-	v1, err := e.prompts.Create(e.ctx, "vidmod", "script.main", "Hello {{name}}", "system", "v1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := e.prompts.Activate(e.ctx, "vidmod", "script.main", v1.Version, 0); err != nil {
-		t.Fatal(err)
-	}
-	job, _ := e.startedJob()
-	var snap []byte
-	_ = e.pool.QueryRow(e.ctx, `SELECT request->'prompts' FROM jobs WHERE id = $1`, job).Scan(&snap)
-	if !strings.Contains(string(snap), `"version": 1`) && !strings.Contains(string(snap), `"version":1`) {
-		t.Fatalf("snapshot missing v1: %s", snap)
-	}
-	v2, err := e.prompts.Create(e.ctx, "vidmod", "script.main", "Hi {{name}}", "system", "v2", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := e.prompts.Activate(e.ctx, "vidmod", "script.main", v2.Version, v1.Version); err != nil {
-		t.Fatal(err)
-	}
-	// old job unchanged
-	var snap2 []byte
-	_ = e.pool.QueryRow(e.ctx, `SELECT request->'prompts' FROM jobs WHERE id = $1`, job).Scan(&snap2)
-	if string(snap) != string(snap2) {
-		t.Fatal("activating a new version rewrote an existing job snapshot")
-	}
-	// concurrent activation → one active
-	v3, _ := e.prompts.Create(e.ctx, "vidmod", "script.main", "Hey {{name}}", "system", "v3", nil)
-	v4, _ := e.prompts.Create(e.ctx, "vidmod", "script.main", "Yo {{name}}", "system", "v4", nil)
-	var wg sync.WaitGroup
-	for _, ver := range []int{v3.Version, v4.Version} {
-		wg.Add(1)
-		go func(ver int) {
-			defer wg.Done()
-			_ = e.prompts.Activate(e.ctx, "vidmod", "script.main", ver, 0)
-		}(ver)
-	}
-	wg.Wait()
-	if e.count(`SELECT count(*) FROM prompts WHERE owner_module = 'vidmod' AND prompt_id = 'script.main' AND active`) != 1 {
-		t.Fatal("more than one active prompt version")
-	}
-	if _, err := prompts.Render("Hello {{name}}", map[string]string{}); !errors.Is(err, prompts.ErrUnknownVar) {
-		t.Fatalf("unknown var: %v", err)
-	}
-	out, err := prompts.Render("Hello {{name}}", map[string]string{"name": "Tim"})
-	if err != nil || out != "Hello Tim" {
-		t.Fatalf("render: %q %v", out, err)
-	}
-	// If-Match style conflict
-	cur, _ := e.prompts.Active(e.ctx, "vidmod", "script.main")
-	if err := e.prompts.Activate(e.ctx, "vidmod", "script.main", v1.Version, cur.Version+99); !errors.Is(err, prompts.ErrVersionConflict) {
-		t.Fatalf("want version conflict, got %v", err)
 	}
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/t1menar/manufacture/core/internal/engine"
 	"github.com/t1menar/manufacture/core/internal/messaging"
 	"github.com/t1menar/manufacture/core/internal/modules"
-	"github.com/t1menar/manufacture/core/internal/prompts"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -43,7 +42,6 @@ type env struct {
 	tokens    map[string]string
 	reg       *modules.Registry
 	creds     *credentials.Store
-	prompts   *prompts.Store
 	masterKey []byte
 }
 
@@ -116,10 +114,9 @@ func setup(t *testing.T) *env {
 		key[i] = byte(i + 1)
 	}
 	mk := modules.MasterKey{Version: 1, Key: key}
-	promptStore := &prompts.Store{Pool: pool}
 	e := &env{t: t, ctx: ctx, pool: pool, conn: conn, topo: topo, log: log,
-		eng:      &engine.Engine{Pool: pool, Topo: topo, Log: log, CallbackBaseURL: "http://core.test", Settings: store, Prompts: promptStore},
-		settings: store, prompts: promptStore, masterKey: key,
+		eng:      &engine.Engine{Pool: pool, Topo: topo, Log: log, CallbackBaseURL: "http://core.test", Settings: store},
+		settings: store, masterKey: key,
 		reg:   &modules.Registry{Pool: pool, Key: mk, Grace: time.Second},
 		creds: &credentials.Store{Pool: pool, Key: credentials.MasterKey{Version: 1, Key: key}},
 		auth:  &auth.Authenticator{Pool: pool, AdminTokenHash: auth.HashToken("mfa_test_admin_token_xxxxxxxx")},

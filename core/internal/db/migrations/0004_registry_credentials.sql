@@ -1,6 +1,6 @@
 -- +goose Up
--- Module registry fields, credentials vault, prompt versions (MVP store in core; D16 places
--- prompts in the module DB — see README).
+-- Module registry fields and credentials vault.
+-- Runtime prompts live in the video module DB (D16/C40); core keeps only shared template helpers.
 
 ALTER TABLE modules
   ADD COLUMN IF NOT EXISTS name text,
@@ -60,29 +60,9 @@ CREATE TABLE credential_access_log (
 );
 CREATE INDEX credential_access_log_cred_idx ON credential_access_log (credential_id, at DESC);
 
--- Prompt versions: immutable rows; at most one active per (owner_module, prompt_id).
--- Spec D16 places this in the module DB; core holds an MVP copy so jobs can snapshot prompts
--- before the video module exists.
-CREATE TABLE prompts (
-  owner_module text NOT NULL,
-  prompt_id text NOT NULL CHECK (prompt_id ~ '^[a-z0-9][a-z0-9._-]{0,63}$'),
-  version integer NOT NULL CHECK (version >= 1),
-  body text NOT NULL,
-  variables text[] NOT NULL DEFAULT '{}',
-  sha256 bytea NOT NULL,
-  active boolean NOT NULL DEFAULT false,
-  author text NOT NULL DEFAULT 'system',
-  comment text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (owner_module, prompt_id, version)
-);
-CREATE UNIQUE INDEX prompts_active_uq ON prompts (owner_module, prompt_id) WHERE active;
-
--- Seed health.offline_after_s into core settings via a new version is done in code/tests;
--- keep seed v1 compatible. Dispatcher reads health.offline_after_s with default 90.
 
 -- +goose Down
-DROP TABLE IF EXISTS prompts, credential_access_log, credentials;
+DROP TABLE IF EXISTS credential_access_log, credentials;
 ALTER TABLE modules
   DROP COLUMN IF EXISTS name, DROP COLUMN IF EXISTS endpoint, DROP COLUMN IF EXISTS version,
   DROP COLUMN IF EXISTS contract, DROP COLUMN IF EXISTS info, DROP COLUMN IF EXISTS settings_schema,

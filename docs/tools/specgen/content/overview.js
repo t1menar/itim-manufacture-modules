@@ -153,7 +153,7 @@ module.exports = {
   ['D13', 'MVP excludes only the web UI (`admin-panel`); all backend logic in full scope', 'owner\'s decision 2026-11-08'],
   ['D14', 'Instagram publishing uses the Instagram Login API path (`instagram.auth_path = instagram_login`)', 'owner\'s decision 2026-11-08; closes the open question in module-publish-01'],
   ['D15', 'Title, description and tags are generated; tags and captions may differ per platform; they are part of the reviewed content revision (core-04 §16)', 'owner\'s decision 2026-11-08'],
-  ['D16', 'Runtime prompts are stored in the database of the module that runs them, as immutable versions with activation, audit and a per-job snapshot. A runtime prompt is a recipe for model output; it does not replace the executable renderer, and build prompts for Claude Code are separate documents', 'owner\'s decision 2026-11-08'],
+  ['D16', 'Runtime prompts are stored in the database of the module that runs them (module-video), as immutable versions with activation, audit and a per-job snapshot recorded in the module result provenance. Core keeps no prompts table — only an optional shared substitution helper. A runtime prompt is a recipe for model output; it does not replace the executable renderer, and build prompts for Claude Code are separate documents', 'owner\'s decision 2026-11-08; clarified 2026-11-09 (no prompts table in core)'],
   ['D17', 'No duplicate work at database level: one live production per idea, one live job per variant, unique publish intents (core-04 C32, C38)', 'owner\'s decision 2026-11-08'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
