@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture.local/contracts/events/idea.ready.json",
+  "title": "idea.ready payload (D21)",
+  "description": "Payload of envelope type idea.ready. message_id = UUIDv5(ns, idea_ref). producer = module:video. exchange manufacture.events, routing key idea.ready.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["idea"],
+  "properties": {
+    "idea": { "$ref": "../idea.json" }
+  }
+}
