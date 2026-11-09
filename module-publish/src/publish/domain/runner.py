@@ -56,7 +56,7 @@ async def run_publish_intents(
                     "intent_id": intent_id or None,
                 }
             )
-        except Exception as exc:  # noqa: BLE001 — map to failed publication
+        except Exception as exc:
             publications.append(
                 {
                     "platform": platform,
@@ -64,7 +64,11 @@ async def run_publish_intents(
                     "handle": handle,
                     "status": "failed",
                     "error": str(exc),
-                    "error_detail": {"code": "instagram_publish_failed", "retryable": True, "message": str(exc)},
+                    "error_detail": {
+                        "code": "instagram_publish_failed",
+                        "retryable": True,
+                        "message": str(exc),
+                    },
                     "intent_id": intent_id or None,
                 }
             )

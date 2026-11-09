@@ -2,4 +2,4 @@
 
 from publish.domain.runner import result_callback_body, run_publish_intents
 
-__all__ = ["run_publish_intents", "result_callback_body"]
+__all__ = ["result_callback_body", "run_publish_intents"]
