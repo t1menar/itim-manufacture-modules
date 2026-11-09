@@ -26,9 +26,18 @@ type Engine struct {
 	Pool            *pgxpool.Pool
 	Topo            messaging.Topology
 	Log             *slog.Logger
-	MaxConcurrent   int    // scheduler.max_concurrent_productions; settings table comes in a later slice
-	DefaultLanguage string // default_language
-	CallbackBaseURL string // callbacks.base_url (contract-1 compatibility field)
+	MaxConcurrent   int // overridden by settings.scheduler.max_concurrent_productions when Settings is set
+	DefaultLanguage string
+	CallbackBaseURL string
+	Settings        SettingsSource // optional; nil keeps struct defaults
+	reviewMaxRounds int
+}
+
+// SettingsSource reads versioned core settings without importing the settings package (avoids cycles).
+type SettingsSource interface {
+	ReviewMaxRounds(ctx context.Context) (int, error)
+	MaxConcurrent(ctx context.Context) (int, error)
+	CallbackBaseURL(ctx context.Context) (string, error)
 }
 
 func (e *Engine) defaults() { e.once.Do(e.setDefaults) }
@@ -46,6 +55,9 @@ func (e *Engine) setDefaults() {
 	if e.CallbackBaseURL == "" {
 		e.CallbackBaseURL = "http://core:8080"
 	}
+	if e.reviewMaxRounds == 0 {
+		e.reviewMaxRounds = 3
+	}
 }
 
 // StageRow is one entry of productions.pipeline_snapshot.
@@ -56,6 +68,7 @@ type StageRow struct {
 	TimeoutS     int     `json:"timeout_s"`
 	MaxAttempts  int     `json:"max_attempts"`
 	ReviseTarget *string `json:"revise_target"`
+	MaxRounds    *int    `json:"max_rounds,omitempty"`
 }
 
 // Tick turns queued ideas into productions (core-05 §2-§3). Ticks are serialized by an
@@ -63,6 +76,12 @@ type StageRow struct {
 // even if that lock were bypassed.
 func (e *Engine) Tick(ctx context.Context) (int, error) {
 	e.defaults()
+	maxConc := e.MaxConcurrent
+	if e.Settings != nil {
+		if n, err := e.Settings.MaxConcurrent(ctx); err == nil && n > 0 {
+			maxConc = n
+		}
+	}
 	created := 0
 	err := db.WithTx(ctx, e.Pool, func(tx pgx.Tx) error {
 		created = 0
@@ -73,7 +92,7 @@ func (e *Engine) Tick(ctx context.Context) (int, error) {
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM productions WHERE status = 'running'`).Scan(&running); err != nil {
 			return err
 		}
-		slots := e.MaxConcurrent - running
+		slots := maxConc - running
 		if slots <= 0 {
 			return nil
 		}
@@ -123,7 +142,7 @@ func (e *Engine) startIdea(ctx context.Context, tx pgx.Tx, ideaID int64) (bool, 
 		return false, err
 	}
 	var snapshot []StageRow
-	rows, err := tx.Query(ctx, `SELECT ps.position, ps.stage_id, s.scope, ps.timeout_s, ps.max_attempts, ps.revise_target
+	rows, err := tx.Query(ctx, `SELECT ps.position, ps.stage_id, s.scope, ps.timeout_s, ps.max_attempts, ps.revise_target, ps.max_rounds
 		FROM pipeline_stages ps JOIN stages s ON s.id = ps.stage_id WHERE ps.pipeline_id = $1 ORDER BY ps.position`, pid)
 	if err != nil {
 		return false, err
@@ -184,6 +203,8 @@ type jobSpec struct {
 	stage      StageRow
 	chain      uuid.UUID // uuid.Nil = new chain
 	try        int
+	mode       string
+	round      int
 	ideaID     int64
 	ideaText   string
 	language   string
@@ -202,10 +223,14 @@ func (e *Engine) createJob(ctx context.Context, tx pgx.Tx, s jobSpec) (uuid.UUID
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, err
 	}
+	mode := s.mode
+	if mode == "" {
+		mode = "create"
+	}
 	var attempt int
-	if err := tx.QueryRow(ctx, `INSERT INTO jobs (id, production_id, variant_id, stage_id, module_id, position, attempt, chain_id, try, max_attempts, timeout_s)
-		VALUES ($1, $2, $3, $4, $5, $6, (SELECT coalesce(max(attempt), 0) + 1 FROM jobs WHERE production_id = $2 AND stage_id = $4), $7, $8, $9, $10)
-		RETURNING attempt`, jobID, s.production, s.variant, s.stage.StageID, moduleID, s.stage.Position, chain, s.try, s.stage.MaxAttempts, s.stage.TimeoutS).Scan(&attempt); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO jobs (id, production_id, variant_id, stage_id, module_id, position, attempt, chain_id, try, max_attempts, timeout_s, mode, round)
+		VALUES ($1, $2, $3, $4, $5, $6, (SELECT coalesce(max(attempt), 0) + 1 FROM jobs WHERE production_id = $2 AND stage_id = $4), $7, $8, $9, $10, $11, $12)
+		RETURNING attempt`, jobID, s.production, s.variant, s.stage.StageID, moduleID, s.stage.Position, chain, s.try, s.stage.MaxAttempts, s.stage.TimeoutS, mode, s.round).Scan(&attempt); err != nil {
 		return uuid.Nil, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO events (production_id, variant_id, job_id, type, actor, payload) VALUES ($1, $2, $3, 'job.queued', 'system', jsonb_build_object('stage', $4::text, 'try', $5::int))`,
@@ -226,7 +251,7 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
-		"stage": s.stage.StageID, "mode": "create", "variant": variant,
+		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
 		"input": map[string]any{
 			"idea":     map[string]any{"id": s.ideaID, "text": s.ideaText, "language": s.language},
 			"channels": []any{}, "upstream": map[string]any{},
@@ -287,4 +312,11 @@ func (e *Engine) Takeover(ctx context.Context, jobID uuid.UUID, moduleID string)
 		return e.enqueueRequest(ctx, tx, jobID, fence, moduleID, s, attempt)
 	})
 	return fence, err
+}
+
+func modeOrCreate(m string) string {
+	if m == "" {
+		return "create"
+	}
+	return m
 }
