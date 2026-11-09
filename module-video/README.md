@@ -92,5 +92,5 @@ in `src/mvideo/ideas/schemas/`, a test fails when they drift).
   `idea.done`, `idea.failed`. Inbox dedup on `message_id`; transitions are monotonic and a wrong revision or a
   late event is `stale`.
 - The loops start only when `MODULE_AMQP_URL` is set (`MODULE_AMQP_PREFIX` for test isolation). They use the
-  `aio-pika` package (imported lazily). Not yet exercised against a real RabbitMQ.
+  `aio-pika` package (imported lazily). Covered by `tests/test_ideas_rabbit.py` (docker marker, image `rabbitmq:4-management`).
 - Seed ideas by SQL as in `docs/IDEAS.md` section 9; admin HTTP for ideas comes later.
