@@ -681,8 +681,9 @@ module.exports = {
 ]],
 ['h1', '12. Database ownership'],
 ['p', 'The module owns database `video` (role `video`); no other service reads it. Admin views go through `/admin/v1/*`. The core owns settings, credentials, channels and the production record; the module stores only snapshots it received.'],
+['p', '**Runtime prompts (D16 / C40):** stored only in this module\'s database as immutable versions with activation (`If-Match` / base version), audit, and a per-run snapshot. Core has **no** prompts table. On `POST …/result` the module reports used versions in `provenance.prompts` (step→`step@semver`) and, when available, `provenance.prompt_refs[]` `{prompt_id, version, sha256}`. Placeholder substitution uses strict `{{name}}` only (unknown variable → error; no eval). Shared Go helper: `core/internal/prompts` (optional for ports).'],
 ['h1', '13. Proposed contract changes'],
-['note', 'Status: PC1-PC5 are adopted in core-04 §14 (PC1 = C22, PC2 in the canonical `/info` example, PC3 = C23, PC4 = C4, PC5 = C11 / C24). New items for this module (metadata C39, runtime prompts C40, content revisions C37) are proposed in core-04 §17.'],
+['note', 'Status: PC1-PC5 are adopted in core-04 §14 (PC1 = C22, PC2 in the canonical `/info` example, PC3 = C23, PC4 = C4, PC5 = C11 / C24). C40 (module-owned runtime prompts + provenance.prompt_refs) is accepted; metadata C39 and content revisions C37 remain proposed in core-04 §17.'],
 ['table', ['#', 'Proposal', 'Why'], [
   ['PC1', 'Document the optional channel settings keys `reading_wps`, `caption_template`, `hashtags`, `style_rules`, `palette` (§2.3) in core-04 as known keys for stage `video`.', 'The module depends on them; the panel should offer them in the channel form.'],
   ['PC2', 'In the canonical `/info` example, replace `admin_endpoints: ["/admin/v1/glossary"]` with this module\'s list (`/admin/v1/runs`, `/admin/v1/prompts`, `/admin/v1/golden`).', 'This module has no glossary endpoint in stage 1.'],

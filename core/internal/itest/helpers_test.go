@@ -21,23 +21,28 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/t1menar/manufacture/core/internal/auth"
+	"github.com/t1menar/manufacture/core/internal/credentials"
 	"github.com/t1menar/manufacture/core/internal/db"
 	"github.com/t1menar/manufacture/core/internal/engine"
 	"github.com/t1menar/manufacture/core/internal/messaging"
+	"github.com/t1menar/manufacture/core/internal/modules"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
 type env struct {
-	t        *testing.T
-	ctx      context.Context
-	pool     *pgxpool.Pool
-	conn     *amqp.Connection
-	topo     messaging.Topology
-	eng      *engine.Engine
-	log      *slog.Logger
-	settings *settings.Store
-	auth     *auth.Authenticator
-	tokens   map[string]string
+	t         *testing.T
+	ctx       context.Context
+	pool      *pgxpool.Pool
+	conn      *amqp.Connection
+	topo      messaging.Topology
+	eng       *engine.Engine
+	log       *slog.Logger
+	settings  *settings.Store
+	auth      *auth.Authenticator
+	tokens    map[string]string
+	reg       *modules.Registry
+	creds     *credentials.Store
+	masterKey []byte
 }
 
 func setup(t *testing.T) *env {
@@ -104,17 +109,28 @@ func setup(t *testing.T) *env {
 		log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	}
 	store := &settings.Store{Pool: pool}
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	mk := modules.MasterKey{Version: 1, Key: key}
 	e := &env{t: t, ctx: ctx, pool: pool, conn: conn, topo: topo, log: log,
 		eng:      &engine.Engine{Pool: pool, Topo: topo, Log: log, CallbackBaseURL: "http://core.test", Settings: store},
-		settings: store,
-		auth:     &auth.Authenticator{Pool: pool, AdminTokenHash: auth.HashToken("mfa_test_admin_token_xxxxxxxx")},
+		settings: store, masterKey: key,
+		reg:   &modules.Registry{Pool: pool, Key: mk, Grace: time.Second},
+		creds: &credentials.Store{Pool: pool, Key: credentials.MasterKey{Version: 1, Key: key}},
+		auth:  &auth.Authenticator{Pool: pool, AdminTokenHash: auth.HashToken("mfa_test_admin_token_xxxxxxxx")},
 		tokens: map[string]string{
 			"vidmod":  "mft_vidmod_test_token_xxxxxxxx",
 			"vidmod2": "mft_vidmod2_test_token_xxxxxxx",
 			"revmod":  "mft_revmod_test_token_xxxxxxxx",
 			"pubmod":  "mft_pubmod_test_token_xxxxxxxx",
 		}}
-	e.exec(`INSERT INTO modules (id, stage_id, active) VALUES ('vidmod', 'video', true), ('vidmod2', 'video', false), ('revmod', 'review', true), ('pubmod', 'publish', true)`)
+	e.exec(`INSERT INTO modules (id, name, stage_id, endpoint, active, health, last_seen_at) VALUES
+		('vidmod', 'Video', 'video', 'http://127.0.0.1:9/vidmod', true, 'up', now()),
+		('vidmod2', 'Video2', 'video', 'http://127.0.0.1:9/vidmod2', false, 'up', now()),
+		('revmod', 'Review', 'review', 'http://127.0.0.1:9/revmod', true, 'up', now()),
+		('pubmod', 'Publish', 'publish', 'http://127.0.0.1:9/pubmod', true, 'up', now())`)
 	for id, tok := range e.tokens {
 		if err := auth.SetModuleToken(ctx, pool, id, tok); err != nil {
 			t.Fatal(err)

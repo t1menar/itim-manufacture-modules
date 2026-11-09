@@ -14,7 +14,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/t1menar/manufacture/core/internal/auth"
+	"github.com/t1menar/manufacture/core/internal/credentials"
 	"github.com/t1menar/manufacture/core/internal/engine"
+	"github.com/t1menar/manufacture/core/internal/modules"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -22,11 +24,13 @@ import (
 type Check func(ctx context.Context) error
 
 type Server struct {
-	Checks   map[string]Check
-	Auth     *auth.Authenticator
-	Engine   *engine.Engine
-	Settings *settings.Store
-	MaxBody  int64
+	Checks      map[string]Check
+	Auth        *auth.Authenticator
+	Engine      *engine.Engine
+	Settings    *settings.Store
+	Modules     *modules.Registry
+	Credentials *credentials.Store
+	MaxBody     int64
 }
 
 func problem(w http.ResponseWriter, status int, code, title string) {
@@ -49,8 +53,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /internal/v1/jobs/{job_id}/result", s.requireModule(s.result))
 	mux.HandleFunc("POST /internal/v1/jobs/{job_id}/fail", s.requireModule(s.fail))
 	mux.HandleFunc("GET /internal/v1/modules/self/settings", s.requireModule(s.ownSettings))
+	mux.HandleFunc("POST /internal/v1/modules/self/heartbeat", s.requireModule(s.heartbeat))
 	mux.HandleFunc("PUT /internal/v1/modules/{id}/settings", s.requireAdmin(s.putSettings))
 	mux.HandleFunc("GET /internal/v1/modules/{id}/settings", s.requireAdmin(s.getSettings))
+	mux.HandleFunc("POST /internal/v1/modules", s.requireAdmin(s.registerModule))
+	mux.HandleFunc("POST /internal/v1/modules/{id}/token", s.requireAdmin(s.rotateToken))
+	mux.HandleFunc("POST /internal/v1/modules/{id}/activate", s.requireAdmin(s.activateModule))
+	mux.HandleFunc("GET /internal/v1/credentials/{ref}", s.requireModule(s.readCredential))
 
 	mux.HandleFunc("/internal/", func(w http.ResponseWriter, _ *http.Request) {
 		problem(w, http.StatusNotImplemented, "not_implemented", "This endpoint is specified in core-04 but not implemented yet")
@@ -324,4 +333,125 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
+	if s.Modules == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "module registry not configured")
+		return
+	}
+	if err := s.Modules.Heartbeat(r.Context(), principal(r).ModuleID); err != nil {
+		problem(w, http.StatusNotFound, "not_found", "module not found")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"status": "ok"})
+}
+
+func (s *Server) registerModule(w http.ResponseWriter, r *http.Request) {
+	if s.Modules == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "module registry not configured")
+		return
+	}
+	var body struct {
+		ID       string        `json:"id"`
+		Name     string        `json:"name"`
+		Stage    string        `json:"stage"`
+		Endpoint string        `json:"endpoint"`
+		Enabled  *bool         `json:"enabled"`
+		Manifest *modules.Info `json:"manifest"`
+	}
+	if !s.readJSON(w, r, &body) {
+		return
+	}
+	m, err := s.Modules.Register(r.Context(), modules.RegisterOpts{
+		ID: body.ID, Name: body.Name, Stage: body.Stage, Endpoint: body.Endpoint,
+		Enabled: body.Enabled, Manifest: body.Manifest,
+	})
+	switch {
+	case errors.Is(err, modules.ErrValidation):
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "invalid module registration")
+	case errors.Is(err, modules.ErrAlreadyExists):
+		problem(w, http.StatusConflict, "already_exists", "module id exists with different endpoint or stage")
+	case errors.Is(err, modules.ErrStageMismatch):
+		problem(w, http.StatusUnprocessableEntity, "module_stage_mismatch", "stage not listed in manifest")
+	case errors.Is(err, modules.ErrContract):
+		problem(w, http.StatusUnprocessableEntity, "module_contract_unsupported", "unsupported contract version")
+	case err != nil:
+		problem(w, http.StatusInternalServerError, "internal", "registration failed")
+	default:
+		status := 201
+		if m.Token == "" {
+			status = 200 // idempotent replay
+		}
+		writeJSON(w, status, m)
+	}
+}
+
+func (s *Server) rotateToken(w http.ResponseWriter, r *http.Request) {
+	if s.Modules == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "module registry not configured")
+		return
+	}
+	raw, prefix, exp, err := s.Modules.RotateToken(r.Context(), r.PathValue("id"))
+	if errors.Is(err, modules.ErrNotFound) {
+		problem(w, http.StatusNotFound, "not_found", "module not found")
+		return
+	}
+	if err != nil {
+		problem(w, http.StatusInternalServerError, "internal", "token rotation failed")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"token": raw, "token_prefix": prefix, "prev_token_expires_at": exp.UTC().Format(time.RFC3339)})
+}
+
+func (s *Server) activateModule(w http.ResponseWriter, r *http.Request) {
+	if s.Modules == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "module registry not configured")
+		return
+	}
+	var body struct {
+		Replace bool `json:"replace"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := s.Modules.Activate(r.Context(), r.PathValue("id"), body.Replace); err != nil {
+		if errors.Is(err, modules.ErrNotFound) {
+			problem(w, http.StatusNotFound, "not_found", "module not found")
+			return
+		}
+		problem(w, http.StatusConflict, "module_not_ready", err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"id": r.PathValue("id"), "active": true})
+}
+
+func (s *Server) readCredential(w http.ResponseWriter, r *http.Request) {
+	if s.Credentials == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "credentials not configured")
+		return
+	}
+	ref := r.PathValue("ref")
+	var jobID *uuid.UUID
+	if raw := r.Header.Get("X-Job-Id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			problem(w, http.StatusUnprocessableEntity, "validation_failed", "X-Job-Id must be a uuid")
+			return
+		}
+		jobID = &id
+	}
+	value, meta, err := s.Credentials.Read(r.Context(), ref, principal(r).ModuleID, jobID)
+	switch {
+	case errors.Is(err, credentials.ErrNotFound):
+		problem(w, http.StatusNotFound, "credential_not_found", "unknown credential ref")
+	case errors.Is(err, credentials.ErrNotAllowed):
+		problem(w, http.StatusForbidden, "credential_not_allowed", "module is not allowed to read this credential")
+	case err != nil:
+		problem(w, http.StatusInternalServerError, "internal", "credential read failed")
+	default:
+		var exp any
+		if meta.ExpiresAt != nil {
+			exp = meta.ExpiresAt.UTC().Format(time.RFC3339)
+		}
+		writeJSON(w, 200, map[string]any{"ref": meta.Ref, "kind": meta.Kind, "value": value, "expires_at": exp})
+	}
 }

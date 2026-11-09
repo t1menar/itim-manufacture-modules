@@ -68,19 +68,24 @@ func (a *Authenticator) FromRequest(ctx context.Context, authorization string) (
 		return Principal{}, ErrUnauthorized // unknown admin token
 	}
 	var id string
-	var prev []byte
+	var cur, prev []byte
 	var prevExp *time.Time
-	err := a.Pool.QueryRow(ctx, `SELECT id, prev_token_hash, prev_token_expires_at FROM modules
-		WHERE token_hash = $1 OR (prev_token_hash = $1 AND prev_token_expires_at IS NOT NULL AND prev_token_expires_at > now())`, hash).
-		Scan(&id, &prev, &prevExp)
+	err := a.Pool.QueryRow(ctx, `SELECT id, token_hash, prev_token_hash, prev_token_expires_at FROM modules
+		WHERE token_hash = $1 OR (prev_token_hash = $1 AND (prev_token_expires_at IS NULL OR prev_token_expires_at > now()))`, hash).
+		Scan(&id, &cur, &prev, &prevExp)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrUnauthorized
 	}
 	if err != nil {
 		return Principal{}, err
 	}
-	_ = prev
-	_ = prevExp
+	ok := subtle.ConstantTimeCompare(hash, cur) == 1
+	if !ok && len(prev) == 32 && prevExp != nil && prevExp.After(time.Now()) {
+		ok = subtle.ConstantTimeCompare(hash, prev) == 1
+	}
+	if !ok {
+		return Principal{}, ErrUnauthorized
+	}
 	return Principal{Kind: KindModule, ModuleID: id}, nil
 }
 

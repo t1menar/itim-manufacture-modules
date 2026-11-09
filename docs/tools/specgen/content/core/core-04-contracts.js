@@ -819,7 +819,7 @@ ep([
   ['C37', 'Content revisions (16.1) and `content_revision_id` in review input/output and publish input', 'accepted (principle) / proposed (shape)', 'module-review, module-publish'],
   ['C38', 'Publish intents (16.3) with `intent_id`, `generation`; `POST /internal/v1/productions/{id}/variants/{vid}/republish {platform_account_id, reason}` (admin only, disabled by default)', 'proposed', 'admin-api, module-publish'],
   ['C39', 'Stage output `metadata`: canonical `{title, description, topics[]}` plus `platforms.<platform>.{caption, hashtags[], fields}`; produced by a separate stage `metadata` (module `content-claude`, Python), or temporarily by the video module as an optional `metadata` object', 'accepted (generate title, description, tags per platform) / proposed (separate module)', 'module-video, module-publish'],
-  ['C40', 'Runtime prompts stored by the module that runs them, as immutable versions with activation (`If-Match`), audit via admin-api and per-job provenance (`prompt_id`, `version`, `sha256`); strict placeholder substitution only', 'accepted (prompts in DB) / proposed (API shape)', 'module-video, content module'],
+  ['C40', 'Runtime prompts stored **only** in the module that runs them (module-video DB), as immutable versions with activation (`If-Match`), audit via the module admin API, and reported in result `provenance.prompt_refs[]` (`prompt_id`, `version`, `sha256`) alongside the existing `provenance.prompts` step→semver map. Core does not store prompts; it may ship a shared `{{var}}` substitution helper with no eval. Unknown placeholder → error.', 'accepted (2026-11-09: module-owned store; core helper only)', 'module-video'],
 ], [0.5, 3.6, 1.4, 1.2]],
   ],
 };

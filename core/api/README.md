@@ -29,3 +29,10 @@ Not covered yet (core-04 §2, admin-api principal):
 - `schemas/stage-metadata-output.json`: proposed stage `metadata` (C39, P1); not seeded until accepted.
 - `schemas/events/*.json`: RabbitMQ envelope and payloads (§15, proposed C29-C31).
 - `schemas/examples/cases.json`: examples with expected validity (valid and invalid cases).
+
+## Added in registry-credentials-prompts
+
+- Admin: `POST /modules`, `POST /modules/{id}/token`, `POST /modules/{id}/activate`
+- Module: `POST /modules/self/heartbeat` (updates `last_seen_at`)
+- Credentials GET already listed; implementation wired
+- Prompts: no core HTTP and no core table (D16/C40: module-video owns storage); core ships `internal/prompts` substitution helper only

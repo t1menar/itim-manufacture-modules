@@ -40,6 +40,11 @@
       "schema": "events/envelope.json",
       "example": "envelope.job-event-without-fence.json",
       "valid": false
+    },
+    {
+      "schema": "stage-video-output.json",
+      "example": "video-output.with-prompt-versions.json",
+      "valid": true
     }
   ]
 }

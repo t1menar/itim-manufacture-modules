@@ -219,7 +219,7 @@ func (e *Engine) createJob(ctx context.Context, tx pgx.Tx, s jobSpec) (uuid.UUID
 		chain = jobID
 	}
 	var moduleID *string
-	err := tx.QueryRow(ctx, `SELECT id FROM modules WHERE stage_id = $1 AND active AND enabled`, s.stage.StageID).Scan(&moduleID)
+	err := tx.QueryRow(ctx, `SELECT id FROM modules WHERE stage_id = $1 AND active AND enabled AND health = 'up'`, s.stage.StageID).Scan(&moduleID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, err
 	}
