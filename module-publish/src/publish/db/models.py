@@ -70,7 +70,14 @@ class PlatformAccount(Base):
     """D23: platform accounts owned by module-publish."""
 
     __tablename__ = "platform_accounts"
-    __table_args__ = (UniqueConstraint("channel_id", "platform", "handle", name="uq_platform_accounts_channel_platform_handle"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id",
+            "platform",
+            "handle",
+            name="uq_platform_accounts_channel_platform_handle",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
     channel_id: Mapped[str] = mapped_column(Text)
@@ -88,7 +95,12 @@ class PublishIntent(Base):
 
     __tablename__ = "publish_intents"
     __table_args__ = (
-        UniqueConstraint("variant_id", "platform_account_id", "generation", name="uq_publish_intents_variant_account_gen"),
+        UniqueConstraint(
+            "variant_id",
+            "platform_account_id",
+            "generation",
+            name="uq_publish_intents_variant_account_gen",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
