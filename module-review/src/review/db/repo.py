@@ -99,7 +99,9 @@ async def claim_runs(
     return runs
 
 
-async def renew_lease(session: AsyncSession, run_id: uuid.UUID, owner: str, *, now: dt.datetime | None = None) -> bool:
+async def renew_lease(
+    session: AsyncSession, run_id: uuid.UUID, owner: str, *, now: dt.datetime | None = None
+) -> bool:
     at = _now(now)
     stmt = (
         update(Run)
@@ -110,7 +112,9 @@ async def renew_lease(session: AsyncSession, run_id: uuid.UUID, owner: str, *, n
     return (await session.execute(stmt)).scalar_one_or_none() is not None
 
 
-async def set_status(session: AsyncSession, run_id: uuid.UUID, status: str, *, step: str | None = None) -> None:
+async def set_status(
+    session: AsyncSession, run_id: uuid.UUID, status: str, *, step: str | None = None
+) -> None:
     values: dict[str, Any] = {"status": status}
     if step is not None:
         values["step"] = step
@@ -234,7 +238,9 @@ async def get_pending_reject(session: AsyncSession, run_id: uuid.UUID) -> Pendin
     return await session.get(PendingReject, run_id)
 
 
-async def find_pending_for_admin(session: AsyncSession, chat_id: int, admin_user_id: int) -> PendingReject | None:
+async def find_pending_for_admin(
+    session: AsyncSession, chat_id: int, admin_user_id: int
+) -> PendingReject | None:
     r = await session.execute(
         select(PendingReject)
         .where(PendingReject.chat_id == chat_id, PendingReject.admin_user_id == admin_user_id)

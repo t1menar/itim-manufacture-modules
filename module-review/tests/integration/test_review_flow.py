@@ -107,7 +107,8 @@ async def test_reject_revise_approve_notify_reply_chain() -> None:
     for upd in bot.poll():
         await flow.handle_update(upd)
     assert result_route.called
-    assert b'"decision": "rejected"' in result_route.calls.last.request.content or b'"decision":"rejected"' in result_route.calls.last.request.content
+    body = result_route.calls.last.request.content
+    assert b'"decision": "rejected"' in body or b'"decision":"rejected"' in body
 
     # New version after revise (round 2) — reply to previous card
     job2 = uuid.uuid4()
@@ -129,7 +130,8 @@ async def test_reject_revise_approve_notify_reply_chain() -> None:
     bot.push_callback(chat_id=admin, user_id=admin, data=f"approve:{job2}", message_id=card2)
     for upd in bot.poll():
         await flow.handle_update(upd)
-    assert b'"decision": "approved"' in result_route.calls.last.request.content or b'"decision":"approved"' in result_route.calls.last.request.content
+    body = result_route.calls.last.request.content
+    assert b'"decision": "approved"' in body or b'"decision":"approved"' in body
 
     # Publish notify replies to approved card
     before = len(bot.sent)

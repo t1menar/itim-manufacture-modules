@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -60,7 +61,11 @@ class ReviewFlow:
                     s,
                     run.id,
                     status="failed",
-                    error={"class": "fatal", "message": "no admin chat configured", "details": {"code": "no_admin"}},
+                    error={
+                        "class": "fatal",
+                        "message": "no admin chat configured",
+                        "details": {"code": "no_admin"},
+                    },
                 )
                 return
 
@@ -116,16 +121,11 @@ class ReviewFlow:
                 return
             status = run.status
             run_id = run.id
-            if action == "approve":
-                if status != "awaiting_decision":
-                    return
-                snapshot = _run_snapshot(run)
-            elif action == "reject":
-                if status != "awaiting_decision":
-                    return
-                snapshot = _run_snapshot(run)
-            else:
+            if action not in {"approve", "reject"}:
                 return
+            if status != "awaiting_decision":
+                return
+            snapshot = _run_snapshot(run)
 
         if action == "reject":
             asked = await self._bot.send_message(
@@ -209,10 +209,8 @@ class ReviewFlow:
                     card_chat, card_mid = card.chat_id, card.message_id
 
         if card_chat is not None and card_mid is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await self._bot.edit_message_reply_markup(card_chat, card_mid, stale_keyboard())
-            except Exception:
-                pass
         try:
             resp = await self._core.result(callback, fence, body)
             if resp.status_code >= 300:
@@ -225,10 +223,8 @@ class ReviewFlow:
         callback, fence = run.callback_base_url, run.fence
         await repo.store_outcome(session, run.id, status="cancelled", error=body)
         if callback:
-            try:
+            with contextlib.suppress(Exception):
                 await self._core.fail(callback, fence, body)
-            except Exception:
-                pass
 
 
 def _run_snapshot(run: Any) -> dict[str, Any]:
