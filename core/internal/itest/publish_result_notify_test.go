@@ -14,8 +14,7 @@ func TestPublishResultAppliesIntentsAndNotifies(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	account := uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
-		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	// D23: platform_accounts live in module-publish.
 	srv := e.api()
 	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("pub"), "artifacts": []any{}})
 	if res.StatusCode != 200 {
@@ -107,8 +106,7 @@ func TestPublishPartialNeedsAttention(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	a1, a2 := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled) VALUES
-		($1, 'itim', 'instagram', '@a', true), ($2, 'itim', 'instagram', '@b', true)`, a1, a2)
+	// D23: platform_accounts live in module-publish; accounts are opaque ids from the module.
 	srv := e.api()
 	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("partial"), "artifacts": []any{}})
 	res.Body.Close()
@@ -126,18 +124,14 @@ func TestPublishPartialNeedsAttention(t *testing.T) {
 	var pubJob uuid.UUID
 	var pf int
 	_ = e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'publish'`).Scan(&pubJob, &pf)
-	var i1, i2 uuid.UUID
-	rows, _ := e.pool.Query(e.ctx, `SELECT id, platform_account_id FROM publish_intents ORDER BY platform_account_id`)
-	defer rows.Close()
-	for rows.Next() {
-		var id, acc uuid.UUID
-		_ = rows.Scan(&id, &acc)
-		if acc == a1 {
-			i1 = id
-		} else {
-			i2 = id
-		}
-	}
+	// Approve opens one intent per channel; insert a second orchestration intent for partial coverage.
+	var i1 uuid.UUID
+	var variantID, revID uuid.UUID
+	_ = e.pool.QueryRow(e.ctx, `SELECT id, variant_id, content_revision_id FROM publish_intents ORDER BY created_at LIMIT 1`).
+		Scan(&i1, &variantID, &revID)
+	i2 := uuid.Must(uuid.NewV7())
+	e.exec(`INSERT INTO publish_intents (id, variant_id, platform_account_id, generation, content_revision_id, status)
+		VALUES ($1,$2,NULL,1,$3,'pending')`, i2, variantID, revID)
 	at := time.Now().UTC().Format(time.RFC3339)
 	output := map[string]any{"publications": []any{
 		map[string]any{
@@ -175,9 +169,7 @@ func TestPublishPartialNeedsAttention(t *testing.T) {
 func TestPublishFailBlockedMarksUnknown(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
-	account := uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
-		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	// D23: platform_accounts live in module-publish.
 	srv := e.api()
 	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("blk"), "artifacts": []any{}})
 	res.Body.Close()

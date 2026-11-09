@@ -43,7 +43,7 @@ type Revision struct {
 type Intent struct {
 	ID                uuid.UUID
 	VariantID         uuid.UUID
-	PlatformAccountID uuid.UUID
+	PlatformAccountID uuid.UUID // opaque; may be uuid.Nil until module binds (D23)
 	Generation        int
 	ContentRevisionID uuid.UUID
 	Status            string
@@ -82,9 +82,8 @@ func (s *Store) CreateRevisionInTx(ctx context.Context, tx pgx.Tx, variantID, so
 	return Revision{ID: id, VariantID: variantID, Revision: next, Body: append(json.RawMessage(nil), body...), SHA256: sum[:]}, nil
 }
 
-// ApproveRevision marks the revision approved and creates generation-1 intents for every
-// enabled platform account of the variant's channels. Concurrent callers: unique index
-// ensures at most one intent per (variant, account, generation=1).
+// ApproveAndCreateIntents marks the revision approved and opens generation-1 orchestration
+// intents (D23: one per variant channel; platform accounts live in module-publish).
 func (s *Store) ApproveAndCreateIntents(ctx context.Context, revisionID uuid.UUID, round int) ([]Intent, error) {
 	var out []Intent
 	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
@@ -119,47 +118,35 @@ func (s *Store) ApproveAndCreateIntentsInTx(ctx context.Context, tx pgx.Tx, revi
 	if _, err := tx.Exec(ctx, `UPDATE content_revisions SET approved_round = $2 WHERE id = $1 AND approved_round IS NULL`, revisionID, round); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `
-		SELECT pa.id FROM platform_accounts pa
-		JOIN variants v ON v.id = $1
-		WHERE pa.enabled AND pa.channel_id = ANY (v.channels)
-		ORDER BY pa.id
-		FOR UPDATE OF pa`, variantID)
-	if err != nil {
+	// D23: accounts live in module-publish. Core opens one orchestration intent per
+	// channel on the variant (platform_account_id left NULL; module binds accounts).
+	var channels []string
+	if err := tx.QueryRow(ctx, `SELECT channels FROM variants WHERE id = $1`, variantID).Scan(&channels); err != nil {
 		return nil, err
 	}
-	accounts, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-	if err != nil {
-		return nil, err
+	if len(channels) == 0 {
+		return out, nil
 	}
-	for _, acc := range accounts {
+	for range channels {
 		id := uuid.Must(uuid.NewV7())
-		tag, err := tx.Exec(ctx, `INSERT INTO publish_intents
+		if _, err := tx.Exec(ctx, `INSERT INTO publish_intents
 			(id, variant_id, platform_account_id, generation, content_revision_id, status)
-			VALUES ($1,$2,$3,1,$4,'pending')
-			ON CONFLICT (variant_id, platform_account_id, generation) DO NOTHING`,
-			id, variantID, acc, revisionID)
-		if err != nil {
+			VALUES ($1,$2,NULL,1,$3,'pending')`,
+			id, variantID, revisionID); err != nil {
 			return nil, err
 		}
-		if tag.RowsAffected() == 0 {
-			var existing Intent
-			if err := tx.QueryRow(ctx, `SELECT id, variant_id, platform_account_id, generation, content_revision_id, status
-				FROM publish_intents WHERE variant_id=$1 AND platform_account_id=$2 AND generation=1`,
-				variantID, acc).Scan(&existing.ID, &existing.VariantID, &existing.PlatformAccountID, &existing.Generation, &existing.ContentRevisionID, &existing.Status); err != nil {
-				return nil, err
-			}
-			out = append(out, existing)
-			continue
-		}
-		out = append(out, Intent{ID: id, VariantID: variantID, PlatformAccountID: acc, Generation: 1, ContentRevisionID: revisionID, Status: "pending"})
+		out = append(out, Intent{ID: id, VariantID: variantID, Generation: 1, ContentRevisionID: revisionID, Status: "pending"})
 	}
 	return out, nil
 }
 
 func scanIntent(row pgx.CollectableRow) (Intent, error) {
 	var i Intent
-	err := row.Scan(&i.ID, &i.VariantID, &i.PlatformAccountID, &i.Generation, &i.ContentRevisionID, &i.Status)
+	var acc *uuid.UUID
+	err := row.Scan(&i.ID, &i.VariantID, &acc, &i.Generation, &i.ContentRevisionID, &i.Status)
+	if acc != nil {
+		i.PlatformAccountID = *acc
+	}
 	return i, err
 }
 
@@ -262,10 +249,14 @@ func (s *Store) ReconcileFound(ctx context.Context, intentID uuid.UUID, external
 // Get returns one intent.
 func (s *Store) Get(ctx context.Context, id uuid.UUID) (Intent, error) {
 	var i Intent
+	var acc *uuid.UUID
 	err := s.Pool.QueryRow(ctx, `SELECT id, variant_id, platform_account_id, generation, content_revision_id, status,
 		external_post_id, url, published_at FROM publish_intents WHERE id = $1`, id).
-		Scan(&i.ID, &i.VariantID, &i.PlatformAccountID, &i.Generation, &i.ContentRevisionID, &i.Status,
+		Scan(&i.ID, &i.VariantID, &acc, &i.Generation, &i.ContentRevisionID, &i.Status,
 			&i.ExternalPostID, &i.URL, &i.PublishedAt)
+	if acc != nil {
+		i.PlatformAccountID = *acc
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Intent{}, ErrNotFound
 	}
@@ -352,7 +343,8 @@ func (s *Store) Republish(ctx context.Context, opts RepublishOpts) (RepublishRes
 			}
 		}
 
-		var variantID, accountID, curRev uuid.UUID
+		var variantID, curRev uuid.UUID
+		var accountID *uuid.UUID
 		var curGen int
 		var status string
 		err := tx.QueryRow(ctx, `SELECT variant_id, platform_account_id, generation, content_revision_id, status
@@ -364,12 +356,19 @@ func (s *Store) Republish(ctx context.Context, opts RepublishOpts) (RepublishRes
 		if err != nil {
 			return err
 		}
-		// Lock the latest generation for this pair (the path id may be an older generation).
+		// Lock the latest generation for this orchestration key (path id may be an older generation).
 		var latestID uuid.UUID
-		err = tx.QueryRow(ctx, `SELECT id, generation, content_revision_id, status FROM publish_intents
-			WHERE variant_id = $1 AND platform_account_id = $2
-			ORDER BY generation DESC LIMIT 1 FOR UPDATE`, variantID, accountID).
-			Scan(&latestID, &curGen, &curRev, &status)
+		if accountID == nil {
+			err = tx.QueryRow(ctx, `SELECT id, generation, content_revision_id, status FROM publish_intents
+				WHERE variant_id = $1 AND platform_account_id IS NULL
+				ORDER BY generation DESC LIMIT 1 FOR UPDATE`, variantID).
+				Scan(&latestID, &curGen, &curRev, &status)
+		} else {
+			err = tx.QueryRow(ctx, `SELECT id, generation, content_revision_id, status FROM publish_intents
+				WHERE variant_id = $1 AND platform_account_id = $2
+				ORDER BY generation DESC LIMIT 1 FOR UPDATE`, variantID, *accountID).
+				Scan(&latestID, &curGen, &curRev, &status)
+		}
 		if err != nil {
 			return err
 		}
@@ -412,9 +411,13 @@ func (s *Store) Republish(ctx context.Context, opts RepublishOpts) (RepublishRes
 			}
 			return err
 		}
+		accAny := any(nil)
+		if accountID != nil {
+			accAny = *accountID
+		}
 		payload, _ := json.Marshal(map[string]any{
 			"intent_id": newID, "previous_intent_id": prevIntentID,
-			"variant_id": variantID, "platform_account_id": accountID,
+			"variant_id": variantID, "platform_account_id": accAny,
 			"previous_generation": curGen, "generation": next,
 			"content_revision_id": revID, "reason": reason, "actor": opts.Actor,
 			"previous_status": status,
@@ -423,14 +426,18 @@ func (s *Store) Republish(ctx context.Context, opts RepublishOpts) (RepublishRes
 			VALUES ('publish.republish_requested', $1, $2, $3)`, opts.Actor, payload, variantID); err != nil {
 			return err
 		}
-		out.Intent = Intent{ID: newID, VariantID: variantID, PlatformAccountID: accountID, Generation: next, ContentRevisionID: revID, Status: "pending"}
+		outIntent := Intent{ID: newID, VariantID: variantID, Generation: next, ContentRevisionID: revID, Status: "pending"}
+		if accountID != nil {
+			outIntent.PlatformAccountID = *accountID
+		}
+		out.Intent = outIntent
 		if s.OnIntentCreated != nil {
 			if err := s.OnIntentCreated(ctx, tx, out.Intent); err != nil {
 				return err
 			}
 		}
 		resp, _ := json.Marshal(map[string]any{
-			"id": newID, "variant_id": variantID, "platform_account_id": accountID,
+			"id": newID, "variant_id": variantID, "platform_account_id": accAny,
 			"generation": next, "content_revision_id": revID, "status": "pending",
 			"previous_generation": curGen, "authorized_by": opts.Actor, "reason": reason,
 		})

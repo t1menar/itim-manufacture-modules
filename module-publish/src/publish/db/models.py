@@ -64,3 +64,41 @@ class Run(Base):
     created_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
     started_at: Mapped[dt.datetime | None]
     finished_at: Mapped[dt.datetime | None]
+
+
+class PlatformAccount(Base):
+    """D23: platform accounts owned by module-publish."""
+
+    __tablename__ = "platform_accounts"
+    __table_args__ = (UniqueConstraint("channel_id", "platform", "handle", name="uq_platform_accounts_channel_platform_handle"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    channel_id: Mapped[str] = mapped_column(Text)
+    platform: Mapped[str] = mapped_column(Text)
+    handle: Mapped[str | None] = mapped_column(Text)
+    external_id: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+
+
+class PublishIntent(Base):
+    """D23: publish intents owned by module-publish (core keeps orchestration refs)."""
+
+    __tablename__ = "publish_intents"
+    __table_args__ = (
+        UniqueConstraint("variant_id", "platform_account_id", "generation", name="uq_publish_intents_variant_account_gen"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    variant_id: Mapped[uuid.UUID]
+    platform_account_id: Mapped[uuid.UUID]
+    generation: Mapped[int] = mapped_column(Integer)
+    content_revision_id: Mapped[uuid.UUID]
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    external_post_id: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[dt.datetime | None]
+    last_error: Mapped[dict[str, Any] | None]
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))

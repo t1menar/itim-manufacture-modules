@@ -83,6 +83,17 @@ func (e *Engine) applyOnePublication(ctx context.Context, tx pgx.Tx, j jobRow, p
 	if intentID == uuid.Nil {
 		return nil // skipped without intent — nothing to apply
 	}
+	// D23: denormalize module account identity onto the orchestration intent.
+	var handle any
+	if pub.Handle != nil {
+		handle = *pub.Handle
+	}
+	acc := pub.PlatformAccountID
+	if _, err := tx.Exec(ctx, `UPDATE publish_intents SET platform = $2, handle = $3,
+		platform_account_id = COALESCE(platform_account_id, NULLIF($4, '00000000-0000-0000-0000-000000000000'::uuid))
+		WHERE id = $1`, intentID, pub.Platform, handle, acc); err != nil {
+		return err
+	}
 	switch pub.Status {
 	case "published":
 		if pub.ExternalPostID == nil || pub.URL == nil {
@@ -149,6 +160,17 @@ func (e *Engine) resolveIntentID(ctx context.Context, tx pgx.Tx, j jobRow, pub p
 	err := tx.QueryRow(ctx, `SELECT id FROM publish_intents
 		WHERE variant_id = $1 AND platform_account_id = $2
 		ORDER BY generation DESC LIMIT 1`, *j.variant, pub.PlatformAccountID).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != pgx.ErrNoRows {
+		return uuid.Nil, err
+	}
+	// D23: core intents often have NULL platform_account_id until the module binds one.
+	err = tx.QueryRow(ctx, `SELECT id FROM publish_intents
+		WHERE variant_id = $1 AND platform_account_id IS NULL
+		  AND status IN ('pending','in_progress','unknown')
+		ORDER BY generation DESC, created_at LIMIT 1`, *j.variant).Scan(&id)
 	if err == pgx.ErrNoRows {
 		return uuid.Nil, nil
 	}
@@ -157,10 +179,10 @@ func (e *Engine) resolveIntentID(ctx context.Context, tx pgx.Tx, j jobRow, pub p
 
 // aggregatePublishIntents returns overall status for notify + variant: published|partial|failed|unknown|dry_run.
 func (e *Engine) aggregatePublishIntents(ctx context.Context, tx pgx.Tx, variantID uuid.UUID) (string, []publicationItem, error) {
+	// D23: platform/handle denormalized on the intent (filled from module results); no platform_accounts in core.
 	rows, err := tx.Query(ctx, `SELECT pi.id, pi.status, pi.external_post_id, pi.url, pi.published_at, pi.last_error,
-		pa.platform, pa.id, pa.handle
+		coalesce(pi.platform, 'instagram'), coalesce(pi.platform_account_id, '00000000-0000-0000-0000-000000000000'::uuid), pi.handle
 		FROM publish_intents pi
-		JOIN platform_accounts pa ON pa.id = pi.platform_account_id
 		WHERE pi.variant_id = $1
 		ORDER BY pi.generation DESC, pi.created_at`, variantID)
 	if err != nil {

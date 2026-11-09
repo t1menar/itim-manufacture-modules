@@ -11,7 +11,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from publish.db.models import ACTIVE_RUN_STATUSES, Run
+from publish.db.models import ACTIVE_RUN_STATUSES, PlatformAccount, PublishIntent, Run
 from publish.ids import uuid7
 
 LEASE_TTL_S = 60
@@ -161,3 +161,64 @@ async def store_outcome(
 
 async def set_progress(session: AsyncSession, run_id: uuid.UUID, *, percent: int, step: str) -> None:
     await session.execute(update(Run).where(Run.id == run_id).values(percent=percent, step=step))
+
+
+async def list_enabled_accounts(
+    session: AsyncSession, *, channel_ids: list[str] | None = None
+) -> list[PlatformAccount]:
+    stmt = select(PlatformAccount).where(PlatformAccount.enabled.is_(True))
+    if channel_ids:
+        stmt = stmt.where(PlatformAccount.channel_id.in_(channel_ids))
+    result = await session.execute(stmt.order_by(PlatformAccount.created_at))
+    return list(result.scalars().all())
+
+
+async def upsert_local_intent(
+    session: AsyncSession,
+    *,
+    intent_id: uuid.UUID,
+    variant_id: uuid.UUID | None,
+    platform_account_id: uuid.UUID,
+    generation: int,
+    content_revision_id: uuid.UUID | None,
+    status: str,
+    external_post_id: str | None = None,
+    url: str | None = None,
+    published_at: dt.datetime | None = None,
+    last_error: dict[str, Any] | None = None,
+) -> None:
+    """Mirror core orchestration intent into module-publish's domain table (D23)."""
+    if variant_id is None or content_revision_id is None:
+        return
+    existing = await session.get(PublishIntent, intent_id)
+    if existing is None:
+        session.add(
+            PublishIntent(
+                id=intent_id,
+                variant_id=variant_id,
+                platform_account_id=platform_account_id,
+                generation=generation,
+                content_revision_id=content_revision_id,
+                status=status,
+                external_post_id=external_post_id,
+                url=url,
+                published_at=published_at,
+                last_error=last_error,
+            )
+        )
+        return
+    existing.status = status
+    existing.platform_account_id = platform_account_id
+    existing.generation = generation
+    if external_post_id is not None:
+        existing.external_post_id = external_post_id
+    if url is not None:
+        existing.url = url
+    if published_at is not None:
+        existing.published_at = published_at
+    if last_error is not None:
+        existing.last_error = last_error
+
+
+async def get_platform_account(session: AsyncSession, account_id: uuid.UUID) -> PlatformAccount | None:
+    return await session.get(PlatformAccount, account_id)

@@ -68,8 +68,7 @@ func TestIdeaReadyOverAMQPDuplicateAndDone(t *testing.T) {
 	}
 	// Seed platform account for publish intents (same as other tests).
 	account := uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
-		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	// D23: platform_accounts live in module-publish.
 
 	apply := func(module, stage string, output any) {
 		t.Helper()
