@@ -9,11 +9,9 @@ import respx
 from publish.instagram.errors import classify_graph_error
 from publish.instagram.real import (
     AccountAuth,
-    InstagramAPIError,
     RealInstagramClient,
     _require_public_https_url,
 )
-from publish.instagram.base import UnknownOutcomeError
 
 GRAPH = "https://graph.test"
 VER = "v22.0"
@@ -43,7 +41,11 @@ async def test_publish_reel_happy_path(client: RealInstagramClient) -> None:
     respx.get(f"{GRAPH}/{VER}/{IG}/content_publishing_limit").mock(
         return_value=httpx.Response(
             200,
-            json={"data": [{"quota_usage": 1, "config": {"quota_total": 100, "quota_duration": 86400}}]},
+            json={
+                "data": [
+                    {"quota_usage": 1, "config": {"quota_total": 100, "quota_duration": 86400}}
+                ]
+            },
         )
     )
     respx.post(f"{GRAPH}/{VER}/{IG}/media").mock(
@@ -74,7 +76,6 @@ async def test_publish_reel_happy_path(client: RealInstagramClient) -> None:
     )
     assert result.external_post_id == "media99"
     assert "instagram.com/reel" in result.url
-    # Ensure token never appears in repr
     assert TOKEN not in repr(client)
 
 
@@ -92,12 +93,16 @@ async def test_rate_limit_then_success(client: RealInstagramClient) -> None:
         ),
         httpx.Response(200, json={"id": "c2"}),
     ]
-    respx.get(f"{GRAPH}/{VER}/c2").mock(return_value=httpx.Response(200, json={"status_code": "FINISHED"}))
+    respx.get(f"{GRAPH}/{VER}/c2").mock(
+        return_value=httpx.Response(200, json={"status_code": "FINISHED"})
+    )
     respx.post(f"{GRAPH}/{VER}/{IG}/media_publish").mock(
         return_value=httpx.Response(200, json={"id": "m2"})
     )
     respx.get(f"{GRAPH}/{VER}/m2").mock(
-        return_value=httpx.Response(200, json={"id": "m2", "permalink": "https://www.instagram.com/reel/x/"})
+        return_value=httpx.Response(
+            200, json={"id": "m2", "permalink": "https://www.instagram.com/reel/x/"}
+        )
     )
     result = await client.publish_reel(
         account_id="a", video_ref="https://cdn.example/v.mp4", caption="c"

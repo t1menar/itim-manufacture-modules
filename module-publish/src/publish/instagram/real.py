@@ -70,7 +70,7 @@ class RealInstagramClient:
         # Last container id per account for reconcile after unknown.
         self._last_container: dict[str, str] = {}
 
-    def __repr__(self) -> str:  # noqa: D105
+    def __repr__(self) -> str:
         return (
             f"RealInstagramClient(graph_base={self._base!r}, api_version={self._version!r}, "
             "token=***)"
