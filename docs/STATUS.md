@@ -4,7 +4,7 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 
 ## On main
 
-#7–#17 merged (through D21 ideas-out).
+#7–#19 merged (through D23 intents-in-publish).
 
 ## Accepted decisions
 
@@ -21,17 +21,21 @@ _Last updated: 2026-11-09 (Europe/Stockholm)._
 ## Domain carve-out plan (audit)
 
 1. D21 — **done (#17)**.
-2. D22 opaque revisions — PR #18 (do not merge until asked).
-3. D23 intents → module-publish — PR #19 (do not merge until asked).
+2. D22 opaque revisions — **done (#18)**.
+3. D23 intents → module-publish — **done (#19)**.
 4. review_rounds detail → module-review — later.
 
 ## Open PRs
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #18 | D22 opaque content_revisions | owner — wait |
-| #19 | D23 intents/accounts/IG limits → module-publish | owner — wait |
+| (this) | module-review real Telegram Bot API | owner — wait |
+
+## Real integrations
+
+- **module-review Telegram:** `REVIEW_TELEGRAM_MODE=fake|real`. Real uses long-poll `getUpdates` (offset in `bot_state`, idempotent `telegram_updates_seen`). Token only via `REVIEW_TELEGRAM_BOT_TOKEN` (never logged).
+- **module-publish Instagram:** see sibling PR (Graph API Reels).
 
 ## module-video
 
-No changes required for D22/D23.
+Not touched by real Telegram / Instagram work.

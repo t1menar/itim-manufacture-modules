@@ -24,7 +24,10 @@ from review.notify.handler import NotifyHandler
 from review.observability.logging import get_logger
 from review.observability.metrics import Metrics
 from review.settings import SettingsHolder
-from review.telegram.fake import FakeTelegramBot
+from review.telegram.bot import TelegramBot
+from review.telegram.factory import build_telegram_bot
+from review.telegram.poller import TelegramPoller
+from review.telegram.real import RealTelegramBot
 from review.workers.amqp_consumer import AmqpConsumer
 
 log = get_logger(__name__)
@@ -37,7 +40,7 @@ def create_app(
     migrate_on_start: bool = False,
     start_amqp: bool = True,
     start_worker: bool = True,
-    bot: FakeTelegramBot | None = None,
+    bot: TelegramBot | None = None,
 ) -> FastAPI:
     metrics = Metrics()
     settings_holder = SettingsHolder()
@@ -45,12 +48,21 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
-    telegram = bot or FakeTelegramBot()
+    telegram = bot or build_telegram_bot(config)
     allowlist = AdminAllowlist(list(config.admin_telegram_ids))
-    flow = ReviewFlow(factory, telegram, core, allowlist, config.admin_telegram_ids)
+    chat_ids = config.reviewer_chat_ids
+    flow = ReviewFlow(factory, telegram, core, allowlist, chat_ids)
     worker = Worker(factory, flow)
     job_service = JobService(factory, worker)
-    notify_handler = NotifyHandler(factory, telegram, config.admin_telegram_ids)
+    notify_handler = NotifyHandler(factory, telegram, chat_ids)
+    poller: TelegramPoller | None = None
+    if isinstance(telegram, RealTelegramBot):
+        poller = TelegramPoller(
+            factory,
+            telegram,
+            flow.handle_update,
+            allowed_chat_ids=set(chat_ids) if chat_ids else None,
+        )
     consumer: AmqpConsumer | None = None
     if start_amqp and config.amqp_url:
         consumer = AmqpConsumer(
@@ -68,7 +80,9 @@ def create_app(
 
             upgrade_head(config.database_url)
         if start_worker:
-            worker.start()
+            worker.start(use_fake_poll=poller is None)
+            if poller is not None:
+                poller.start()
         if consumer is not None:
             await consumer.start()
         try:
@@ -76,6 +90,8 @@ def create_app(
         finally:
             if consumer is not None:
                 await consumer.stop()
+            if poller is not None:
+                await poller.stop()
             if start_worker:
                 await worker.stop()
             if own_engine:
@@ -100,6 +116,7 @@ def create_app(
     app.state.job_service = job_service
     app.state.worker = worker
     app.state.flow = flow
+    app.state.telegram_poller = poller
     app.state.amqp_consumer = consumer
     app.state.db_ready = "ok"
     app.state.amqp_ready = "not_configured" if consumer is None else "starting"
