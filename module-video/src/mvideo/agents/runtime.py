@@ -84,6 +84,7 @@ def validate_tool(
         {n: d for n, d in docs.items() if not n.startswith("_")},
         source=source,
         cfg=RuleConfig.from_settings(settings),
+        previous_script=docs.get("_previous_script"),
     )
     issues = [i.as_dict() for i in report.issues if i.file in only_out or not i.file]
     return {

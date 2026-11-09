@@ -275,6 +275,27 @@ async def list_steps(session: AsyncSession, run_id: uuid.UUID) -> list[Step]:
     return list(result.scalars())
 
 
+async def previous_outputs(
+    session: AsyncSession, production_id: uuid.UUID, exclude: uuid.UUID
+) -> dict[str, dict[str, Any]] | None:
+    """`{step: outputs}` of the latest succeeded run of the production (revise mode), or None."""
+    stmt = (
+        select(Run)
+        .where(Run.production_id == production_id, Run.status == "succeeded", Run.id != exclude)
+        .order_by(Run.created_at.desc(), Run.id.desc())
+        .limit(1)
+    )
+    run = (await session.execute(stmt)).scalar_one_or_none()
+    if run is None:
+        return None
+    out: dict[str, dict[str, Any]] = {}
+    tries: dict[str, int] = {}
+    for row in await list_steps(session, run.id):
+        if row.status in ("succeeded", "reused") and row.try_ >= tries.get(row.name, 0):
+            out[row.name], tries[row.name] = row.outputs, row.try_
+    return out
+
+
 async def update_progress(
     session: AsyncSession, run_id: uuid.UUID, *, step: str | None, percent: int, message: str | None = None
 ) -> None:

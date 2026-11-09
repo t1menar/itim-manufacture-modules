@@ -124,12 +124,12 @@ def main() -> None:
     configure_logging()
     storage = Storage(config)
     engine = create_engine(config.database_url)
-    steps, finalize, services = fake_pipeline(), fake_finalize, None
+    steps, finalize, services, revise_steps = fake_pipeline(), fake_finalize, None, None
     if os.environ.get("MVIDEO_PIPELINE") == "real":
         from mvideo.db.engine import session_factory
-        from mvideo.pipeline.real import finalize_real, real_pipeline, services_from_env
+        from mvideo.pipeline.real import finalize_real, real_pipeline, revise_pipeline, services_from_env
 
-        steps, finalize = real_pipeline(), finalize_real
+        steps, finalize, revise_steps = real_pipeline(), finalize_real, revise_pipeline()
         services = services_from_env(
             session_factory(engine),
             f"http://{os.environ.get('MVIDEO_SELF_HOST', 'module-video')}:{config.port}/mcp/sandbox",
@@ -144,6 +144,7 @@ def main() -> None:
         finalize=finalize,
         ready_checks=[storage.ready_check],
         services=services,
+        revise_steps=revise_steps,
     )
     uvicorn.run(app, host=config.host, port=config.port, log_config=None)
 
