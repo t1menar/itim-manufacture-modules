@@ -129,12 +129,16 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if s.variant != nil {
 		variant = map[string]any{"id": s.variant.String(), "language": s.language}
 	}
+	channels, err := loadJobChannels(ctx, tx, s)
+	if err != nil {
+		return err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
 		"input": map[string]any{
 			"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
-			"channels": []any{}, "upstream": map[string]any{},
+			"channels": channels, "upstream": map[string]any{},
 		},
 		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
 		"credentials": []string{},
@@ -154,6 +158,42 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 		Envelope: messaging.Envelope{Type: "job.requested", Producer: "core", ProductionID: &prod,
 			Job: &messaging.JobRef{JobID: jobID, Fence: fence}, Payload: payload},
 	})
+}
+
+
+// loadJobChannels builds the job-request channels array from the variant (or the
+// production's variants when the stage is production-scoped). Module-video requires
+// at least one channel object with id/language/name/settings (D21 job input).
+func loadJobChannels(ctx context.Context, tx pgx.Tx, s jobSpec) ([]any, error) {
+	var ids []string
+	if s.variant != nil {
+		if err := tx.QueryRow(ctx, `SELECT channels FROM variants WHERE id = $1`, *s.variant).Scan(&ids); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT channels FROM variants WHERE production_id = $1 ORDER BY id LIMIT 1), '{}')`, s.production).Scan(&ids); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]any, 0, len(ids))
+	for _, id := range ids {
+		var name, language string
+		if err := tx.QueryRow(ctx, `SELECT name, language FROM channels WHERE id = $1`, id).Scan(&name, &language); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				language = s.language
+				if language == "" {
+					language = "en"
+				}
+				name = id
+			} else {
+				return nil, err
+			}
+		}
+		out = append(out, map[string]any{
+			"id": id, "language": language, "name": name, "settings": map[string]any{},
+		})
+	}
+	return out, nil
 }
 
 // Takeover assigns a live job to another executor (activation switch or explicit admin

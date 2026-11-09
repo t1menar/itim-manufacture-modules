@@ -70,13 +70,17 @@ func (e *Engine) CreateRepublishJob(ctx context.Context, tx pgx.Tx, variantID, i
 		e.Log.Warn("no active publish module; republish job stays queued", "job_id", jobID, "intent_id", intentID)
 		return jobID, nil
 	}
+	channels, err := loadJobChannels(ctx, tx, jobSpec{production: production, variant: &variantID, language: language})
+	if err != nil {
+		return uuid.Nil, err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": 1, "fence": 1, "production_id": production,
 		"stage": "publish", "mode": "republish", "round": 0,
 		"variant": map[string]any{"id": variantID.String(), "language": language},
 		"input": map[string]any{
 			"idea_ref": map[string]any{"id": ideaID, "rev": ideaRev},
-			"channels": []any{}, "upstream": map[string]any{},
+			"channels": channels, "upstream": map[string]any{},
 			"intents": []map[string]any{{
 				"intent_id": intentID.String(), "content_revision_id": revisionID.String(), "generation": generation,
 			}},

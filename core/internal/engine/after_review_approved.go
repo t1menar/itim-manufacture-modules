@@ -203,13 +203,17 @@ func (e *Engine) CreateFirstPublishJob(ctx context.Context, tx pgx.Tx, variantID
 		e.Log.Warn("no active publish module; publish job stays queued", "job_id", jobID)
 		return jobID, nil
 	}
+	channels, err := loadJobChannels(ctx, tx, jobSpec{production: production, variant: &variantID, language: language})
+	if err != nil {
+		return uuid.Nil, err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": 1, "fence": 1, "production_id": production,
 		"stage": "publish", "mode": "create", "round": 0,
 		"variant": map[string]any{"id": variantID.String(), "language": language},
 		"input": map[string]any{
 			"idea_ref": map[string]any{"id": ideaID, "rev": ideaRev},
-			"channels": []any{}, "upstream": upstream, "intents": intentRows,
+			"channels": channels, "upstream": upstream, "intents": intentRows,
 		},
 		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
 		"credentials": []string{},

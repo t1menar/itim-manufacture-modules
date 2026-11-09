@@ -120,4 +120,12 @@ func TestIdeaReadyOverAMQPDuplicateAndDone(t *testing.T) {
 	if int(ref["id"].(float64)) != int(id) || int(ref["rev"].(float64)) != int(rev) {
 		t.Fatalf("idea_ref=%v", ref)
 	}
+	chs, _ := input["channels"].([]any)
+	if len(chs) == 0 {
+		t.Fatal("job input.channels must be non-empty for module-video")
+	}
+	ch0, _ := chs[0].(map[string]any)
+	if ch0["id"] != "itim" || ch0["language"] != "en" {
+		t.Fatalf("channels[0]=%v", ch0)
+	}
 }
