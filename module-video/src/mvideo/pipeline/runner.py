@@ -37,6 +37,9 @@ from mvideo.core_client import (
 from mvideo.db import repo
 from mvideo.db.models import ACTIVE_RUN_STATUSES, Run
 from mvideo.ideas import repo as idea_repo
+from mvideo.observability.logging import forget_secret, register_secret
+from mvideo.observability.metrics import Metrics
+from mvideo.observability.tracing import job_span, span
 from mvideo.pipeline.budget import check_agent_run_gate
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import LeaseLost, RunCancelled, StepError
@@ -112,7 +115,10 @@ class Runner:
         clock: Callable[[], dt.datetime] = _utcnow,
         services: dict[str, Any] | None = None,
         revise_steps: list[Step] | None = None,
+        metrics: Metrics | None = None,
     ) -> None:
+        self.metrics = metrics or Metrics()
+        self._run_secrets: dict[uuid.UUID, str] = {}
         self._revise_steps = revise_steps  # None: revise runs the same steps (fakes)
         self._services = services or {}  # launcher, source, docker, ... for RunContext
         self._factory = factory
@@ -148,14 +154,18 @@ class Runner:
         self._cancel_events[run_id] = cancel
         supervisor = asyncio.create_task(self._supervise(run_id, cancel, lost))
         try:
-            await self._drive(run, cancel, lost)
+            with job_span(run.traceparent, str(run.production_id), job_id=str(run.job_id), mode=run.mode):
+                await self._drive(run, cancel, lost)
         except RunCancelled:
+            self.metrics.jobs.labels(run.mode, "cancelled").inc()
             await self._finish(run_id, "cancelled")
             log.info("run_cancelled")
         except LeaseLost:
             log.warning("lease_lost_stopping")
         finally:
             self._cancel_events.pop(run_id, None)
+            if (secret := self._run_secrets.pop(run_id, None)) is not None:
+                forget_secret(secret)
             supervisor.cancel()
             await asyncio.gather(supervisor, return_exceptions=True)
             structlog.contextvars.clear_contextvars()
@@ -219,11 +229,15 @@ class Runner:
             input=JobInput.model_validate(run.input),
             settings=settings,
             storage=self._storage,
+            metrics=self.metrics,
             **self._services,
         )
+        ctx.spent_usd = float(run.cost_usd)  # a resumed run keeps what it already spent
         try:
             ctx.idea = await self._load_idea(ctx)
             ctx.credential = await self._fetch_credential(call, settings)
+            register_secret(ctx.credential.value)
+            self._run_secrets[run.id] = ctx.credential.value
             await self._run_steps(run, ctx, call, cancel, lost)
             body = await self._build_result(run.id, ctx)
         except (RunCancelled, LeaseLost, asyncio.CancelledError):
@@ -315,6 +329,7 @@ class Runner:
                     )  # fmt: skip
                     await repo.update_progress(s, run.id, step=spec.name, percent=spec.hi)
                     ctx.outputs[spec.name] = _artifacts(hit.outputs)
+                    self.metrics.step_reused.labels(spec.name).inc()
                     log.info("step_reused", step=spec.name, reused_from=str(hit.id))
                     continue
                 if spec.uses_agent:
@@ -324,21 +339,30 @@ class Runner:
 
             started = self._clock()
             async with self._factory() as s, s.begin():
-                await repo.upsert_step(
+                row = await repo.upsert_step(
                     s, run.id, spec.name, 1, input_hash=digest, status="running", started_at=started,
                     finished_at=None, error=None, outputs={},
                 )  # fmt: skip
+                step_id = row.id
                 await repo.update_progress(s, run.id, step=spec.name, percent=spec.lo)
             await self._progress(call, spec.lo, spec.name, f"{spec.name} started")
 
             try:
-                produced = await self._race(spec, ctx, cancel, lost)
+                with span(f"step.{spec.name}", step=spec.name):
+                    produced = await self._race(spec, ctx, cancel, lost)
             except StepError as exc:
+                await self._account(run.id, step_id, ctx)
                 await self._mark_step_failed(run.id, spec, digest, exc)
                 exc.step = exc.step or spec.name
+                self._count_failure(spec.name, exc)
+                raise
+            except BaseException:
+                await self._account(run.id, step_id, ctx)  # a cancelled agent run was still paid for
                 raise
 
             finished = self._clock()
+            await self._account(run.id, step_id, ctx)
+            self.metrics.step_duration.labels(spec.name).observe((finished - started).total_seconds())
             async with self._factory() as s, s.begin():
                 await repo.upsert_step(
                     s, run.id, spec.name, 1, input_hash=digest, status="succeeded",
@@ -351,6 +375,29 @@ class Runner:
                     await repo.log_usage(s, "agent_run", run.id, step=spec.name, at=finished)
             ctx.outputs[spec.name] = produced
             await self._progress(call, spec.hi, spec.name, f"{spec.name} finished")
+
+    async def _account(self, run_id: uuid.UUID, step_id: uuid.UUID, ctx: RunContext) -> None:
+        """Add the agent runs of this step to the run's cost (once each, also after a failure)."""
+        fresh = ctx.usage[ctx.usage_flushed :]
+        if not fresh:
+            return
+        ctx.usage_flushed = len(ctx.usage)
+        async with self._factory() as s, s.begin():
+            for c in fresh:
+                await repo.add_cost(
+                    s, run_id, cost_usd=c.usd, tokens_in=c.tokens_in, tokens_out=c.tokens_out,
+                    cache_read_tokens=c.cache_read, cache_write_tokens=c.cache_write, step_id=step_id,
+                )  # fmt: skip
+
+    def _count_failure(self, step: str, exc: StepError) -> None:
+        m = self.metrics
+        m.step_failures.labels(step, exc.error_class, exc.code).inc()
+        if exc.error_class == "blocked":
+            m.blocked.labels(step).inc()
+        if exc.code == "agent_auth_failed":
+            m.auth_failures.labels(step).inc()
+        if exc.code == "agent_rate_limited":
+            m.rate_limited.labels(step).inc()
 
     async def _load_previous(self, run: Run, ctx: RunContext) -> None:
         """Revise: files of the last succeeded run; analysis and research stay as they were."""
@@ -399,8 +446,10 @@ class Runner:
         try:
             await self._core.progress(call, percent, step, message)
         except CoreRejected as exc:
+            self.metrics.core_callback_failures.labels("progress").inc()
             raise RunCancelled from exc  # the core dropped this job (cancelled or stale attempt)
         except Exception:
+            self.metrics.core_callback_failures.labels("progress").inc()
             log.warning("progress_not_delivered", step=step, percent=percent)
 
     # ---- outcome -----------------------------------------------------------------------------
@@ -429,13 +478,17 @@ class Runner:
         async with self._factory() as s, s.begin():
             await repo.store_outcome(s, run.id, result=body)  # persisted before it is sent
         try:
-            await self._core.result(call, body)
+            with span("core.callback", kind="result"):
+                await self._core.result(call, body)
         except CoreUnavailable:
+            self.metrics.core_callback_failures.labels("result").inc()
             log.error("result_callback_undelivered_will_retry_after_restart")
             await self._release(run.id)
             return
         except CoreRejected:
+            self.metrics.core_callback_failures.labels("result").inc()
             log.warning("result_callback_rejected_by_core")
+        self._count_job(run, "succeeded", body["metrics"].get("cost_usd", 0.0))
         await self._finish(run.id, "succeeded")
 
     async def _fail(self, run: Run, call: JobCall, exc: StepError) -> None:
@@ -446,14 +499,26 @@ class Runner:
         async with self._factory() as s, s.begin():
             await repo.store_outcome(s, run.id, error=body)
         try:
-            await self._core.fail(call, body)
+            with span("core.callback", kind="fail"):
+                await self._core.fail(call, body)
         except CoreUnavailable:
+            self.metrics.core_callback_failures.labels("fail").inc()
             log.error("fail_callback_undelivered_will_retry_after_restart")
             await self._release(run.id)
             return
         except CoreRejected:
+            self.metrics.core_callback_failures.labels("fail").inc()
             log.warning("fail_callback_rejected_by_core")
+        self._count_job(run, "blocked" if body.get("class") == "blocked" else "failed", float(run.cost_usd))
         await self._finish(run.id, "failed")
+
+    def _count_job(self, run: Run, status: str, cost_usd: float) -> None:
+        m = self.metrics
+        m.jobs.labels(run.mode, status).inc()
+        created = getattr(run, "created_at", None)
+        if created is not None:
+            m.job_duration.labels(run.mode).observe(max(0.0, (self._clock() - created).total_seconds()))
+        m.job_cost.labels(run.mode).observe(cost_usd)
 
     async def _finish(self, run_id: uuid.UUID, status: str) -> None:
         async with self._factory() as s, s.begin():

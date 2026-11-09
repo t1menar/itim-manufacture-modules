@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from mvideo import __version__
@@ -52,6 +53,7 @@ def create_app(
     revise_steps: list[Step] | None = None,
 ) -> FastAPI:
     auth = AuthState()
+    metrics = Metrics()
     worker: Worker | None = None
     runner: Runner | None = None
     service: JobService | None = None
@@ -77,6 +79,7 @@ def create_app(
             cancel_poll_s=cancel_poll_s,
             services=services,
             revise_steps=revise_steps,
+            metrics=metrics,
         )
         worker = Worker(factory=factory, runner=runner, poll_s=worker_poll_s, lease_ttl_s=LEASE_TTL_S)
         service = JobService(factory, worker, runner)
@@ -121,7 +124,7 @@ def create_app(
         )
     app.state.idea_runtime = idea_runtime
     app.state.config = config
-    app.state.metrics = Metrics()
+    app.state.metrics = metrics
     app.state.engine = engine
     app.state.health_checks = list(health_checks or [])
     if engine is not None:
@@ -137,6 +140,21 @@ def create_app(
     app.include_router(health.router)
     app.include_router(jobs.router)
     app.include_router(mcp_sandbox.router)
+
+    @app.middleware("http")
+    async def count_requests(request: Request, call_next: Any) -> Any:
+        started = time.monotonic()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = getattr(request.scope.get("route"), "path", "unmatched")  # template, never the raw path
+            labels = (route, request.method, str(status))
+            metrics.http_requests.labels(*labels).inc()
+            metrics.http_duration.labels(*labels).observe(time.monotonic() - started)
+
     app.include_router(admin_prompts.router)
     app.include_router(admin_credentials.router)
     return app

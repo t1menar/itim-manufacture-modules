@@ -14,6 +14,7 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from mvideo.config import BootstrapConfig
+from mvideo.observability.tracing import span
 
 
 class StorageError(Exception):
@@ -92,8 +93,9 @@ class Storage:
     ) -> Artifact:
         digest = hashlib.sha256(data).hexdigest()
         try:
-            async with self._client() as s3:
-                await s3.put_object(
+            with span("s3.upload", key=key, size=len(data)):
+                async with self._client() as s3:
+                    await s3.put_object(
                     Bucket=self._bucket, Key=key, Body=data, ContentType=content_type,
                     Metadata={"sha256": digest},
                 )  # fmt: skip
@@ -113,8 +115,9 @@ class Storage:
                 size += len(chunk)
         digest = h.hexdigest()
         try:
-            async with self._client() as s3:
-                await s3.upload_file(
+            with span("s3.upload", key=key, size=size):
+                async with self._client() as s3:
+                    await s3.upload_file(
                     str(path), self._bucket, key,
                     ExtraArgs={"ContentType": content_type, "Metadata": {"sha256": digest}},
                 )  # fmt: skip

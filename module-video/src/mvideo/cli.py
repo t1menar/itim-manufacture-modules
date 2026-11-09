@@ -12,6 +12,7 @@ from mvideo.config import BootstrapConfig, ConfigError
 from mvideo.core_client import CoreClient
 from mvideo.db.engine import create_engine
 from mvideo.observability.logging import configure_logging
+from mvideo.observability.tracing import setup_tracing
 from mvideo.pipeline.steps.fake import fake_finalize, fake_pipeline
 from mvideo.storage import Storage
 
@@ -122,6 +123,7 @@ def main() -> None:
         sys.stderr.write(f"mvideo: configuration error: {exc}\n")
         raise SystemExit(2) from exc
     configure_logging()
+    setup_tracing(config.otlp_endpoint)
     storage = Storage(config)
     engine = create_engine(config.database_url)
     steps, finalize, services, revise_steps = fake_pipeline(), fake_finalize, None, None

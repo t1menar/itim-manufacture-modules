@@ -8,6 +8,7 @@ from typing import Any
 
 from mvideo.contract import JobInput
 from mvideo.core_client import Credential
+from mvideo.observability.metrics import Metrics
 from mvideo.settings_model import VideoSettings
 from mvideo.storage import Artifact, Storage, object_key
 
@@ -33,6 +34,9 @@ class RunContext:
     sandbox_mcp_url: str = ""
     fix_reports: dict[str, str] = field(default_factory=dict)  # step -> check report of a fix round
     usage: list[Any] = field(default_factory=list)  # Cost records of agent runs (accounted by the runner)
+    usage_flushed: int = 0  # how many of `usage` the runner already added to the run's cost
+    spent_usd: float = 0.0  # cost of the job so far (restored from the run row on resume)
+    metrics: Any = field(default_factory=Metrics)  # mvideo.observability.metrics.Metrics
     # revise mode: files of the last succeeded run of the production, and what this run found out
     previous: dict[str, dict[str, Artifact]] = field(default_factory=dict)
     values_changed: list[str] = field(default_factory=list)

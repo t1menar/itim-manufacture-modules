@@ -12,6 +12,7 @@ from mvideo.agents.launcher import AgentRequest, AgentResult
 from mvideo.agents.run import run_agent
 from mvideo.agents.workspace import Workspace
 from mvideo.ideas.document import idea_text
+from mvideo.observability.tracing import span
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
 from mvideo.pipeline.steps.base import Step
@@ -21,6 +22,7 @@ from mvideo.validate.rules import RuleConfig
 from mvideo.validate.runner import validate_documents
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "validate" / "schemas"
+MIN_BUDGET_USD = 0.1
 REFERENCE_DIR = Path(__file__).resolve().parents[4] / "reference" / "create_database"
 BLOCKED_CODE = {
     "analysis": "idea_not_showable", "research": "facts_missing", "script": "facts_missing",
@@ -176,8 +178,9 @@ class AgentStep(Step):
         """Run, validate, resume with the validator output up to `limits.schema_retries` times."""
         retries = ctx.settings.limits.schema_retries
         for attempt in range(retries + 1):
-            res, _, cost = await run_agent(ctx.launcher, req)
-            ctx.usage.append(cost)
+            req.max_budget_usd = self.reserve_budget(ctx)
+            with span("agent.run", step=self.name, attempt=attempt):
+                res, _, _ = await run_agent(ctx.launcher, req, on_cost=lambda c, r: self.account(ctx, c, r))
             out = {k: v for k, v in res.files.items() if not k.startswith("_")}
             if "blocked.json" in out:
                 raise self.blocked_error(out)
@@ -188,6 +191,7 @@ class AgentStep(Step):
             report = [i.as_dict() for i in issues] + [
                 {"message": f"/out/{f} was not written"} for f in missing
             ]
+            ctx.metrics.schema_retries.labels(self.name).inc()
             if attempt == retries:
                 raise StepError(
                     "fatal", "schema_invalid", f"{self.name} output invalid after {retries} resumes",
@@ -200,6 +204,34 @@ class AgentStep(Step):
                 prompt=RESUME_PROMPT.format(files=", ".join(self.produces)),
             )  # fmt: skip
         raise AssertionError("unreachable")
+
+    def reserve_budget(self, ctx: RunContext) -> float | None:
+        """`usd` mode (05 section 5): `remaining = job_budget_usd - spent`; below 0.1 the job stops,
+        otherwise the run gets `min(step budget, remaining)`. `estimate` mode enforces nothing."""
+        if ctx.settings.resolved_cost_mode() != "usd":
+            return None
+        remaining = ctx.settings.limits.job_budget_usd - ctx.spent_usd
+        if remaining < MIN_BUDGET_USD:
+            raise StepError(
+                "fatal", "budget_exceeded",
+                f"job budget {ctx.settings.limits.job_budget_usd} USD is used up (spent {ctx.spent_usd:.4f})",
+                step=self.name,
+            )  # fmt: skip
+        step = ctx.settings.limits.steps.get(self.name)
+        return min(step.budget_usd, remaining) if step else remaining
+
+    def account(self, ctx: RunContext, cost: Any, res: AgentResult) -> None:
+        """Remember the price of one run and publish its metrics."""
+        ctx.usage.append(cost)
+        ctx.spent_usd += cost.usd
+        m, step = ctx.metrics, self.name
+        for kind, n in (("input", cost.tokens_in), ("output", cost.tokens_out),
+                        ("cache_read", cost.cache_read), ("cache_write", cost.cache_write)):  # fmt: skip
+            m.tokens.labels(step, kind).inc(n)
+        m.cost.labels(step, cost.model, str(cost.estimated).lower()).inc(cost.usd)
+        m.agent_turns.labels(step).observe(cost.turns)
+        if res.egress_denied:
+            m.egress_denied.labels(step).inc(res.egress_denied)
 
     async def upload(self, ctx: RunContext, files: dict[str, bytes]) -> dict[str, Artifact]:
         out: dict[str, Artifact] = {}

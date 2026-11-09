@@ -79,6 +79,7 @@ class FakeCore:
         self.fails: list[tuple[str, dict[str, Any]]] = []
         self.credential_reads: list[str] = []
         self.credential_kind = "claude_oauth_token"
+        self.credential_value = "secret-token-value"
         self.credential_error: str | None = None  # not_found | forbidden
         self.result_error: Exception | None = None
         self.progress_error: Exception | None = None
@@ -100,7 +101,7 @@ class FakeCore:
         self.credential_reads.append(ref)
         if self.credential_error is not None:
             raise CredentialError(self.credential_error, ref)
-        return Credential(ref=ref, kind=self.credential_kind, value="secret-token-value")
+        return Credential(ref=ref, kind=self.credential_kind, value=self.credential_value)
 
 
 __all__ = ["CoreRejected", "CoreUnavailable", "FakeCore", "job_request", "settings_values"]

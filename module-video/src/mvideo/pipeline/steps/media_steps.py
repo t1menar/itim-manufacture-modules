@@ -7,9 +7,11 @@ import dataclasses
 import hashlib
 import json
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
+from mvideo.observability.tracing import span
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
 from mvideo.pipeline.steps.agent_step import (
@@ -95,17 +97,21 @@ class CaptureStep(AgentStep):
                 plan = json.loads(out["capture.plan.json"])
                 problems: list[str] = []
                 log = ""
+                t_sandbox = time.monotonic()
                 try:
-                    capture, log = await asyncio.to_thread(
-                        run_capture, ctx.docker, ctx.settings, plan, script, run_id=req.step_id
-                    )
+                    with span("sandbox.exec", purpose="capture"):
+                        capture, log = await asyncio.to_thread(
+                            run_capture, ctx.docker, ctx.settings, plan, script, run_id=req.step_id
+                        )
                     problems = check_values(capture)
                 except CaptureFailure as exc:
                     if exc.code == "version_mismatch":
                         raise StepError("blocked", "version_mismatch", str(exc), step=self.name) from exc
                     problems, log = [str(exc)], exc.log
+                ctx.metrics.sandbox_seconds.labels("capture").observe(time.monotonic() - t_sandbox)
                 if not problems:
                     break
+                ctx.metrics.fix_rounds.labels("capture").inc()
                 if attempt == rounds:
                     raise StepError(
                         "blocked",
@@ -189,12 +195,19 @@ class RenderStep(Step):
                     "fatal", "check_failed", f"duration {total:.1f} s outside {lo:g}-{hi:g} s",
                     step=self.name, details={"checks": checks},
                 )  # fmt: skip
-            await asyncio.to_thread(self._sample_frames, rctx, ctx.settings.render.glyph_sample_s, checks)
+            await asyncio.to_thread(
+                self._sample_frames, rctx, ctx.settings.render.glyph_sample_s, checks, ctx.metrics
+            )
             silent = tmpd / "video.en.silent.mp4"
-            stats = await asyncio.to_thread(
+            t_render = time.monotonic()
+            with span("render.chunk", frames=self.limit_frames or rctx.timeline.frames):
+                stats = await asyncio.to_thread(
                 render_video, resolved, silent, tmpd / "chunks", fonts_dir=self.fonts_dir,
                 settings=values, reading_wps=reading_wps(ctx), limit_frames=self.limit_frames,
             )  # fmt: skip
+            elapsed = time.monotonic() - t_render
+            ctx.metrics.render_frames.inc(stats.frames)
+            ctx.metrics.render_ratio.observe(elapsed / max(stats.frames / rctx.timeline.fps, 0.001))
             expected = min(rctx.timeline.frames, self.limit_frames or rctx.timeline.frames)
             checks["frames"] = {
                 "status": "pass" if stats.frames == expected else "fail",
@@ -236,7 +249,7 @@ class RenderStep(Step):
                 out[name] = await st.put_bytes(ctx.key(self.name, name), data, kind="json")
         return out
 
-    def _sample_frames(self, rctx: Any, step_s: float, checks: dict[str, Any]) -> None:
+    def _sample_frames(self, rctx: Any, step_s: float, checks: dict[str, Any], metrics: Any) -> None:
         """Strict canvas every `glyph_sample_s`: a missing glyph or a safe-zone breach fails the step."""
         t, last = 0.0, rctx.timeline.total_s
         limit = (self.limit_frames or 10**9) / rctx.timeline.fps
@@ -245,11 +258,15 @@ class RenderStep(Step):
                 render_frame(rctx, t, strict=True)
                 t += max(step_s, 0.05)
         except GlyphMissing as exc:
+            metrics.missing_glyphs.labels(getattr(exc, "role", "unknown")).inc()
+            metrics.check_failures.labels("glyphs").inc()
             checks["glyphs"] = {"status": "fail", "value": str(exc), "limit": 0}
             raise StepError(
                 "fatal", "check_failed", f"glyph check: {exc}", step=self.name, details={"checks": checks}
             ) from exc
         except SafeZoneError as exc:
+            metrics.safe_zone.inc()
+            metrics.check_failures.labels("safe_zone").inc()
             checks["safe_zone"] = {"status": "fail", "value": str(exc), "limit": 0}
             raise StepError(
                 "fatal", "check_failed", f"safe zone: {exc}", step=self.name, details={"checks": checks}
@@ -384,6 +401,12 @@ class PackageStep(AgentStep):
                 },
             }  # fmt: skip
             failed = {k: v for k, v in checks.items() if v["status"] == "fail"}
+            m = ctx.metrics
+            for name in failed:
+                m.check_failures.labels(name).inc()
+            m.loudness.observe(loud.integrated)
+            m.file_size.observe(final.stat().st_size)
+            m.duration.labels("en").observe(frames / info.fps)
             if failed:
                 raise StepError("fatal", "check_failed", "package checks failed", step=self.name,
                                 details={"checks": failed})  # fmt: skip

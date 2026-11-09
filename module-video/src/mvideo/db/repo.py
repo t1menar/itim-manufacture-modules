@@ -347,6 +347,11 @@ async def finish_run(
     )
 
 
+async def count_runs_by_status(session: AsyncSession) -> dict[str, int]:
+    rows = (await session.execute(select(Run.status, func.count()).group_by(Run.status))).all()
+    return {status: n for status, n in rows}
+
+
 async def log_usage(
     session: AsyncSession,
     kind: str,
