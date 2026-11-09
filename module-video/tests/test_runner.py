@@ -66,7 +66,7 @@ async def test_progress_follows_the_step_ranges(harness: Harness) -> None:
 async def test_credential_is_fetched_once_per_job(harness: Harness) -> None:
     await harness.submit()
     await harness.run_all()
-    assert harness.core.credential_reads == ["cred:claude-subscription"]
+    assert harness.core.credential_reads == ["CLAUDE_OAUTH_TOKEN"]
 
 
 async def test_api_status_document_after_success(harness: Harness) -> None:

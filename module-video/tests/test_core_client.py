@@ -111,16 +111,16 @@ async def test_other_4xx_is_not_retried() -> None:
 
 @respx.mock
 async def test_credential_read() -> None:
-    route = respx.get("http://core:8080/internal/v1/credentials/cred%3Aclaude-subscription").respond(
+    route = respx.get("http://core:8080/internal/v1/credentials/CLAUDE_OAUTH_TOKEN").respond(
         200,
         json={
-            "ref": "cred:claude-subscription",
+            "ref": "CLAUDE_OAUTH_TOKEN",
             "kind": "claude_oauth_token",
             "value": "s3cret",
             "expires_at": None,
         },
     )
-    cred = await client(Clock()).get_credential(CALL, "cred:claude-subscription")
+    cred = await client(Clock()).get_credential(CALL, "CLAUDE_OAUTH_TOKEN")
     assert (cred.kind, cred.value) == ("claude_oauth_token", "s3cret")
     assert route.calls.last.request.headers["x-job-id"] == "j1"
     assert "s3cret" not in repr(cred)

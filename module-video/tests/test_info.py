@@ -53,7 +53,7 @@ def test_minimal_settings_validate_against_served_schema(client: TestClient) -> 
 def test_stage1_defaults() -> None:
     s = VideoSettings.model_validate(MINIMAL)
     assert s.agent.auth.mode == "subscription"
-    assert s.agent.auth.credential_ref == "cred:claude-subscription"
+    assert s.agent.auth.credential_ref == "CLAUDE_OAUTH_TOKEN"
     assert s.limits.job_budget_usd == 15
     assert (s.limits.max_jobs_per_day, s.limits.max_agent_runs_per_hour) == (6, 12)
     assert s.limits.steps["research"].max_turns == 60

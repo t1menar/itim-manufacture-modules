@@ -39,15 +39,19 @@ async def test_api_stores_lists_without_values_and_deletes(
         transport=httpx.ASGITransport(app=app), base_url="http://t", headers=headers
     ) as c:
         body = {"kind": "claude_oauth_token", "value": SECRET, "note": "local"}
-        assert (await c.put("/admin/v1/credentials/claude-main", json=body)).status_code == 201
-        assert (await c.put("/admin/v1/credentials/claude-main", json=body)).status_code == 204
+        assert (await c.put("/admin/v1/credentials/CLAUDE_OAUTH_TOKEN", json=body)).status_code == 201
+        assert (await c.put("/admin/v1/credentials/CLAUDE_OAUTH_TOKEN", json=body)).status_code == 204
         listing = await c.get("/admin/v1/credentials")
         assert SECRET not in listing.text
-        assert listing.json()[0]["ref"] == "claude-main" and listing.json()[0]["length"] == len(SECRET)
+        assert listing.json()[0]["ref"] == "CLAUDE_OAUTH_TOKEN" and listing.json()[0]["length"] == len(SECRET)
         bad = await c.put("/admin/v1/credentials/x", json={"kind": "nope", "value": SECRET})
         assert bad.status_code == 422 and SECRET not in bad.text
-        assert (await c.delete("/admin/v1/credentials/claude-main")).status_code == 204
-        assert (await c.delete("/admin/v1/credentials/claude-main")).status_code == 404
+        lower = await c.put(
+            "/admin/v1/credentials/cred:claude", json={"kind": "claude_oauth_token", "value": SECRET}
+        )
+        assert lower.status_code == 422
+        assert (await c.delete("/admin/v1/credentials/CLAUDE_OAUTH_TOKEN")).status_code == 204
+        assert (await c.delete("/admin/v1/credentials/CLAUDE_OAUTH_TOKEN")).status_code == 404
 
 
 async def test_gateway_prefers_the_database_and_falls_back_to_core(
@@ -58,9 +62,11 @@ async def test_gateway_prefers_the_database_and_falls_back_to_core(
         transport=httpx.ASGITransport(app=app), base_url="http://t",
         headers={"Authorization": f"Bearer {TOKEN}"},
     ) as c:  # fmt: skip
-        await c.put("/admin/v1/credentials/claude-main", json={"kind": "claude_oauth_token", "value": SECRET})
+        await c.put(
+            "/admin/v1/credentials/CLAUDE_OAUTH_TOKEN", json={"kind": "claude_oauth_token", "value": SECRET}
+        )
     gw = LocalCredentialGateway(FakeCore(), session_factory(engine))  # type: ignore[arg-type]
-    cred = await gw.get_credential(CALL, "claude-main")
+    cred = await gw.get_credential(CALL, "CLAUDE_OAUTH_TOKEN")
     assert (cred.kind, cred.value) == ("claude_oauth_token", SECRET) and SECRET not in repr(cred)
     try:
         await gw.get_credential(CALL, "other")

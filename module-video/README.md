@@ -100,11 +100,11 @@ in `src/mvideo/ideas/schemas/`, a test fails when they drift).
 For a local deployment the Claude credential lives in this module's database (table `credentials`, migration 0005). The module looks there first and asks the core only when the ref is not stored. Values are kept as plain text, so use this only on a machine you own. The API never returns a value, and the logs and `repr` never show it.
 
 ```bash
-curl -X PUT localhost:8080/admin/v1/credentials/claude-main \
+curl -X PUT localhost:8080/admin/v1/credentials/CLAUDE_OAUTH_TOKEN \
   -H "Authorization: Bearer $MODULE_TOKEN" -H 'Content-Type: application/json' \
   -d '{"kind":"claude_oauth_token","value":"'"$TOKEN"'","note":"local"}'   # 201 new, 204 replaced
 curl localhost:8080/admin/v1/credentials -H "Authorization: Bearer $MODULE_TOKEN"   # ref, kind, length, no value
-curl -X DELETE localhost:8080/admin/v1/credentials/claude-main -H "Authorization: Bearer $MODULE_TOKEN"
+curl -X DELETE localhost:8080/admin/v1/credentials/CLAUDE_OAUTH_TOKEN -H "Authorization: Bearer $MODULE_TOKEN"
 ```
 
-`kind` is `claude_oauth_token` (subscription) or `anthropic_api_key` (api_key). A job whose `agent.auth.credential_ref` names a stored credential is accepted even when the job does not list it in `credentials`.
+Names are CAPITAL_SNAKE_CASE (`CLAUDE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`); the table and the API both enforce `^[A-Z][A-Z0-9_]{1,63}$`. Refs fetched from the core keep the core's `cred:<slug>` form. `kind` is `claude_oauth_token` (subscription) or `anthropic_api_key` (api_key). A job whose `agent.auth.credential_ref` names a stored credential is accepted even when the job does not list it in `credentials`.

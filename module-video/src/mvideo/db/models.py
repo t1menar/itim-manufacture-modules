@@ -283,6 +283,7 @@ class StoredCredential(Base):
     """A secret kept by this module (Claude token or API key); the API never returns it."""
 
     __tablename__ = "credentials"
+    __table_args__ = (CheckConstraint("ref ~ '^[A-Z][A-Z0-9_]{1,63}$'", name="ck_credentials_ref"),)
 
     ref: Mapped[str] = mapped_column(Text, primary_key=True)
     kind: Mapped[str] = mapped_column(Text)

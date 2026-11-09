@@ -79,10 +79,10 @@ class AgentAuth(BaseModel):
 
     mode: Literal["subscription", "api_key"] = "subscription"
     credential_ref: str = Field(
-        default="cred:claude-subscription",
+        default="CLAUDE_OAUTH_TOKEN",
         description=(
             "subscription: credential kind claude_oauth_token (token from claude setup-token); "
-            "api_key: kind anthropic_api_key, e.g. cred:anthropic-main"
+            "api_key: kind anthropic_api_key, e.g. ANTHROPIC_API_KEY"
         ),
     )
 

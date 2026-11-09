@@ -62,7 +62,7 @@ def job_request(
             "channels": [{"id": "itim", "language": "en", "name": "iTim", "settings": {}}],
         },
         "settings": {"version": 7, "values": settings if settings is not None else settings_values()},
-        "credentials": ["cred:claude-subscription"],
+        "credentials": ["CLAUDE_OAUTH_TOKEN"],
         "callback": {"base_url": f"http://core:8080/internal/v1/jobs/{jid}"},
         "deadline": (deadline or dt.datetime.now(dt.UTC) + dt.timedelta(hours=1)).isoformat(),
     }

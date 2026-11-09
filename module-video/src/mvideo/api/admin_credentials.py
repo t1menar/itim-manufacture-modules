@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -15,6 +16,7 @@ from mvideo.db.engine import session_factory
 router = APIRouter(prefix="/admin/v1/credentials", dependencies=[Depends(require_bearer)])
 
 KINDS = ("claude_oauth_token", "anthropic_api_key")
+REF = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")
 
 
 class NewCredential(BaseModel):
@@ -42,6 +44,8 @@ async def put_credential(ref: str, request: Request) -> Response:
         body = NewCredential.model_validate(await request.json())
     except (ValueError, ValidationError) as exc:
         raise ProblemError(422, "input_invalid", "Request body is invalid (the value is not echoed)") from exc
+    if not REF.match(ref):
+        raise ProblemError(422, "input_invalid", "ref must be CAPITAL_SNAKE_CASE, e.g. CLAUDE_OAUTH_TOKEN")
     if body.kind not in KINDS:
         raise ProblemError(422, "input_invalid", f"kind must be one of {', '.join(KINDS)}")
     actor = request.headers.get("x-actor", "admin")[:100]
