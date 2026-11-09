@@ -28,9 +28,14 @@ jobs:
           enable-cache: true
       - name: start MinIO
         run: |
-          docker run -d --name mf-minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=manufacture -e MINIO_ROOT_PASSWORD=manufacture_dev_secret \
-            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/minio/data" "$RUNNER_TEMP/minio/bin"
+          curl -fsSL -o "$RUNNER_TEMP/minio/bin/minio" \
+            "https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z"
+          chmod +x "$RUNNER_TEMP/minio/bin/minio"
+          export MINIO_ROOT_USER=manufacture MINIO_ROOT_PASSWORD=manufacture_dev_secret
+          "$RUNNER_TEMP/minio/bin/minio" server "$RUNNER_TEMP/minio/data" --address ":9000" --console-address ":9001" \
+            >"$RUNNER_TEMP/minio/minio.log" 2>&1 &
           for i in $(seq 1 40); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 1; done
           curl -sf http://127.0.0.1:9000/minio/health/live
       - name: sync
