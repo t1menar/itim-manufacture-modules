@@ -127,7 +127,7 @@ class JobRunner:
                 channel_ids.append(ch)
         async with self._factory() as s:
             accounts = await repo.list_enabled_accounts(s, channel_ids=channel_ids or None)
-        account_by_channel: dict[str, list] = {}
+        account_by_channel: dict[str, list[Any]] = {}
         for acc in accounts:
             account_by_channel.setdefault(acc.channel_id, []).append(acc)
         default_accounts = accounts

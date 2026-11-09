@@ -16,7 +16,7 @@ class FakeInstagramClient:
 
     dry_run: bool = True
     fail_next: str | None = None  # "transient" | "fatal" | "unknown"
-    _seq: itertools.count = field(default_factory=lambda: itertools.count(1))
+    _seq: itertools.count[int] = field(default_factory=lambda: itertools.count(1))
     posts: list[dict[str, Any]] = field(default_factory=list)
 
     async def publish_reel(

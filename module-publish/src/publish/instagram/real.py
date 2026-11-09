@@ -204,7 +204,9 @@ class RealInstagramClient:
     async def _container_status(self, auth: AccountAuth, container_id: str) -> str | None:
         data = await self._get(container_id, auth, params={"fields": "status_code"})
         code = data.get("status_code")
-        return str(code) if code is not None else None
+        if code is None:
+            return None
+        return str(code)
 
     async def _media_publish(self, auth: AccountAuth, container_id: str) -> str:
         data = await self._post(
@@ -223,9 +225,10 @@ class RealInstagramClient:
 
     async def _permalink(self, auth: AccountAuth, media_id: str) -> str | None:
         data = await self._get_media(auth, media_id)
-        if data and isinstance(data.get("permalink"), str):
-            return data["permalink"]
-        return None
+        if not data:
+            return None
+        permalink = data.get("permalink")
+        return permalink if isinstance(permalink, str) else None
 
     async def _get_media(self, auth: AccountAuth, media_id: str) -> dict[str, Any] | None:
         try:

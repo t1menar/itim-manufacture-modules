@@ -56,7 +56,10 @@ class Worker:
         for run in runs:
             task = asyncio.create_task(self._runner.execute(run.id), name=f"run-{run.id}")
             self._tasks[run.id] = task
-            task.add_done_callback(lambda _t, rid=run.id: self._tasks.pop(rid, None))
+            def _done(_t: asyncio.Task[None], rid: uuid.UUID = run.id) -> None:
+                self._tasks.pop(rid, None)
+
+            task.add_done_callback(_done)
             log.info("run_claimed", run_id=str(run.id), job_id=str(run.job_id))
         return [r.id for r in runs]
 
