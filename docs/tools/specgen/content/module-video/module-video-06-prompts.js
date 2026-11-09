@@ -547,7 +547,7 @@ unique job_id conflict (returns the existing run) and lease expiry.
 Why: idempotency and recovery (05 §8) rely on these constraints, so they must be in the schema, not in code.
 Run tests, fix failures, summarize.`],
 ['h2', '10.3 B2 — Job API and runner skeleton'],
-['table', BUILD, [['B2', 'jobs, callbacks, cancel, queue, recovery', '04 §2–3, 05 §2.1, §6–9', 'contract tests; restart test; cancel test', '~900']], BW],
+['table', BUILD, [['B2', 'jobs, callbacks, cancel, queue, recovery, usage gate', '04 §2–3, 05 §2.1, §5, §6–9', 'contract tests; restart test; cancel test; daily-limit and /ready tests', '~900']], BW],
 ['code', `Goal: implement POST /v1/jobs, GET /v1/jobs/{id}, POST /v1/jobs/{id}/cancel, the core client (progress,
 result, fail with retries per 04 §3.1, credentials read) and a runner that executes a list of steps with the
 state machines of 05 §9. Use fake steps that sleep and write small files to S3, so the flow is testable now.
@@ -559,6 +559,10 @@ Done when:
 - step cache: a second attempt with identical inputs marks steps "reused" (05 §8).
 Reference: the canonical job request in docs/tools/specgen/AUTHORING.md section 4.
 Anti-pattern: sending the result callback before uploads are confirmed; the core would point to missing files.
+Also implement the usage gate: table usage_log (03 section 7), limits max_jobs_per_day and
+max_agent_runs_per_hour checked at intake and before each agent run, failing transient with details.retry_after,
+and the credential-kind check against agent.auth.mode. /ready reports auth: configured|missing and never fails
+because of a limit, because a limit is temporary and the core handles it with retry_after.
 Run tests (respx for the core, testcontainers for DB and MinIO), fix failures, summarize.`],
 ['h2', '10.4 B3 — Schemas, validator, timing'],
 ['table', BUILD, [['B3', 'all file schemas, rule checks, shared timing', '04 §4–8, 05 §2.4', '`mvideo validate` passes on the reference files and fails on each anti-example fixture', '~1200']], BW],
@@ -615,7 +619,7 @@ template has binds, privileged or host network; containers are removed after the
 Why: numbers on screen must come from a clean, contained, reproducible run (FR-VID-015, NFR-VID-009).
 Run tests (they need Docker; mark them and document how to run), fix failures, summarize.`],
 ['h2', '10.8 B7 — Agent runtime'],
-['table', BUILD, [['B7', 'agent image, runner, egress proxy, MCP tools, source cache', '03 §5.1–5.3, §5.5, 05 §4', 'fake-model run end to end; egress denial test', '~1100']], BW],
+['table', BUILD, [['B7', 'agent image, runner, auth modes, egress proxy, MCP tools, source cache', '03 §5.1–5.3, §5.5, 05 §4–5', 'fake-model run end to end; egress denial; one auth variable per mode; rate_limit and auth_failed replays', '~1100']], BW],
 ['code', `Goal: build module-video/agent (Dockerfile + runner.py using the Claude Agent SDK), agents/workspace.py and
 launcher.py (05 section 4), net/egress_proxy.py (per-step port and allowlist), the in-runner MCP tools validate,
 estimate, source_line, the module HTTP MCP tool sandbox_try, and sources/git_cache.py.
@@ -625,6 +629,13 @@ the versions in provenance; keep option values in settings, because SDK details 
 Done when: with MVIDEO_FAKE_AGENT=replay the pipeline runs; with a real key a trivial prompt runs in the agent
 container, writes /out, and reports cost; CONNECT to a host outside the allowlist is refused and counted;
 the agent container has no Docker socket and no module env vars (inspect test).
+Auth: implement agent.auth.mode (04 section 10). subscription: set CLAUDE_CODE_OAUTH_TOKEN, do not set
+ANTHROPIC_API_KEY; api_key: the reverse; never both (verify variable names against current documentation).
+The value comes from the core for this job only, is never written to disk or logs, and is scrubbed from
+transcripts. Map CLI outcomes: usage or rate limit -> transient agent_rate_limited with details.retry_after (reset
+time if the CLI reports it, else limits.rate_limit_backoff_s), no retry inside the job; invalid, expired or revoked
+token -> blocked agent_auth_failed. Add replay-agent scenarios rate_limit and auth_failed and run the replay
+tests in both modes.
 Anti-pattern: running the SDK inside the module process; module secrets would be readable by the agent.
 Run tests, fix failures, summarize.`],
 ['h2', '10.9 B8 — Steps and runtime prompts'],
@@ -634,7 +645,7 @@ prompts in docs/module-video/module-video-06-prompts.docx sections 2 to 7, copie
 module-video/prompts/<step>/1.0.0/ with meta.json (placeholders, schema id). Implement schema retries,
 fix rounds and blocked handling as in 05 sections 2.8 and 4.
 
-Done when: the golden idea CREATE DATABASE produces a video whose checks all pass and whose values match the
+Done when: the golden idea CREATE DATABASE produces a video (in subscription mode with cost_mode estimate) whose checks all pass and whose values match the
 reference capture; golden-analysis-2 blocks; recorded transcripts are saved for replay tests.
 Why: prompts are code; they must be the exact files the spec reviewed.
 Run the golden case, fix failures in code (not by editing prompt text unless the spec is wrong; then stop and
@@ -646,12 +657,14 @@ validator (structural diff), capture reuse decision and the rendered "changes" t
 Done when: golden-revise-1..4 behave as specified; a caption-only revise starts no sandbox.
 Run tests, fix failures, summarize.`],
 ['h2', '10.11 B10 — Observability and cost'],
-['table', BUILD, [['B10', 'metrics, logs, traces, budget', '03 §8, 05 §5', 'metric lint; budget test', '~500']], BW],
+['table', BUILD, [['B10', 'metrics, logs, traces, cost and usage limits', '03 §8, 05 §5', 'metric lint; budget tests in both cost modes', '~500']], BW],
 ['code', `Goal: add every metric in 03 section 8 with the listed types and labels, structlog JSON fields, OpenTelemetry
-spans, and the budget logic of 05 section 5. production_id goes into logs and spans, never into metric labels,
+spans, and the cost and usage logic of 05 section 5 (both cost modes). production_id goes into logs and spans, never into metric labels,
 because it would explode cardinality.
 Done when: a test scrapes /metrics after a replay run and finds all metrics; job budget 0.01 fails with
-budget_exceeded before research; secrets never appear in logs (grep test). Summarize.`],
+budget_exceeded before research in usd mode, while the same budget in estimate mode lets the job finish with
+cost_estimated true; the 7th job of a day fails transient daily_job_limit; the 13th agent run in an hour fails
+transient agent_run_rate_limit; secrets (token and key values) never appear in logs (grep test). Summarize.`],
 ['h2', '10.12 B11 — Admin endpoints and golden runs'],
 ['table', BUILD, [['B11', '/admin/v1/*', '04 §3.4, 06 §8', 'contract tests', '~400']], BW],
 ['code', `Goal: implement /admin/v1/runs, /runs/{id}, /prompts and /golden (+ GET report) as in 04 section 3.4, with the
