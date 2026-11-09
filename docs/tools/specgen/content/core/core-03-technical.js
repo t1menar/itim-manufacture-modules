@@ -367,8 +367,8 @@ cols([
   ['`response`', 'jsonb', 'not null', 'stored response (never includes a module token)'],
   ['`expires_at`', 'timestamptz', 'not null', 'index; deleted by retention'],
 ]),
-['h2', '3.20 Messaging, content revisions and publish intents (proposed, C29-C38)'],
-['p', 'Added with migration `0003_messaging.sql` once C29-C38 are accepted. Same conventions as above.'],
+['h2', '3.20 Messaging, content revisions and publish intents (C29–C38; C38 accepted 2026-11-09)'],
+['p', 'Messaging from migration `0003_messaging.sql`; content revisions and publish intents from `0005_publish_intents.sql`; admin republish + `idempotency_keys` and job mode `republish` from `0006_republish.sql` (D18/C38). Same conventions as above.'],
 cols([
   ['`outbox.id`', 'bigint', 'PK identity', 'relay order'],
   ['`message_id`', 'uuid', 'not null unique', 'envelope and AMQP `message_id`'],

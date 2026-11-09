@@ -182,6 +182,54 @@ paths:
         '409': {description: settings_version_conflict, $ref: '#/components/responses/Problem'}
         '412': {description: version_mismatch, $ref: '#/components/responses/Problem'}
         '422': {$ref: '#/components/responses/Problem'}
+  /internal/v1/publish-intents/{id}/republish:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}, description: 'any generation of the (variant, account) pair'}
+      - {name: Idempotency-Key, in: header, required: false, schema: {type: string, maxLength: 256}}
+      - {name: X-Admin-Actor, in: header, required: false, schema: {type: string}, description: 'optional actor id; stored as user:<id> in audit'}
+    post:
+      operationId: republishIntent
+      description: |
+        Admin principal only (module token → 403). Accepted P2/C38 / D18: creates generation max+1
+        for the same (variant_id, platform_account_id), writes audit `publish.republish_requested`,
+        and enqueues one publish `job.requested`. No automatic republish path exists.
+        `base_generation` must equal the current max generation (else 409 generation_conflict).
+        Pending/in_progress → 409 invalid_state. Status `unknown` requires acknowledge_unknown_risk=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, base_generation]
+              properties:
+                reason: {type: string, minLength: 1, maxLength: 2000, description: 'non-whitespace after trim; required'}
+                base_generation: {type: integer, minimum: 1}
+                acknowledge_unknown_risk: {type: boolean, description: 'required true when current status is unknown'}
+                content_revision_id: {type: string, format: uuid, description: 'optional; default latest approved revision of the variant'}
+      responses:
+        '201':
+          description: new pending intent (generation max+1)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, variant_id, platform_account_id, generation, content_revision_id, status, previous_generation, authorized_by, reason]
+                properties:
+                  id: {type: string, format: uuid}
+                  variant_id: {type: string, format: uuid}
+                  platform_account_id: {type: string, format: uuid}
+                  generation: {type: integer, minimum: 2}
+                  content_revision_id: {type: string, format: uuid}
+                  status: {type: string, enum: [pending]}
+                  previous_generation: {type: integer}
+                  authorized_by: {type: string}
+                  reason: {type: string}
+        '401': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {description: 'generation_conflict | invalid_state | unknown_needs_ack', $ref: '#/components/responses/Problem'}
+        '422': {description: 'validation_failed | idempotency_key_reused', $ref: '#/components/responses/Problem'}
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer, description: 'module token mft_... (admin-api token mfa_... is rejected with 403 on these routes)'}

@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"github.com/t1menar/manufacture/core/internal/credentials"
 	"github.com/t1menar/manufacture/core/internal/engine"
 	"github.com/t1menar/manufacture/core/internal/modules"
+	"github.com/t1menar/manufacture/core/internal/publish"
 	"github.com/t1menar/manufacture/core/internal/settings"
 )
 
@@ -30,6 +32,7 @@ type Server struct {
 	Settings    *settings.Store
 	Modules     *modules.Registry
 	Credentials *credentials.Store
+	Publish     *publish.Store
 	MaxBody     int64
 }
 
@@ -60,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /internal/v1/modules/{id}/token", s.requireAdmin(s.rotateToken))
 	mux.HandleFunc("POST /internal/v1/modules/{id}/activate", s.requireAdmin(s.activateModule))
 	mux.HandleFunc("GET /internal/v1/credentials/{ref}", s.requireModule(s.readCredential))
+	mux.HandleFunc("POST /internal/v1/publish-intents/{id}/republish", s.requireAdmin(s.republish))
 
 	mux.HandleFunc("/internal/", func(w http.ResponseWriter, _ *http.Request) {
 		problem(w, http.StatusNotImplemented, "not_implemented", "This endpoint is specified in core-04 but not implemented yet")
@@ -453,5 +457,70 @@ func (s *Server) readCredential(w http.ResponseWriter, r *http.Request) {
 			exp = meta.ExpiresAt.UTC().Format(time.RFC3339)
 		}
 		writeJSON(w, 200, map[string]any{"ref": meta.Ref, "kind": meta.Kind, "value": value, "expires_at": exp})
+	}
+}
+
+func (s *Server) republish(w http.ResponseWriter, r *http.Request) {
+	if s.Publish == nil {
+		problem(w, http.StatusNotImplemented, "not_implemented", "publish intents not configured")
+		return
+	}
+	intentID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "id must be a uuid")
+		return
+	}
+	var body struct {
+		Reason                 string     `json:"reason"`
+		BaseGeneration         int        `json:"base_generation"`
+		AcknowledgeUnknownRisk bool       `json:"acknowledge_unknown_risk"`
+		ContentRevisionID      *uuid.UUID `json:"content_revision_id"`
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
+	if err != nil {
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "request body is invalid")
+		return
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "request body is invalid")
+		return
+	}
+	sum := sha256.Sum256(raw)
+	actor := "admin-api"
+	if a := r.Header.Get("X-Admin-Actor"); a != "" {
+		actor = "user:" + a
+	}
+	res, err := s.Publish.Republish(r.Context(), publish.RepublishOpts{
+		IntentID: intentID, Reason: body.Reason, BaseGeneration: body.BaseGeneration,
+		AcknowledgeUnknownRisk: body.AcknowledgeUnknownRisk, ContentRevisionID: body.ContentRevisionID,
+		Actor: actor, IdempotencyKey: r.Header.Get("Idempotency-Key"),
+		IdempotencyPath: r.URL.Path, IdempotencyBodyHash: sum[:],
+	})
+	switch {
+	case errors.Is(err, publish.ErrValidation):
+		problem(w, http.StatusUnprocessableEntity, "validation_failed", "reason is required (non-whitespace, max 2000) and base_generation must be set")
+	case errors.Is(err, publish.ErrNotFound):
+		problem(w, http.StatusNotFound, "not_found", "publish intent not found")
+	case errors.Is(err, publish.ErrGenerationConflict):
+		problem(w, http.StatusConflict, "generation_conflict", "base_generation is not current")
+	case errors.Is(err, publish.ErrInvalidState):
+		problem(w, http.StatusConflict, "invalid_state", "current intent is pending or in_progress")
+	case errors.Is(err, publish.ErrUnknownNeedsAck):
+		problem(w, http.StatusConflict, "unknown_needs_ack", "acknowledge_unknown_risk is required when current status is unknown")
+	case errors.Is(err, publish.ErrIdempotencyReuse):
+		problem(w, http.StatusUnprocessableEntity, "idempotency_key_reused", "Idempotency-Key was used with a different body")
+	case err != nil:
+		problem(w, http.StatusInternalServerError, "internal", "republish failed")
+	default:
+		if res.Idempotent {
+			w.Header().Set("Idempotent-Replayed", "true")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(res.HTTPStatus)
+			_, _ = w.Write(res.HTTPResponse)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		_, _ = w.Write(res.HTTPResponse)
 	}
 }
