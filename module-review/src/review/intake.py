@@ -46,6 +46,12 @@ def validate_job(raw: Any) -> ValidJob:
         deadline = datetime.fromisoformat(str(raw["deadline"]).replace("Z", "+00:00"))
         settings = raw.get("settings") or {}
         values = settings.get("values") if isinstance(settings, dict) else {}
+        job_input = dict(raw.get("input") or {})
+        if "idea" in job_input:
+            raise ProblemError(422, "input_invalid", "input.idea removed (D21); use input.idea_ref {id,rev}")
+        ref = job_input.get("idea_ref")
+        if not isinstance(ref, dict) or ref.get("id") is None or ref.get("rev") is None:
+            raise ProblemError(422, "input_invalid", "input.idea_ref {id,rev} required")
         return ValidJob(
             job_id=job_id,
             attempt=attempt,
@@ -54,7 +60,7 @@ def validate_job(raw: Any) -> ValidJob:
             mode=mode,
             round=round_n,
             variant_id=variant_id,
-            input=dict(raw.get("input") or {}),
+            input=job_input,
             settings=dict(values or {}),
             callback_base_url=base,
             deadline=deadline,

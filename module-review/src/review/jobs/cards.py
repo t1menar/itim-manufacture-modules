@@ -34,7 +34,12 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 
 def extract_meta(job_input: dict[str, Any]) -> tuple[str, str, str, str]:
-    """Return title, description, video_ref, language from job input/upstream."""
+    """Return title, description, video_ref, language from job input/upstream.
+
+    D21: idea body is not in the job; only opaque idea_ref. Caption text comes from
+    content_revision metadata. Language prefers channels[0].language, else "en".
+    """
+    _ = _as_dict(job_input.get("idea_ref"))  # present for contract; unused for caption
     upstream = _as_dict(job_input.get("upstream"))
     rev = _as_dict(upstream.get("content_revision"))
     meta = _as_dict(rev.get("metadata"))
@@ -43,7 +48,9 @@ def extract_meta(job_input: dict[str, Any]) -> tuple[str, str, str, str]:
     video = _as_dict(rev.get("video"))
     video_ref = str(video.get("ref") or upstream.get("video_ref") or "s3://manufacture/fake/review.mp4")
     language = "en"
-    idea = _as_dict(job_input.get("idea"))
-    if idea.get("language"):
-        language = str(idea["language"])
+    channels = job_input.get("channels")
+    if isinstance(channels, list) and channels:
+        ch0 = channels[0]
+        if isinstance(ch0, dict) and ch0.get("language"):
+            language = str(ch0["language"])
     return title, description, video_ref, language

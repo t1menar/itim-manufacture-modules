@@ -137,15 +137,15 @@ func revisionBodyFromVideoOutput(variantID, jobID uuid.UUID, output json.RawMess
 func (e *Engine) CreateFirstPublishJob(ctx context.Context, tx pgx.Tx, variantID, revisionID uuid.UUID, intents []publish.Intent) (uuid.UUID, error) {
 	e.defaults()
 	var production uuid.UUID
-	var language, ideaText string
+	var language string
 	var ideaID int64
+	var ideaRev int
 	var snapshotJSON []byte
-	if err := tx.QueryRow(ctx, `SELECT v.production_id, v.language, i.id, i.text, p.pipeline_snapshot
+	if err := tx.QueryRow(ctx, `SELECT v.production_id, v.language, p.idea_id, p.idea_rev, p.pipeline_snapshot
 		FROM variants v
 		JOIN productions p ON p.id = v.production_id
-		JOIN ideas i ON i.id = p.idea_id
 		WHERE v.id = $1 FOR UPDATE OF v`, variantID).
-		Scan(&production, &language, &ideaID, &ideaText, &snapshotJSON); err != nil {
+		Scan(&production, &language, &ideaID, &ideaRev, &snapshotJSON); err != nil {
 		return uuid.Nil, err
 	}
 	var snapshot []StageRow
@@ -203,13 +203,17 @@ func (e *Engine) CreateFirstPublishJob(ctx context.Context, tx pgx.Tx, variantID
 		e.Log.Warn("no active publish module; publish job stays queued", "job_id", jobID)
 		return jobID, nil
 	}
+	channels, err := loadJobChannels(ctx, tx, jobSpec{production: production, variant: &variantID, language: language})
+	if err != nil {
+		return uuid.Nil, err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": 1, "fence": 1, "production_id": production,
 		"stage": "publish", "mode": "create", "round": 0,
 		"variant": map[string]any{"id": variantID.String(), "language": language},
 		"input": map[string]any{
-			"idea":     map[string]any{"id": ideaID, "text": ideaText, "language": language},
-			"channels": []any{}, "upstream": upstream, "intents": intentRows,
+			"idea_ref": map[string]any{"id": ideaID, "rev": ideaRev},
+			"channels": channels, "upstream": upstream, "intents": intentRows,
 		},
 		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
 		"credentials": []string{},

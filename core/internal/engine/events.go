@@ -24,7 +24,7 @@ type liveJob struct {
 	status         string
 	snapshot       []StageRow
 	ideaID         int64
-	ideaText       string
+	ideaRev        int
 	language       string
 }
 
@@ -40,11 +40,11 @@ func (e *Engine) HandleJobEvent(ctx context.Context, tx pgx.Tx, env messaging.En
 	var j liveJob
 	var snap []byte
 	err := tx.QueryRow(ctx, `SELECT j.id, j.production_id, j.variant_id, j.stage_id, j.module_id, j.position, j.chain_id, j.try, j.max_attempts,
-			j.fence, j.status, p.pipeline_snapshot, i.id, i.text, p.language
-		FROM jobs j JOIN productions p ON p.id = j.production_id JOIN ideas i ON i.id = p.idea_id
+			j.fence, j.status, p.pipeline_snapshot, p.idea_id, p.idea_rev, p.language
+		FROM jobs j JOIN productions p ON p.id = j.production_id
 		WHERE j.id = $1 FOR UPDATE OF j`, env.Job.JobID).
 		Scan(&j.id, &j.production, &j.variant, &j.stageID, &j.moduleID, &j.position, &j.chain, &j.try, &j.maxTries,
-			&j.fence, &j.status, &snap, &j.ideaID, &j.ideaText, &j.language)
+			&j.fence, &j.status, &snap, &j.ideaID, &j.ideaRev, &j.language)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return messaging.Invalid, nil
 	} else if err != nil {
@@ -113,7 +113,7 @@ func (e *Engine) event(ctx context.Context, tx pgx.Tx, j liveJob, typ string, pa
 }
 
 func (j liveJob) spec(stage StageRow, variant *uuid.UUID) jobSpec {
-	return jobSpec{production: j.production, variant: variant, stage: stage, chain: uuid.Nil, try: 1, ideaID: j.ideaID, ideaText: j.ideaText, language: j.language}
+	return jobSpec{production: j.production, variant: variant, stage: stage, chain: uuid.Nil, try: 1, ideaID: j.ideaID, ideaRev: j.ideaRev, language: j.language}
 }
 
 func (e *Engine) scopeVariants(ctx context.Context, tx pgx.Tx, j liveJob) ([]uuid.UUID, error) {
@@ -198,11 +198,20 @@ func (e *Engine) completeProduction(ctx context.Context, tx pgx.Tx, prod uuid.UU
 		return nil
 	}
 	var ideaID int64
-	if err := tx.QueryRow(ctx, `UPDATE productions SET status = $2, finished_at = now(), rev = rev + 1 WHERE id = $1 AND status = 'running' RETURNING idea_id`, prod, status).Scan(&ideaID); err != nil {
+	var ideaRev int
+	if err := tx.QueryRow(ctx, `UPDATE productions SET status = $2, finished_at = now(), rev = rev + 1 WHERE id = $1 AND status = 'running'
+		RETURNING idea_id, idea_rev`, prod, status).Scan(&ideaID, &ideaRev); err != nil {
 		return fmt.Errorf("finish production: %w", err)
 	}
-	_, err := tx.Exec(ctx, `UPDATE ideas SET status = $2, rev = rev + 1, updated_at = now() WHERE id = $1`, ideaID, status)
-	return err
+	evt := "done"
+	if status == "failed" {
+		evt = "failed"
+	}
+	code := ""
+	if evt == "failed" {
+		code = "production_failed"
+	}
+	return e.enqueueIdeaStatus(ctx, tx, ideaID, ideaRev, prod, evt, code)
 }
 
 // RetryVariant is the admin retry of a variant in needs_attention: it locks the variant, checks
@@ -213,9 +222,9 @@ func (e *Engine) RetryVariant(ctx context.Context, tx pgx.Tx, variantID uuid.UUI
 	var j liveJob
 	var snap []byte
 	var status string
-	err := tx.QueryRow(ctx, `SELECT v.production_id, v.position, v.status, v.language, p.pipeline_snapshot, i.id, i.text
-		FROM variants v JOIN productions p ON p.id = v.production_id JOIN ideas i ON i.id = p.idea_id
-		WHERE v.id = $1 FOR UPDATE OF v`, variantID).Scan(&j.production, &j.position, &status, &j.language, &snap, &j.ideaID, &j.ideaText)
+	err := tx.QueryRow(ctx, `SELECT v.production_id, v.position, v.status, v.language, p.pipeline_snapshot, p.idea_id, p.idea_rev
+		FROM variants v JOIN productions p ON p.id = v.production_id
+		WHERE v.id = $1 FOR UPDATE OF v`, variantID).Scan(&j.production, &j.position, &status, &j.language, &snap, &j.ideaID, &j.ideaRev)
 	if err != nil {
 		return uuid.Nil, err
 	}

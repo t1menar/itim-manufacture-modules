@@ -74,131 +74,8 @@ type StageRow struct {
 	NotifyStage  *string `json:"notify_stage,omitempty"`
 }
 
-// Tick turns queued ideas into productions (core-05 §2-§3). Ticks are serialized by an
-// advisory transaction lock; the unique indexes on productions make a duplicate impossible
-// even if that lock were bypassed.
-func (e *Engine) Tick(ctx context.Context) (int, error) {
-	e.defaults()
-	maxConc := e.MaxConcurrent
-	if e.Settings != nil {
-		if n, err := e.Settings.MaxConcurrent(ctx); err == nil && n > 0 {
-			maxConc = n
-		}
-	}
-	created := 0
-	err := db.WithTx(ctx, e.Pool, func(tx pgx.Tx) error {
-		created = 0
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('core.scheduler'))`); err != nil {
-			return err
-		}
-		var running int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM productions WHERE status = 'running'`).Scan(&running); err != nil {
-			return err
-		}
-		slots := maxConc - running
-		if slots <= 0 {
-			return nil
-		}
-		rows, err := tx.Query(ctx, `SELECT id FROM ideas WHERE status = 'queued'
-			ORDER BY priority DESC, queued_at, id LIMIT $1 FOR UPDATE SKIP LOCKED`, slots)
-		if err != nil {
-			return err
-		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
-		if err != nil {
-			return err
-		}
-		for _, id := range ids {
-			ok, err := e.startIdea(ctx, tx, id)
-			if err != nil {
-				return fmt.Errorf("idea %d: %w", id, err)
-			}
-			if ok {
-				created++
-			}
-		}
-		return nil
-	})
-	return created, err
-}
-
-func failIdea(ctx context.Context, tx pgx.Tx, id int64, code string) error {
-	_, err := tx.Exec(ctx, `UPDATE ideas SET status = 'failed', failure = jsonb_build_object('code', $2::text),
-		rev = rev + 1, updated_at = now() WHERE id = $1`, id, code)
-	if err == nil {
-		_, err = tx.Exec(ctx, `INSERT INTO events (type, actor, payload) VALUES ('idea.failed', 'system', jsonb_build_object('idea_id', $1::bigint, 'code', $2::text))`, id, code)
-	}
-	return err
-}
-
-func (e *Engine) startIdea(ctx context.Context, tx pgx.Tx, ideaID int64) (bool, error) {
-	var text string
-	var lang, pipelineID *string
-	if err := tx.QueryRow(ctx, `SELECT text, language, pipeline_id FROM ideas WHERE id = $1`, ideaID).Scan(&text, &lang, &pipelineID); err != nil {
-		return false, err
-	}
-	var pid string
-	err := tx.QueryRow(ctx, `SELECT id FROM pipelines WHERE enabled AND ((($1::text) IS NULL AND is_default) OR id = $1)`, pipelineID).Scan(&pid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, failIdea(ctx, tx, ideaID, "no_pipeline")
-	} else if err != nil {
-		return false, err
-	}
-	var snapshot []StageRow
-	rows, err := tx.Query(ctx, `SELECT ps.position, ps.stage_id, s.scope, ps.timeout_s, ps.max_attempts, ps.revise_target, ps.max_rounds, ps.notify_stage
-		FROM pipeline_stages ps JOIN stages s ON s.id = ps.stage_id WHERE ps.pipeline_id = $1 ORDER BY ps.position`, pid)
-	if err != nil {
-		return false, err
-	}
-	snapshot, err = pgx.CollectRows(rows, pgx.RowToStructByPos[StageRow])
-	if err != nil {
-		return false, err
-	}
-	if len(snapshot) == 0 {
-		return false, failIdea(ctx, tx, ideaID, "no_pipeline")
-	}
-	language := e.DefaultLanguage
-	if lang != nil {
-		language = *lang
-	}
-	var channels []string
-	if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(r.channel_id ORDER BY r.priority), '{}') FROM routing_rules r
-		JOIN channels c ON c.id = r.channel_id WHERE r.enabled AND c.enabled AND r.language = $1`, language).Scan(&channels); err != nil {
-		return false, err
-	}
-	if len(channels) == 0 {
-		return false, failIdea(ctx, tx, ideaID, "no_route")
-	}
-	prodID, _ := uuid.NewV7()
-	varID, _ := uuid.NewV7()
-	snapJSON, _ := json.Marshal(snapshot)
-	if _, err := tx.Exec(ctx, `INSERT INTO productions (id, idea_id, run_no, pipeline_id, pipeline_snapshot, language)
-		VALUES ($1, $2, (SELECT coalesce(max(run_no), 0) + 1 FROM productions WHERE idea_id = $2), $3, $4, $5)`,
-		prodID, ideaID, pid, snapJSON, language); err != nil {
-		return false, err
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO variants (id, production_id, language, channels, status) VALUES ($1, $2, $3, $4, 'producing')`,
-		varID, prodID, language, channels); err != nil {
-		return false, err
-	}
-	tag, err := tx.Exec(ctx, `UPDATE ideas SET status = 'in_production', rev = rev + 1, updated_at = now() WHERE id = $1 AND status = 'queued'`, ideaID)
-	if err != nil {
-		return false, err
-	}
-	if tag.RowsAffected() != 1 {
-		return false, errors.New("idea left the queued state concurrently")
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO events (production_id, type, actor, payload) VALUES ($1, 'production.created', 'system', jsonb_build_object('idea_id', $2::bigint, 'pipeline_id', $3::text))`, prodID, ideaID, pid); err != nil {
-		return false, err
-	}
-	first := snapshot[0]
-	var variant *uuid.UUID
-	if first.Scope == "variant" {
-		variant = &varID
-	}
-	_, err = e.createJob(ctx, tx, jobSpec{production: prodID, variant: variant, stage: first, chain: uuid.Nil, try: 1, ideaID: ideaID, ideaText: text, language: language})
-	return err == nil, err
-}
+// Idea intake is event-driven (D21): module-video publishes idea.ready; see applyIdeaReady.
+// The former Tick/startIdea path that read core.ideas has been removed.
 
 type jobSpec struct {
 	production uuid.UUID
@@ -209,7 +86,7 @@ type jobSpec struct {
 	mode       string
 	round      int
 	ideaID     int64
-	ideaText   string
+	ideaRev    int
 	language   string
 }
 
@@ -252,12 +129,16 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if s.variant != nil {
 		variant = map[string]any{"id": s.variant.String(), "language": s.language}
 	}
+	channels, err := loadJobChannels(ctx, tx, s)
+	if err != nil {
+		return err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
 		"input": map[string]any{
-			"idea":     map[string]any{"id": s.ideaID, "text": s.ideaText, "language": s.language},
-			"channels": []any{}, "upstream": map[string]any{},
+			"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
+			"channels": channels, "upstream": map[string]any{},
 		},
 		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
 		"credentials": []string{},
@@ -279,6 +160,41 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	})
 }
 
+// loadJobChannels builds the job-request channels array from the variant (or the
+// production's variants when the stage is production-scoped). Module-video requires
+// at least one channel object with id/language/name/settings (D21 job input).
+func loadJobChannels(ctx context.Context, tx pgx.Tx, s jobSpec) ([]any, error) {
+	var ids []string
+	if s.variant != nil {
+		if err := tx.QueryRow(ctx, `SELECT channels FROM variants WHERE id = $1`, *s.variant).Scan(&ids); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT channels FROM variants WHERE production_id = $1 ORDER BY id LIMIT 1), '{}')`, s.production).Scan(&ids); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]any, 0, len(ids))
+	for _, id := range ids {
+		var name, language string
+		if err := tx.QueryRow(ctx, `SELECT name, language FROM channels WHERE id = $1`, id).Scan(&name, &language); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				language = s.language
+				if language == "" {
+					language = "en"
+				}
+				name = id
+			} else {
+				return nil, err
+			}
+		}
+		out = append(out, map[string]any{
+			"id": id, "language": language, "name": name, "settings": map[string]any{},
+		})
+	}
+	return out, nil
+}
+
 // Takeover assigns a live job to another executor (activation switch or explicit admin
 // re-issue). It is the only place the fence grows; plain re-sends keep job_id, fence and
 // message_id. Events still carrying the old fence are rejected as stale.
@@ -289,10 +205,10 @@ func (e *Engine) Takeover(ctx context.Context, jobID uuid.UUID, moduleID string)
 		var s jobSpec
 		var stageID string
 		var position int
-		if err := tx.QueryRow(ctx, `SELECT j.production_id, j.variant_id, j.stage_id, j.position, j.chain_id, j.try, i.id, i.text, p.language
-			FROM jobs j JOIN productions p ON p.id = j.production_id JOIN ideas i ON i.id = p.idea_id
+		if err := tx.QueryRow(ctx, `SELECT j.production_id, j.variant_id, j.stage_id, j.position, j.chain_id, j.try, p.idea_id, p.idea_rev, p.language
+			FROM jobs j JOIN productions p ON p.id = j.production_id
 			WHERE j.id = $1 AND j.status IN ('queued','dispatching','dispatched','running') FOR UPDATE OF j`, jobID).
-			Scan(&s.production, &s.variant, &stageID, &position, &s.chain, &s.try, &s.ideaID, &s.ideaText, &s.language); err != nil {
+			Scan(&s.production, &s.variant, &stageID, &position, &s.chain, &s.try, &s.ideaID, &s.ideaRev, &s.language); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return errors.New("job is not live")
 			}

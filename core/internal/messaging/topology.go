@@ -30,7 +30,11 @@ func (t Topology) DeclareCore(ch *amqp.Channel) error {
 			return err
 		}
 	}
-	return t.declareQueue(ch, t.CoreEvents(), t.Events(), "job.#")
+	if err := t.declareQueue(ch, t.CoreEvents(), t.Events(), "job.#"); err != nil {
+		return err
+	}
+	// D21: idea.ready from module-video (same core events queue / inbox consumer).
+	return ch.QueueBind(t.CoreEvents(), "idea.ready", t.Events(), false, nil)
 }
 
 // DeclareModule declares a module command queue (used by modules and by tests with fake modules).

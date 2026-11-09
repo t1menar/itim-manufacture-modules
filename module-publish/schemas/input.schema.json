@@ -3,12 +3,19 @@
   "$id": "publish-input.schema.json",
   "type": "object",
   "required": [
-    "idea",
+    "idea_ref",
     "intents"
   ],
   "properties": {
-    "idea": {
-      "type": "object"
+    "idea_ref": {
+      "type": "object",
+      "required": ["id", "rev"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "integer", "minimum": 1},
+        "rev": {"type": "integer", "minimum": 1}
+      },
+      "description": "D21: opaque idea reference; module-video owns the idea document"
     },
     "channels": {
       "type": "array"

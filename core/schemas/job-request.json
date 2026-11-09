@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "job-request.json",
-  "title": "Job request, contract 1 (core-04 §7.2); fence added by proposed C31",
+  "title": "Job request, contract 1 (core-04 \u00a77.2); fence added by proposed C31",
   "type": "object",
   "required": [
     "job_id",
@@ -73,32 +73,11 @@
     "input": {
       "type": "object",
       "required": [
-        "idea",
+        "idea_ref",
         "channels",
         "upstream"
       ],
       "properties": {
-        "idea": {
-          "type": "object",
-          "required": [
-            "id",
-            "text",
-            "language"
-          ],
-          "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "text": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 2000
-            },
-            "language": {
-              "type": "string"
-            }
-          }
-        },
         "variants": {
           "type": "array"
         },
@@ -164,6 +143,25 @@
               }
             }
           }
+        },
+        "idea_ref": {
+          "type": "object",
+          "required": [
+            "id",
+            "rev"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rev": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "description": "D21: opaque idea reference; module-video loads the document by ref"
         }
       }
     },

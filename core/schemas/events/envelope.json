@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "events/envelope.json",
-  "title": "RabbitMQ message envelope (core-04 §15.3, proposed C29-C31)",
+  "title": "RabbitMQ message envelope (core-04 \u00a715.3, proposed C29-C31)",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,7 +24,11 @@
         "notify.requested",
         "job.progress",
         "job.succeeded",
-        "job.failed"
+        "job.failed",
+        "idea.ready",
+        "idea.in_production",
+        "idea.done",
+        "idea.failed"
       ]
     },
     "schema_version": {

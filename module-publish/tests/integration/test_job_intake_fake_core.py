@@ -34,7 +34,7 @@ def _job_body(*, job_id: uuid.UUID, account: uuid.UUID, intent: uuid.UUID, callb
         "mode": "create",
         "variant": {"id": str(uuid.uuid4()), "language": "en"},
         "input": {
-            "idea": {"id": 1, "text": "hello world idea", "language": "en"},
+            "idea_ref": {"id": 1, "rev": 1},
             "channels": [],
             "upstream": {
                 "content_revision": {

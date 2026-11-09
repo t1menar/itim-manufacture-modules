@@ -10,11 +10,6 @@
     "language": "en"
   },
   "input": {
-    "idea": {
-      "id": 42,
-      "text": "Detailed implementation of CREATE DATABASE in PostgreSQL",
-      "language": "en"
-    },
     "variants": [
       {
         "id": "0193a1b0-0000-7000-8000-000000000002",
@@ -36,7 +31,11 @@
       "review_reason": "The WAL step at 0:32 is too fast to read",
       "round": 1
     },
-    "upstream": {}
+    "upstream": {},
+    "idea_ref": {
+      "id": 42,
+      "rev": 1
+    }
   },
   "settings": {
     "version": 7,

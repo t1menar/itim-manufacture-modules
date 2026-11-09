@@ -2,7 +2,7 @@ module.exports = {
   dir: '',
   file: 'Manufacture-Overview.docx',
   meta: { title: 'Manufacture — System Overview', subtitle: 'Abstract, processes and architecture at a high level of abstraction',
-    doc: 'Manufacture-Overview', version: '0.6' },
+    doc: 'Manufacture-Overview', version: '0.7' },
   blocks: [
 ['h1', '1. Abstract'],
 ['p', 'Manufacture is a system that turns a one-line video idea into finished short vertical videos for the **iTim** channel, sends each video for human review in Telegram, and publishes approved videos to the matching channel. Content (analysis, research, script, translation) is written by Claude; frames are drawn by a deterministic renderer, so every number and every line of code shown on screen comes from a real run of the real system.'],
@@ -159,6 +159,8 @@ module.exports = {
   ['D19', 'Title, description and tags (with per-platform caption/hashtags) are returned by **module-video** in the video stage result as required `variants[].metadata` (accepted P1/C39). There is no separate `content-claude` / module-content stage in the plan.', 'owner\'s decision 2026-11-09'],
   ['D20', 'MVP excludes **admin-api** and **admin-panel**. The Telegram bot in module-review is **review + publish notifications only** (video card with Approve/Reject; reject asks for a text reason; revised card replies to the previous version; publish notify replies to the approved card). Admin slash commands (`/republish`, `/module`, `/retry`, `/skip`, `/settings`) are not routed. Administration on MVP is via the database; core admin HTTP (#11) remains. If an offline admin client is used, `mfa_…` stays **only** in env `MODULE_CORE_ADMIN_TOKEN` (never a Core credentials ref) with `X-Admin-Actor: tg:<telegram_user_id>`. Module `mft_` remains for job callbacks; admin-api returns later with the panel.', 'owner\'s decision 2026-11-09; clarified 2026-11-09 (bot = review/notify only)'],
   ['D21', 'Ideas and topics live only in **module-video**. Statuses: `draft` → `ready` → `queued` → `dispatched` → `in_production` → `done`/`failed` (plus cancelled/archived). Scheduler in module-video publishes orchestration-only `idea.ready` (idea_ref + language/pipeline/priority) via transactional outbox; reverse statuses `idea.in_production`/`done`/`failed` over RabbitMQ with stable UUIDv5 message_id and module inbox dedup. Core stores only opaque `idea_ref` on the production, never idea body; video job input carries `idea_ref` and the module loads the document from its DB. Table core.`ideas` is removed with **no** data migration. Principle: core orchestrates the system; module domain stays in modules. Spec: `module-video/docs/IDEAS.md`.', 'owner\'s decision 2026-11-09; Q\&A closed'],
+  ['D22', 'Content revisions stored in core are an **opaque JSON blob** with sha256. Core does not treat video metadata fields as its domain model (orchestration may still schema-validate stage output).', 'owner\'s decision 2026-11-09'],
+  ['D23', 'Publish intents belong to **module-publish**. Core retains only intent **id/generation** (and fencing) needed for admin republish. Broader rule: core orchestrates the system; module domain data stays in modules.', 'owner\'s decision 2026-11-09'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [

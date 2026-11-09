@@ -22,7 +22,8 @@ Every other `/internal/…` route answers `501 not_implemented` (problem+json).
 ## What works
 
 - **Migrations** (goose, Postgres session lock): domain tables, outbox, inbox, seed pipeline `default-v1`.
-- **No duplicates at DB level**: one running production per idea (`productions_live_uq`), unique `(idea_id, run_no)`,
+- **D21**: ideas live in module-video; core stores opaque `idea_ref` / `idea_id`+`idea_rev` only; intake via `idea.ready`.
+- **No duplicates at DB level**: one running production per idea (`productions_live_uq`), unique `idea_ref`, unique `(idea_id, run_no)`,
   one live job per variant / per production-scope stage (`jobs_variant_live_uq`, `jobs_production_live_uq`),
   unique `(chain_id, try)`; scheduler serialised by an advisory xact lock + `SKIP LOCKED`.
 - **Transactional outbox**: business rows and the outbox row commit in one transaction. The relay claims rows with a
