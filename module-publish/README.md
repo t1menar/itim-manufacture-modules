@@ -15,27 +15,65 @@ Specification: `../docs/module-publish/`.
 - Not yet: real Instagram Login OAuth, ledger reconcile beyond stub, multi-account parallel publish.
 
 
-## Real Instagram Graph API (optional)
+## Secrets & settings (module DB first)
 
-Default remains **fake** (tests/CI). Live Reels publishing:
+Migration `0004_module_secrets` adds `module_secrets` / `module_settings` and column `platform_accounts.access_token`.
 
-| Env | Required | Notes |
-|-----|----------|-------|
-| `PUBLISH_INSTAGRAM_MODE` | no (default `fake`) | `fake` or `real` |
-| `PUBLISH_INSTAGRAM_ACCESS_TOKEN` | when `real`* | Instagram User access token with `instagram_business_content_publish` (Instagram Login) or `instagram_content_publish` (Facebook Login). **Never commit/log.** |
-| `PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY` | no | Set `1` to skip bootstrap token and resolve only via Core `cred:…` on each account |
-| `PUBLISH_INSTAGRAM_IG_USER_ID` | optional | Default IG user id if `platform_accounts.external_id` empty |
-| `PUBLISH_INSTAGRAM_GRAPH_BASE` | no | Default `https://graph.instagram.com` (Facebook Login host: `https://graph.facebook.com`) |
-| `PUBLISH_INSTAGRAM_API_VERSION` | no | Default `v22.0` (override when Meta bumps) |
+**Priority:** DB wins; env is a **dev/test fallback**. Core credentials vault / `credential_ref` is **not** used for these secrets.
 
-\* Or per-account `settings.credential_ref` / `access_token_ref` pointing at Core credentials vault (`GET /internal/v1/credentials/{ref}`).
+`GET /admin/v1/accounts` never returns `access_token`.
+
+### SQL templates (placeholders only)
+
+```sql
+-- Per-account Instagram token + IG user id
+UPDATE platform_accounts
+SET
+  external_id = '<IG_USER_ID>',
+  access_token = '<INSTAGRAM_USER_ACCESS_TOKEN>',
+  updated_at = now()
+WHERE id = '<PLATFORM_ACCOUNT_UUID>';
+
+-- Optional default token (used only if account.access_token empty)
+INSERT INTO module_secrets (key, value) VALUES
+  ('instagram.default_access_token', '<INSTAGRAM_USER_ACCESS_TOKEN>')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+
+-- MinIO/S3 keys (for MinIO/presigned PR)
+INSERT INTO module_secrets (key, value) VALUES
+  ('s3.access_key', '<MINIO_ACCESS_KEY>'),
+  ('s3.secret_key', '<MINIO_SECRET_KEY>')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+
+INSERT INTO module_settings (key, value) VALUES
+  ('s3', '{
+     "endpoint": "<INTERNAL_HOST:PORT>",
+     "public_endpoint": "<PUBLIC_TLS_HOST>",
+     "bucket": "manufacture",
+     "secure": false,
+     "public_secure": true,
+     "region": "us-east-1"
+   }'::jsonb),
+  ('instagram.mode', '"real"'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+```
+
+### Env fallback (optional)
+
+| Env | Notes |
+|-----|-------|
+| `PUBLISH_INSTAGRAM_MODE` | `fake` or `real` |
+| `PUBLISH_INSTAGRAM_ACCESS_TOKEN` | Fallback if account + default secret empty |
+| `PUBLISH_INSTAGRAM_IG_USER_ID` | Fallback if `platform_accounts.external_id` empty |
+| `PUBLISH_INSTAGRAM_GRAPH_BASE` | Default `https://graph.instagram.com` |
+| `PUBLISH_INSTAGRAM_API_VERSION` | Default `v22.0` |
 
 ### Setup (operator)
 
 1. Meta developer app + Instagram professional/Business account linked.
-2. Permissions: `instagram_business_basic` + `instagram_business_content_publish` (Instagram Login) **or** `instagram_basic` + `instagram_content_publish` (+ Page tokens for Facebook Login).
-3. Seed `platform_accounts` with `external_id` = IG user id; store token in env or vault.
-4. **Public HTTPS `video_url`:** Graph downloads the file itself. `s3://` refs fail until MinIO (or equivalent) issues a presigned HTTPS URL. This is an intentional blocker.
+2. Permissions: `instagram_business_basic` + `instagram_business_content_publish` (Instagram Login) **or** `instagram_basic` + `instagram_content_publish`.
+3. Seed `platform_accounts` with `external_id` = IG user id and `access_token` (SQL above).
+4. **Public HTTPS `video_url`:** Graph downloads the file itself. `s3://` refs fail until MinIO (or equivalent) issues a presigned HTTPS URL.
 
 ### Behaviour
 

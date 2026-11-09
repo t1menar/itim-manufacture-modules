@@ -20,7 +20,7 @@ OPTIONAL_VARS = (
     "PUBLISH_AMQP_URL",
     "PUBLISH_AMQP_QUEUE",
     "PUBLISH_INSTAGRAM_MODE",  # fake | real
-    "PUBLISH_INSTAGRAM_ACCESS_TOKEN",  # required for real unless per-account credential_ref
+    "PUBLISH_INSTAGRAM_ACCESS_TOKEN",  # env fallback; prefer platform_accounts.access_token
     "PUBLISH_INSTAGRAM_IG_USER_ID",  # optional default IG user id when account.external_id empty
     "PUBLISH_INSTAGRAM_GRAPH_BASE",  # default https://graph.instagram.com
     "PUBLISH_INSTAGRAM_API_VERSION",  # default v22.0
@@ -77,19 +77,8 @@ class BootstrapConfig:
         mode = (source.get("PUBLISH_INSTAGRAM_MODE") or "fake").strip().lower() or "fake"
         if mode not in {"fake", "real"}:
             raise ConfigError("PUBLISH_INSTAGRAM_MODE must be 'fake' or 'real'")
+        # Token: prefer platform_accounts.access_token / module_secrets; env is fallback.
         token = (source.get("PUBLISH_INSTAGRAM_ACCESS_TOKEN") or "").strip() or None
-        if mode == "real" and not token:
-            # Per-account credential_ref via Core vault is allowed at publish time;
-            # still require a bootstrap token OR document that accounts must have refs.
-            # For start-up we allow missing token if accounts use credential_ref only —
-            # but warn via ConfigError unless PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY=1.
-            allow_vault = (source.get("PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY") or "").strip() == "1"
-            if not allow_vault:
-                raise ConfigError(
-                    "PUBLISH_INSTAGRAM_ACCESS_TOKEN is required when PUBLISH_INSTAGRAM_MODE=real "
-                    "(or set PUBLISH_INSTAGRAM_ALLOW_VAULT_ONLY=1 to resolve tokens only from "
-                    "Core credentials vault per account)"
-                )
         return cls(
             database_url=source["PUBLISH_DATABASE_URL"].strip(),
             listen_addr=listen_addr,

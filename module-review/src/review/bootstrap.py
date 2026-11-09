@@ -24,7 +24,7 @@ OPTIONAL_VARS = (
     "REVIEW_ADMIN_TELEGRAM_IDS",
     "REVIEW_CHAT_IDS",
     "REVIEW_TELEGRAM_MODE",  # fake | real
-    "REVIEW_TELEGRAM_BOT_TOKEN",  # required when mode=real; never log
+    "REVIEW_TELEGRAM_BOT_TOKEN",  # env fallback; prefer module_secrets telegram.bot_token
     "REVIEW_TELEGRAM_API_BASE",  # override for tests / local mock
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
@@ -96,9 +96,8 @@ class BootstrapConfig:
         mode = (source.get("REVIEW_TELEGRAM_MODE") or "fake").strip().lower() or "fake"
         if mode not in {"fake", "real"}:
             raise ConfigError("REVIEW_TELEGRAM_MODE must be 'fake' or 'real'")
+        # Token: prefer module_secrets later; env is fallback for dev/tests.
         token = (source.get("REVIEW_TELEGRAM_BOT_TOKEN") or "").strip() or None
-        if mode == "real" and not token:
-            raise ConfigError("REVIEW_TELEGRAM_BOT_TOKEN is required when REVIEW_TELEGRAM_MODE=real")
         api_base = (source.get("REVIEW_TELEGRAM_API_BASE") or "https://api.telegram.org").strip()
         admin_ids = _parse_ids(source.get("REVIEW_ADMIN_TELEGRAM_IDS") or "")
         chat_ids = _parse_ids(source.get("REVIEW_CHAT_IDS") or "")

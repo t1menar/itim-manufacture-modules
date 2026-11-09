@@ -44,7 +44,7 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
-    ig = ig_client or build_instagram_client(config, factory=factory, core=core, dry_run=True)
+    ig = ig_client or build_instagram_client(config, factory=factory, dry_run=True)
     runner = JobRunner(factory=factory, core=core, ig=ig)
     worker = Worker(factory=factory, runner=runner)
     job_service = JobService(factory, worker)

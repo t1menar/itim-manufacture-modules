@@ -20,17 +20,60 @@ Specification: `../docs/module-review/` (`module-review-01-description.docx` …
 - Real Telegram long-polling: implemented behind `REVIEW_TELEGRAM_MODE=real`. Still not: Anthropic; rich reviewer directory UI.
 
 
-## Real Telegram (optional)
+## Secrets & settings (module DB first)
 
-Default remains **fake** (tests/CI). For a live bot:
+Migration `0004_module_secrets` adds:
 
-| Env | Required | Notes |
-|-----|----------|-------|
-| `REVIEW_TELEGRAM_MODE` | no (default `fake`) | `fake` or `real` |
-| `REVIEW_TELEGRAM_BOT_TOKEN` | when `real` | From [@BotFather](https://t.me/BotFather). **Never commit or log.** |
-| `REVIEW_TELEGRAM_API_BASE` | no | Default `https://api.telegram.org` (override only for mocks) |
-| `REVIEW_ADMIN_TELEGRAM_IDS` | recommended | Comma-separated Telegram user ids allowed to approve/reject |
-| `REVIEW_CHAT_IDS` | optional | Chats that receive cards/notify (defaults to admin ids) |
+| Table | Purpose |
+|-------|---------|
+| `module_secrets` | Secret strings (`key` PK, `value` text). **Never log or return via API.** |
+| `module_settings` | Non-secret JSON (`key` PK, `value` jsonb) |
+
+**Priority:** DB row wins; env is a **dev/test fallback** only.
+
+### SQL templates (fill placeholders yourself — do not commit real values)
+
+```sql
+-- Telegram bot token (from @BotFather)
+INSERT INTO module_secrets (key, value) VALUES
+  ('telegram.bot_token', '<TELEGRAM_BOT_TOKEN>')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+
+-- Mode + API base (optional; default fake / https://api.telegram.org)
+INSERT INTO module_settings (key, value) VALUES
+  ('telegram.mode', '"real"'::jsonb),
+  ('telegram.api_base', '"https://api.telegram.org"'::jsonb),
+  ('telegram.admin_ids', '{"ids": [<ADMIN_TG_USER_ID>, …]}'::jsonb),
+  ('telegram.chat_ids', '{"ids": [<REVIEW_CHAT_ID>, …]}'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+
+-- MinIO/S3 keys (used when MinIO/presigned PR is merged)
+INSERT INTO module_secrets (key, value) VALUES
+  ('s3.access_key', '<MINIO_ACCESS_KEY>'),
+  ('s3.secret_key', '<MINIO_SECRET_KEY>')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+
+INSERT INTO module_settings (key, value) VALUES
+  ('s3', '{
+     "endpoint": "<INTERNAL_HOST:PORT>",
+     "public_endpoint": "<PUBLIC_TLS_HOST>",
+     "bucket": "manufacture",
+     "secure": false,
+     "public_secure": true,
+     "region": "us-east-1"
+   }'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+```
+
+### Env fallback (optional)
+
+| Env | Notes |
+|-----|-------|
+| `REVIEW_TELEGRAM_MODE` | `fake` or `real` (overridden by `module_settings.telegram.mode` when set) |
+| `REVIEW_TELEGRAM_BOT_TOKEN` | Fallback if `module_secrets.telegram.bot_token` empty |
+| `REVIEW_TELEGRAM_API_BASE` | Fallback API host |
+| `REVIEW_ADMIN_TELEGRAM_IDS` | Comma-separated; fallback for `telegram.admin_ids` |
+| `REVIEW_CHAT_IDS` | Fallback for `telegram.chat_ids` |
 
 Behaviour in `real` mode:
 
