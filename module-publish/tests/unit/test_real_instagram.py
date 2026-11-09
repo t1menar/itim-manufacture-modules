@@ -41,16 +41,10 @@ async def test_publish_reel_happy_path(client: RealInstagramClient) -> None:
     respx.get(f"{GRAPH}/{VER}/{IG}/content_publishing_limit").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "data": [
-                    {"quota_usage": 1, "config": {"quota_total": 100, "quota_duration": 86400}}
-                ]
-            },
+            json={"data": [{"quota_usage": 1, "config": {"quota_total": 100, "quota_duration": 86400}}]},
         )
     )
-    respx.post(f"{GRAPH}/{VER}/{IG}/media").mock(
-        return_value=httpx.Response(200, json={"id": "container1"})
-    )
+    respx.post(f"{GRAPH}/{VER}/{IG}/media").mock(return_value=httpx.Response(200, json={"id": "container1"}))
     status = respx.get(f"{GRAPH}/{VER}/container1")
     status.side_effect = [
         httpx.Response(200, json={"status_code": "IN_PROGRESS"}),
@@ -93,20 +87,12 @@ async def test_rate_limit_then_success(client: RealInstagramClient) -> None:
         ),
         httpx.Response(200, json={"id": "c2"}),
     ]
-    respx.get(f"{GRAPH}/{VER}/c2").mock(
-        return_value=httpx.Response(200, json={"status_code": "FINISHED"})
-    )
-    respx.post(f"{GRAPH}/{VER}/{IG}/media_publish").mock(
-        return_value=httpx.Response(200, json={"id": "m2"})
-    )
+    respx.get(f"{GRAPH}/{VER}/c2").mock(return_value=httpx.Response(200, json={"status_code": "FINISHED"}))
+    respx.post(f"{GRAPH}/{VER}/{IG}/media_publish").mock(return_value=httpx.Response(200, json={"id": "m2"}))
     respx.get(f"{GRAPH}/{VER}/m2").mock(
-        return_value=httpx.Response(
-            200, json={"id": "m2", "permalink": "https://www.instagram.com/reel/x/"}
-        )
+        return_value=httpx.Response(200, json={"id": "m2", "permalink": "https://www.instagram.com/reel/x/"})
     )
-    result = await client.publish_reel(
-        account_id="a", video_ref="https://cdn.example/v.mp4", caption="c"
-    )
+    result = await client.publish_reel(account_id="a", video_ref="https://cdn.example/v.mp4", caption="c")
     assert result.external_post_id == "m2"
 
 
@@ -116,16 +102,10 @@ async def test_container_error_is_permanent(client: RealInstagramClient) -> None
     respx.get(url__regex=r".*content_publishing_limit.*").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
-    respx.post(f"{GRAPH}/{VER}/{IG}/media").mock(
-        return_value=httpx.Response(200, json={"id": "bad"})
-    )
-    respx.get(f"{GRAPH}/{VER}/bad").mock(
-        return_value=httpx.Response(200, json={"status_code": "ERROR"})
-    )
+    respx.post(f"{GRAPH}/{VER}/{IG}/media").mock(return_value=httpx.Response(200, json={"id": "bad"}))
+    respx.get(f"{GRAPH}/{VER}/bad").mock(return_value=httpx.Response(200, json={"status_code": "ERROR"}))
     with pytest.raises(RuntimeError, match="container"):
-        await client.publish_reel(
-            account_id="a", video_ref="https://cdn.example/v.mp4", caption="c"
-        )
+        await client.publish_reel(account_id="a", video_ref="https://cdn.example/v.mp4", caption="c")
 
 
 @respx.mock

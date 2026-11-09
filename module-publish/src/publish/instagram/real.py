@@ -71,10 +71,7 @@ class RealInstagramClient:
         self._last_container: dict[str, str] = {}
 
     def __repr__(self) -> str:
-        return (
-            f"RealInstagramClient(graph_base={self._base!r}, api_version={self._version!r}, "
-            "token=***)"
-        )
+        return f"RealInstagramClient(graph_base={self._base!r}, api_version={self._version!r}, token=***)"
 
     def _url(self, path: str) -> str:
         return f"{self._base}/{self._version}/{path.lstrip('/')}"
@@ -232,9 +229,7 @@ class RealInstagramClient:
 
     async def _get_media(self, auth: AccountAuth, media_id: str) -> dict[str, Any] | None:
         try:
-            return await self._get(
-                media_id, auth, params={"fields": "id,permalink,timestamp,media_type"}
-            )
+            return await self._get(media_id, auth, params={"fields": "id,permalink,timestamp,media_type"})
         except InstagramAPIError:
             return None
 
@@ -257,9 +252,7 @@ class RealInstagramClient:
         q["access_token"] = auth.access_token
         return await self._request("GET", path, params=q)
 
-    async def _post(
-        self, path: str, auth: AccountAuth, *, data: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _post(self, path: str, auth: AccountAuth, *, data: dict[str, Any]) -> dict[str, Any]:
         _ = auth
         return await self._request("POST", path, data=data)
 
@@ -308,9 +301,7 @@ class RealInstagramClient:
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 30.0)
                     continue
-                if resp.status_code >= 400 or (
-                    isinstance(body, dict) and body.get("error") is not None
-                ):
+                if resp.status_code >= 400 or (isinstance(body, dict) and body.get("error") is not None):
                     classified = classify_graph_error(
                         status_code=resp.status_code, body=body if isinstance(body, dict) else None
                     )
@@ -343,9 +334,7 @@ def _require_public_https_url(video_ref: str) -> str:
     if video_ref.startswith("https://"):
         return video_ref
     if video_ref.startswith("http://"):
-        raise RuntimeError(
-            "instagram requires https video_url (http not accepted); got http:// ref"
-        )
+        raise RuntimeError("instagram requires https video_url (http not accepted); got http:// ref")
     if video_ref.startswith("s3://"):
         raise RuntimeError(
             "instagram requires a public https video_url; s3:// refs need a presigned URL "

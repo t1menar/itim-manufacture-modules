@@ -56,6 +56,7 @@ class Worker:
         for run in runs:
             task = asyncio.create_task(self._runner.execute(run.id), name=f"run-{run.id}")
             self._tasks[run.id] = task
+
             def _done(_t: asyncio.Task[None], rid: uuid.UUID = run.id) -> None:
                 self._tasks.pop(rid, None)
 

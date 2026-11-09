@@ -103,9 +103,8 @@ class BootstrapConfig:
             instagram_mode=mode,
             instagram_access_token=token,
             instagram_ig_user_id=(source.get("PUBLISH_INSTAGRAM_IG_USER_ID") or "").strip() or None,
-            instagram_graph_base=(
-                source.get("PUBLISH_INSTAGRAM_GRAPH_BASE") or "https://graph.instagram.com"
-            ).strip().rstrip("/"),
-            instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v22.0").strip()
-            or "v22.0",
+            instagram_graph_base=(source.get("PUBLISH_INSTAGRAM_GRAPH_BASE") or "https://graph.instagram.com")
+            .strip()
+            .rstrip("/"),
+            instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v22.0").strip() or "v22.0",
         )
