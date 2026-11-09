@@ -16,9 +16,11 @@ from review.api.problems import install_problem_handlers
 from review.bootstrap import BootstrapConfig
 from review.clients.core import CoreClient
 from review.db.session import make_engine, ping, session_factory
+from review.notify.handler import NotifyHandler
 from review.observability.logging import get_logger
 from review.observability.metrics import Metrics
 from review.settings import SettingsHolder
+from review.telegram.fake import FakeTelegramBot
 from review.workers.amqp_consumer import AmqpConsumer
 
 log = get_logger(__name__)
@@ -37,9 +39,13 @@ def create_app(
     eng = engine or make_engine(config.database_url)
     factory = session_factory(eng)
     core = CoreClient(config.core_url, config.core_token)
+    bot = FakeTelegramBot()
+    notify_handler = NotifyHandler(factory, bot, config.admin_telegram_ids)
     consumer: AmqpConsumer | None = None
     if start_amqp and config.amqp_url:
-        consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory)
+        consumer = AmqpConsumer(
+            config.amqp_url, config.amqp_queue, factory, notify_handler=notify_handler
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -70,6 +76,9 @@ def create_app(
     app.state.settings_holder = settings_holder
     app.state.engine = eng
     app.state.core = core
+    app.state.session_factory = factory
+    app.state.telegram_bot = bot
+    app.state.notify_handler = notify_handler
     app.state.amqp_consumer = consumer
     app.state.db_ready = "ok"
     app.state.amqp_ready = "not_configured" if consumer is None else "starting"

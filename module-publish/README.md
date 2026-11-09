@@ -6,6 +6,9 @@ Specification: `../docs/module-publish/`.
 
 ## Status
 
+- **Fake publish runner (this PR):** `publish.domain.run_publish_intents` + `FakeInstagramClient` builds contract-valid `stage-publish-output` / result callback bodies. HTTP job intake still 501 until phase 3.
+
+
 - **Phase 1 (this PR):** project skeleton, bootstrap env, settings schema + holder, FastAPI `/info` `/health` `/ready` `/metrics`, problem+json, bearer auth on job/admin routes (handlers **501** until later), Alembic `0001` (`amqp_inbox`), optional AMQP consumer with inbox dedup, Core HTTP client (`X-Fence`, progress/result/fail), **fake Instagram Login client only** (no real network posts), Dockerfile, tests.
 - Not yet: real Instagram Login OAuth, ledger reconcile beyond stub, multi-account parallel publish.
 

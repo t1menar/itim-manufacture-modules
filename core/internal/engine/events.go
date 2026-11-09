@@ -172,30 +172,10 @@ func (e *Engine) advance(ctx context.Context, tx pgx.Tx, j liveJob) error {
 }
 
 func (e *Engine) onFailure(ctx context.Context, tx pgx.Tx, j liveJob, class string) error {
-	if class == "transient" && j.try < j.maxTries {
-		stage := j.snapshot[j.position-1]
-		s := j.spec(stage, j.variant)
-		s.chain, s.try = j.chain, j.try+1
-		_, err := e.createJob(ctx, tx, s)
-		return err
+	if j.stageID == "publish" {
+		return e.afterPublishFail(ctx, tx, j, class)
 	}
-	vars, err := e.scopeVariants(ctx, tx, j)
-	if err != nil {
-		return err
-	}
-	if class == "fatal" {
-		if _, err := tx.Exec(ctx, `UPDATE variants SET status = 'failed', rev = rev + 1 WHERE id = ANY($1)`, vars); err != nil {
-			return err
-		}
-		return e.completeProduction(ctx, tx, j.production)
-	}
-	reason := "blocked"
-	if class == "transient" {
-		reason = "retries_exhausted"
-	}
-	attention, _ := json.Marshal(map[string]any{"reason": reason, "job_id": j.id})
-	_, err = tx.Exec(ctx, `UPDATE variants SET status = 'needs_attention', attention = $2, rev = rev + 1 WHERE id = ANY($1)`, vars, attention)
-	return err
+	return e.onFailureDefault(ctx, tx, j, class)
 }
 
 // completeProduction applies core-05 §4.5.

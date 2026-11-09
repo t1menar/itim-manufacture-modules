@@ -29,10 +29,13 @@ class AmqpConsumer:
         url: str,
         queue: str,
         session_factory: async_sessionmaker[Any],
+        *,
+        notify_handler: Any | None = None,
     ) -> None:
         self._url = url
         self._queue = queue
         self._sessions = session_factory
+        self._notify = notify_handler
         self._task: asyncio.Task[None] | None = None
         self._conn: aio_pika.RobustConnection | None = None
         self.ready: str = "starting"
@@ -78,6 +81,15 @@ class AmqpConsumer:
             log.warning("amqp_bad_json", message_id=str(message_id))
             return
         msg_type = str(envelope.get("type") or message.type or "unknown")
+        if msg_type == "notify.requested" and self._notify is not None:
+            payload = envelope.get("payload") or envelope
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    payload = {}
+            await self._notify.handle(str(message_id), payload if isinstance(payload, dict) else {})
+            return
         async with self._sessions() as session, session.begin():
             claimed = await try_claim(session, str(message_id), msg_type)
         if not claimed:

@@ -165,28 +165,79 @@ func scanIntent(row pgx.CollectableRow) (Intent, error) {
 // ApplyPublished marks intent published from a module callback (idempotent on same external_id).
 func (s *Store) ApplyPublished(ctx context.Context, intentID uuid.UUID, externalID, url string, at time.Time) error {
 	return db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
+		return s.ApplyPublishedInTx(ctx, tx, intentID, externalID, url, at)
+	})
+}
+
+// ApplyPublishedInTx is ApplyPublished inside the caller's transaction.
+func (s *Store) ApplyPublishedInTx(ctx context.Context, tx pgx.Tx, intentID uuid.UUID, externalID, url string, at time.Time) error {
+	var status string
+	var curExt *string
+	if err := tx.QueryRow(ctx, `SELECT status, external_post_id FROM publish_intents WHERE id = $1 FOR UPDATE`, intentID).
+		Scan(&status, &curExt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if status == "published" {
+		if curExt != nil && *curExt == externalID {
+			return nil // identical duplicate callback
+		}
+		return ErrConflict
+	}
+	if status != "pending" && status != "in_progress" && status != "unknown" {
+		return ErrInvalidState
+	}
+	_, err := tx.Exec(ctx, `UPDATE publish_intents SET status = 'published', external_post_id = $2, url = $3,
+		published_at = $4, rev = rev + 1, updated_at = now() WHERE id = $1`, intentID, externalID, url, at)
+	return err
+}
+
+// ApplyFailedInTx marks intent failed (terminal for this generation). retryable is stored in last_error.
+func (s *Store) ApplyFailedInTx(ctx context.Context, tx pgx.Tx, intentID uuid.UUID, code string, retryable bool, message string) error {
+	var status string
+	if err := tx.QueryRow(ctx, `SELECT status FROM publish_intents WHERE id = $1 FOR UPDATE`, intentID).Scan(&status); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if status == "failed" {
+		return nil
+	}
+	if status == "published" {
+		return ErrConflict
+	}
+	if status != "pending" && status != "in_progress" && status != "unknown" {
+		return ErrInvalidState
+	}
+	detail, _ := json.Marshal(map[string]any{"code": code, "retryable": retryable, "message": message})
+	_, err := tx.Exec(ctx, `UPDATE publish_intents SET status = 'failed', last_error = $2, rev = rev + 1, updated_at = now() WHERE id = $1`, intentID, detail)
+	return err
+}
+
+// ApplyUnknownInTx marks intent unknown (reconcile needed; no auto-resend).
+func (s *Store) ApplyUnknownInTx(ctx context.Context, tx pgx.Tx, intentID uuid.UUID) error {
+	tag, err := tx.Exec(ctx, `UPDATE publish_intents SET status = 'unknown', rev = rev + 1, updated_at = now()
+		WHERE id = $1 AND status IN ('pending','in_progress','unknown')`, intentID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
 		var status string
-		var curExt *string
-		if err := tx.QueryRow(ctx, `SELECT status, external_post_id FROM publish_intents WHERE id = $1 FOR UPDATE`, intentID).
-			Scan(&status, &curExt); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+		if e := tx.QueryRow(ctx, `SELECT status FROM publish_intents WHERE id = $1`, intentID).Scan(&status); e != nil {
+			if errors.Is(e, pgx.ErrNoRows) {
 				return ErrNotFound
 			}
-			return err
+			return e
 		}
-		if status == "published" {
-			if curExt != nil && *curExt == externalID {
-				return nil // identical duplicate callback
-			}
-			return ErrConflict
+		if status == "unknown" {
+			return nil
 		}
-		if status != "pending" && status != "in_progress" && status != "unknown" {
-			return ErrInvalidState
-		}
-		_, err := tx.Exec(ctx, `UPDATE publish_intents SET status = 'published', external_post_id = $2, url = $3,
-			published_at = $4, rev = rev + 1, updated_at = now() WHERE id = $1`, intentID, externalID, url, at)
-		return err
-	})
+		return ErrInvalidState
+	}
+	return nil
 }
 
 // MarkUnknown sets status=unknown after failed reconcile (never auto-resends).

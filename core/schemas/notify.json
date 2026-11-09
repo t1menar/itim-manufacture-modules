@@ -89,7 +89,8 @@
             "enum": [
               "published",
               "failed",
-              "skipped"
+              "skipped",
+              "unknown"
             ]
           },
           "error": {
@@ -102,7 +103,19 @@
             "type": [
               "object",
               "null"
-            ]
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
           },
           "dry_run": {
             "type": "boolean"
@@ -142,6 +155,17 @@
           }
         }
       }
+    },
+    "attention_kind": {
+      "type": "string",
+      "enum": [
+        "published",
+        "partial",
+        "failed",
+        "unknown",
+        "dry_run"
+      ],
+      "description": "Core aggregate of intent outcomes for this notify"
     }
   }
 }

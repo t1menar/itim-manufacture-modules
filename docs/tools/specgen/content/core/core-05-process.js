@@ -2,7 +2,7 @@
 module.exports = {
   dir: 'core', file: 'core-05-process.docx',
   meta: { title: 'core — Process', subtitle: 'Scheduler, queue, dispatch, callbacks, retries, review loop, notify, health, recovery',
-    doc: 'core-05-process', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'core-05-process', version: '0.2', status: 'Draft', date: '2026-11-09' },
   blocks: [
 ['h1', '1. Runtime structure'],
 ['p', 'One process runs the HTTP server and a set of loops. All state is in PostgreSQL; loops keep nothing in memory that is not rebuilt on the next tick. Loops marked "leader" run on one instance only, guarded by `pg_try_advisory_lock` on a dedicated connection; dispatch workers run on every instance and coordinate through `FOR UPDATE SKIP LOCKED`. Stage 1 deploys one instance; running two is safe.'],
@@ -167,6 +167,8 @@ defaults: base 30 s, factor 2, max 1800 s, jitter 0.2  ->  ~30 s, ~60 s, ~120 s,
 ]],
 ['p', 'Revise touches only the rejected variant; the other variants of a production (none in stage 1) continue independently.'],
 ['h1', '10. Publish, then notify'],
+  ['p', 'Implementation note (2026-11-09): Core applies each \`publications[]\` entry to \`publish_intents\` (\`published\` with external id/url, \`failed\` with \`last_error.{code,retryable}\`, \`unknown\` → reconcile / \`needs_attention\` \`publish_outcome_unknown\`; \`skipped\` → \`cancelled\`). Aggregation over the latest generation per account sets the variant to \`published\` (all ok) or \`needs_attention\` (\`publish_partial\` / \`publish_failed\` / \`publish_outcome_unknown\`). Notify is a stable \`notify.requested\` outbox row (\`message_id = sha1(job_id||notify)\`) to the active module of \`notify_stage\` — not a separate \`notifications\` table in this slice.'],
+
 ['ol', [
   'Publish job succeeds; publications written. All `published` or `skipped` (dry run) → V `published`; any `failed` → V `needs_attention` (`publish_partial`). Admin retry re-runs publish; the publish module\'s idempotency key prevents a second post on accounts that already succeeded.',
   'Because the `publish` row of the snapshot has `notify_stage = review`, the same transaction inserts a `notifications` row with the notify body (contracts §7.5), `status: published | partial | failed | dry_run`. A publish job that ends failed (fatal or retries exhausted) also produces a notification with `status: failed`.',

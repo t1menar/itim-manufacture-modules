@@ -1,4 +1,4 @@
-"""Job and notify HTTP surface. Phase 1: auth + explicit not_implemented (no fake success)."""
+"""Job and notify HTTP surface."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from review.api.auth import CoreAuth, Unauthorized, unauthorized_response
 from review.api.problems import problem
@@ -35,17 +36,28 @@ async def cancel_job(job_id: UUID, _: CoreAuth) -> Any:
 
 @router.post("/v1/notify")
 async def notify(request: Request, _: CoreAuth) -> Any:
-    await request.body()
-    return problem(501, "not_implemented", "Notify is implemented in phase 6")
+    body = await request.json()
+    if not isinstance(body, dict):
+        return problem(422, "validation_error", "notify body must be a JSON object")
+    handler = getattr(request.app.state, "notify_handler", None)
+    if handler is None:
+        return problem(501, "not_implemented", "Notify handler not configured")
+    factory = request.app.state.session_factory
+    async with factory() as session, session.begin():
+        result = await handler.handle_http(session, body)
+    return JSONResponse(
+        status_code=200,
+        content={"ok": True, "claimed": result.claimed, "sent": result.sent, "status": result.status},
+    )
 
 
 def install_auth_handler(app: Any) -> None:
     from fastapi import Request as FRequest
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse as JR
 
-    async def _unauth(_: FRequest, __: Unauthorized) -> JSONResponse:
+    async def _unauth(_: FRequest, __: Unauthorized) -> JR:
         resp = unauthorized_response()
-        if not isinstance(resp, JSONResponse):
+        if not isinstance(resp, JR):
             raise TypeError("unauthorized_response must return JSONResponse")
         return resp
 
