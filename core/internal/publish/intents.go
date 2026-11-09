@@ -54,26 +54,31 @@ type Intent struct {
 
 // CreateRevision appends an immutable content revision for the variant (body snapshotted as-is).
 func (s *Store) CreateRevision(ctx context.Context, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
+	var out Revision
+	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.CreateRevisionInTx(ctx, tx, variantID, sourceJob, body)
+		return err
+	})
+	return out, err
+}
+
+// CreateRevisionInTx is CreateRevision inside the caller's transaction (video result → revision).
+func (s *Store) CreateRevisionInTx(ctx context.Context, tx pgx.Tx, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
 	if len(body) == 0 || body[0] != '{' {
 		return Revision{}, fmt.Errorf("body must be a JSON object")
 	}
 	sum := sha256.Sum256(body)
-	var out Revision
-	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
-		var next int
-		if err := tx.QueryRow(ctx, `SELECT coalesce(max(revision), 0) + 1 FROM content_revisions WHERE variant_id = $1`, variantID).Scan(&next); err != nil {
-			return err
-		}
-		id := uuid.Must(uuid.NewV7())
-		_, err := tx.Exec(ctx, `INSERT INTO content_revisions (id, variant_id, revision, body, sha256, source_job_id)
-			VALUES ($1,$2,$3,$4,$5,$6)`, id, variantID, next, body, sum[:], sourceJob)
-		if err != nil {
-			return err
-		}
-		out = Revision{ID: id, VariantID: variantID, Revision: next, Body: append(json.RawMessage(nil), body...), SHA256: sum[:]}
-		return nil
-	})
-	return out, err
+	var next int
+	if err := tx.QueryRow(ctx, `SELECT coalesce(max(revision), 0) + 1 FROM content_revisions WHERE variant_id = $1`, variantID).Scan(&next); err != nil {
+		return Revision{}, err
+	}
+	id := uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO content_revisions (id, variant_id, revision, body, sha256, source_job_id)
+		VALUES ($1,$2,$3,$4,$5,$6)`, id, variantID, next, body, sum[:], sourceJob); err != nil {
+		return Revision{}, err
+	}
+	return Revision{ID: id, VariantID: variantID, Revision: next, Body: append(json.RawMessage(nil), body...), SHA256: sum[:]}, nil
 }
 
 // ApproveRevision marks the revision approved and creates generation-1 intents for every

@@ -280,7 +280,7 @@ defaults: base 30 s, factor 2, max 1800 s, jitter 0.2  ->  ~30 s, ~60 s, ~120 s,
 ], [2.4, 2.4, 2]],
 ['h1', '20. Publish intents and content revisions (C37-C38; C38 accepted 2026-11-09)'],
 ['ol', [
-  'A video or metadata result creates content revision n+1 of the variant (immutable). The review job is created for the latest revision.',
+  'A successful video (or revise) result creates content revision n+1 of the variant (immutable), snapshotting `variants[].metadata` (D19/C39) with artifact refs and provenance. The review job is created for the latest revision.',
   'Review `approved` with matching `content_revision_id` sets `approved_round` and, in the same transaction, creates generation-1 intents for every routed account that has none, then the publish job with the intent ids.',
   'Publish output per intent: `published` -> intent `published`; `failed` -> intent `failed` (retry rules apply to the job, same intent); `blocked` + `publish_outcome_unknown` -> intent `unknown`, variant `needs_attention`.',
   'Admin retry of a `needs_attention` publish re-uses the same intents; module-publish reconciles its ledger before any new platform call.',
