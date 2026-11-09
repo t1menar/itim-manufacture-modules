@@ -21,22 +21,30 @@ import (
 	"github.com/t1menar/manufacture/core/internal/messaging"
 )
 
-func TestDuplicateScheduleCreatesOneProduction(t *testing.T) {
+func TestDuplicateIdeaReadyCreatesOneProduction(t *testing.T) {
 	e := setup(t)
-	e.idea("one idea")
+	const id, rev = int64(1001), 1
+	if err := e.applyIdeaReady(id, rev); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.applyIdeaReady(id, rev); err != nil {
+		t.Fatal(err)
+	}
 	var wg sync.WaitGroup
+	errCh := make(chan error, 8)
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := e.eng.Tick(e.ctx); err != nil {
-				t.Error(err)
-			}
+			errCh <- e.applyIdeaReady(id, rev)
 		}()
 	}
 	wg.Wait()
-	if _, err := e.eng.Tick(e.ctx); err != nil {
-		t.Fatal(err)
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	if n := e.count(`SELECT count(*) FROM productions`); n != 1 {
 		t.Fatalf("productions = %d, want 1", n)
@@ -44,8 +52,9 @@ func TestDuplicateScheduleCreatesOneProduction(t *testing.T) {
 	if n := e.count(`SELECT count(*) FROM jobs`); n != 1 {
 		t.Fatalf("jobs = %d, want 1", n)
 	}
-	if n := e.count(`SELECT count(*) FROM outbox`); n != 1 {
-		t.Fatalf("outbox = %d, want 1", n)
+	// job.requested + idea.in_production
+	if n := e.count(`SELECT count(*) FROM outbox`); n != 2 {
+		t.Fatalf("outbox = %d, want 2", n)
 	}
 	// State and outbox are one transaction: the job request and the outbox body agree.
 	if n := e.count(`SELECT count(*) FROM outbox o JOIN jobs j ON (o.body->'job'->>'job_id')::uuid = j.id AND (o.body->'job'->>'fence')::int = j.fence`); n != 1 {
@@ -56,8 +65,8 @@ func TestDuplicateScheduleCreatesOneProduction(t *testing.T) {
 func TestDBRejectsSecondRunningProductionAndSecondLiveJob(t *testing.T) {
 	e := setup(t)
 	e.startedJob()
-	_, err := e.pool.Exec(e.ctx, `INSERT INTO productions (id, idea_id, run_no, pipeline_id, pipeline_snapshot, language, status)
-		SELECT gen_random_uuid(), idea_id, run_no + 1, pipeline_id, pipeline_snapshot, language, 'running' FROM productions`)
+	_, err := e.pool.Exec(e.ctx, `INSERT INTO productions (id, idea_id, idea_rev, idea_ref, run_no, pipeline_id, pipeline_snapshot, language, status)
+		SELECT gen_random_uuid(), idea_id, idea_rev, 'idea:' || idea_id::text || ':v' || (idea_rev + 100)::text, run_no + 1, pipeline_id, pipeline_snapshot, language, 'running' FROM productions`)
 	if !db.IsUniqueViolation(err, "productions_live_uq") {
 		t.Fatalf("want productions_live_uq violation, got %v", err)
 	}
@@ -130,7 +139,7 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	}
 	d := e.get(e.topo.ModuleQueue("vidmod"))
 	var outboxID string
-	_ = e.pool.QueryRow(e.ctx, `SELECT message_id::text FROM outbox WHERE status = 'sent'`).Scan(&outboxID)
+	_ = e.pool.QueryRow(e.ctx, `SELECT message_id::text FROM outbox WHERE status = 'sent' AND routing_key LIKE 'job.%' LIMIT 1`).Scan(&outboxID)
 	if d.MessageId != outboxID {
 		t.Fatalf("AMQP message_id %q != outbox %q", d.MessageId, outboxID)
 	}
@@ -170,8 +179,8 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	if n := e.count(`SELECT count(*) FROM productions WHERE status = 'done'`); n != 1 {
 		t.Fatal("production not done")
 	}
-	if n := e.count(`SELECT count(*) FROM ideas WHERE status = 'done'`); n != 1 {
-		t.Fatal("idea not done")
+	if n := e.count(`SELECT count(*) FROM outbox WHERE routing_key = 'idea.done'`); n != 1 {
+		t.Fatal("idea.done not enqueued")
 	}
 	if n := e.count(`SELECT count(*) FROM variants WHERE status = 'published'`); n != 1 {
 		t.Fatal("variant not published")
@@ -181,13 +190,15 @@ func TestHappyPathThroughBroker(t *testing.T) {
 func TestCrashAfterConfirmResendsSameMessageID(t *testing.T) {
 	e := setup(t)
 	e.startedJob()
+	// D21 also enqueues idea.in_production on the events exchange; this test is about job command resend.
+	e.exec(`UPDATE outbox SET status = 'sent', sent_at = now() WHERE routing_key LIKE 'idea.%'`)
 	r1 := e.relay("w1")
 	r1.AfterConfirm = func(uuid.UUID) error { return errors.New("crash") }
 	if _, err := r1.RunOnce(e.ctx, e.conn); err == nil {
 		t.Fatal("expected simulated crash")
 	}
-	if n := e.count(`SELECT count(*) FROM outbox WHERE status = 'pending'`); n != 1 {
-		t.Fatal("row must stay pending after a crash before mark-sent")
+	if n := e.count(`SELECT count(*) FROM outbox WHERE status = 'pending' AND routing_key LIKE 'job.%'`); n != 1 {
+		t.Fatal("job outbox row must stay pending after a crash before mark-sent")
 	}
 	// a second relay cannot steal the row while the lease is valid ...
 	if n, _ := e.relay("w2").RunOnce(e.ctx, e.conn); n != 0 {
@@ -243,10 +254,10 @@ func TestConsumerCrashBeforeCommitRedelivers(t *testing.T) {
 	if err := c.Consume(e.ctx, e.conn); err == nil {
 		t.Fatal("expected crash")
 	}
-	if n := e.count(`SELECT count(*) FROM inbox`); n != 0 {
-		t.Fatal("rolled-back message left an inbox row")
+	if n := e.count(`SELECT count(*) FROM inbox WHERE type LIKE 'job.%'`); n != 0 {
+		t.Fatal("rolled-back job message left an inbox row")
 	}
-	if err := e.consumeUntil(e.consumer(), func() bool { return e.count(`SELECT count(*) FROM inbox`) == 1 }); err != nil {
+	if err := e.consumeUntil(e.consumer(), func() bool { return e.count(`SELECT count(*) FROM inbox WHERE type LIKE 'job.%'`) == 1 }); err != nil {
 		t.Fatal(err)
 	}
 	if n := e.count(`SELECT count(*) FROM jobs WHERE stage_id = 'review'`); n != 1 {
@@ -284,12 +295,12 @@ func TestTakeoverFencesStaleEvents(t *testing.T) {
 	if err != nil || newFence != fence+1 {
 		t.Fatalf("takeover: fence=%d err=%v", newFence, err)
 	}
-	if n := e.count(`SELECT count(DISTINCT message_id) FROM outbox`); n != 2 {
+	if n := e.count(`SELECT count(DISTINCT message_id) FROM outbox WHERE routing_key LIKE 'job.%'`); n != 2 {
 		t.Fatal("takeover must enqueue a new request")
 	}
 	old := e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	stale := e.moduleEvent("vidmod2", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
-	if err := e.consumeUntil(e.consumer(), func() bool { return e.count(`SELECT count(*) FROM inbox`) == 2 }); err != nil {
+	if err := e.consumeUntil(e.consumer(), func() bool { return e.count(`SELECT count(*) FROM inbox WHERE type LIKE 'job.%'`) == 2 }); err != nil {
 		t.Fatal(err)
 	}
 	var o1, o2 string
@@ -329,8 +340,8 @@ func TestFailingHandlerIsBoundedAndDeadLettered(t *testing.T) {
 	if n := calls.Load(); n != 3 {
 		t.Fatalf("handler calls = %d; MaxAttempts 3 must bound retries", n)
 	}
-	if n := e.count(`SELECT count(*) FROM inbox`); n != 0 {
-		t.Fatal("failed message left inbox row")
+	if n := e.count(`SELECT count(*) FROM inbox WHERE type LIKE 'job.%'`); n != 0 {
+		t.Fatal("failed job message left inbox row")
 	}
 }
 

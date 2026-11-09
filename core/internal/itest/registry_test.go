@@ -97,14 +97,11 @@ func TestHeartbeatTimeoutBlocksDispatch(t *testing.T) {
 		t.Fatal("not down")
 	}
 	e.idea("offline module")
-	if created, err := e.eng.Tick(e.ctx); err != nil || created != 1 {
-		t.Fatalf("tick: %d %v", created, err)
-	}
 	if e.count(`SELECT count(*) FROM jobs WHERE status = 'queued' AND module_id IS NULL`) != 1 {
 		t.Fatalf("expected queued job without module")
 	}
-	if e.count(`SELECT count(*) FROM outbox`) != 0 {
-		t.Fatal("must not dispatch to down module")
+	if e.count(`SELECT count(*) FROM outbox WHERE routing_key LIKE 'job.%'`) != 0 {
+		t.Fatal("must not dispatch job to down module")
 	}
 }
 

@@ -35,7 +35,8 @@ type JobRef struct {
 
 var (
 	knownTypes = map[string]bool{"job.requested": true, "job.cancel_requested": true, "notify.requested": true,
-		"job.progress": true, "job.succeeded": true, "job.failed": true}
+		"job.progress": true, "job.succeeded": true, "job.failed": true,
+		"idea.ready": true, "idea.in_production": true, "idea.done": true, "idea.failed": true}
 	producerRe = regexp.MustCompile(`^(core|module:[a-z0-9][a-z0-9-]{1,39})$`)
 	// MaxBody is the message size limit of core-04 §15.1.
 	MaxBody = 256 << 10

@@ -230,12 +230,12 @@ func (e *Engine) lockJob(ctx context.Context, tx pgx.Tx, jobID uuid.UUID) (jobRo
 	var snap []byte
 	err := tx.QueryRow(ctx, `SELECT j.id, j.production_id, j.variant_id, j.stage_id, j.module_id, j.position, j.chain_id, j.try, j.max_attempts,
 			j.fence, j.status, j.cancel_requested, j.round, j.mode, coalesce(j.error, 'null'::jsonb), coalesce(j.output, 'null'::jsonb),
-			p.pipeline_snapshot, i.id, i.text, p.language
-		FROM jobs j JOIN productions p ON p.id = j.production_id JOIN ideas i ON i.id = p.idea_id
+			p.pipeline_snapshot, p.idea_id, p.idea_rev, p.language
+		FROM jobs j JOIN productions p ON p.id = j.production_id
 		WHERE j.id = $1 FOR UPDATE OF j`, jobID).
 		Scan(&j.id, &j.production, &j.variant, &j.stageID, &j.moduleID, &j.position, &j.chain, &j.try, &j.maxTries,
 			&j.fence, &j.status, &j.cancelRequested, &j.round, &j.mode, &j.errorJSON, &j.outputJSON,
-			&snap, &j.ideaID, &j.ideaText, &j.language)
+			&snap, &j.ideaID, &j.ideaRev, &j.language)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return j, ErrJobNotCurrent
 	}

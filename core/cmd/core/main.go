@@ -97,7 +97,7 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 			}
 		},
 	}
-	consumer := &messaging.Consumer{Pool: pool, Name: "core.job-events", Queue: topo.CoreEvents(), Handler: eng.HandleJobEvent, Log: log}
+	consumer := &messaging.Consumer{Pool: pool, Name: "core.job-events", Queue: topo.CoreEvents(), Handler: eng.HandleEvent, Log: log}
 
 	api := &httpapi.Server{
 		Checks: map[string]httpapi.Check{
@@ -130,20 +130,7 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 			}
 		}
 	})
-	start(func() {
-		t := time.NewTicker(5 * time.Second)
-		defer t.Stop()
-		for {
-			if _, err := eng.Tick(loops); err != nil && loops.Err() == nil {
-				log.Warn("scheduler tick", "err", err)
-			}
-			select {
-			case <-loops.Done():
-				return
-			case <-t.C:
-			}
-		}
-	})
+	// D21: idea intake is via idea.ready consumer (HandleEvent), not a DB poller.
 	start(func() {
 		t := time.NewTicker(2 * time.Second)
 		defer t.Stop()

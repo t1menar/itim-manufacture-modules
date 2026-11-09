@@ -18,15 +18,15 @@ import (
 func (e *Engine) CreateRepublishJob(ctx context.Context, tx pgx.Tx, variantID, intentID, revisionID uuid.UUID, generation int) (uuid.UUID, error) {
 	e.defaults()
 	var production uuid.UUID
-	var language, ideaText string
+	var language string
 	var ideaID int64
+	var ideaRev int
 	var snapshotJSON []byte
-	if err := tx.QueryRow(ctx, `SELECT v.production_id, v.language, i.id, i.text, p.pipeline_snapshot
+	if err := tx.QueryRow(ctx, `SELECT v.production_id, v.language, p.idea_id, p.idea_rev, p.pipeline_snapshot
 		FROM variants v
 		JOIN productions p ON p.id = v.production_id
-		JOIN ideas i ON i.id = p.idea_id
 		WHERE v.id = $1 FOR UPDATE OF v`, variantID).
-		Scan(&production, &language, &ideaID, &ideaText, &snapshotJSON); err != nil {
+		Scan(&production, &language, &ideaID, &ideaRev, &snapshotJSON); err != nil {
 		return uuid.Nil, err
 	}
 	var snapshot []StageRow
@@ -75,7 +75,7 @@ func (e *Engine) CreateRepublishJob(ctx context.Context, tx pgx.Tx, variantID, i
 		"stage": "publish", "mode": "republish", "round": 0,
 		"variant": map[string]any{"id": variantID.String(), "language": language},
 		"input": map[string]any{
-			"idea":     map[string]any{"id": ideaID, "text": ideaText, "language": language},
+			"idea_ref": map[string]any{"id": ideaID, "rev": ideaRev},
 			"channels": []any{}, "upstream": map[string]any{},
 			"intents": []map[string]any{{
 				"intent_id": intentID.String(), "content_revision_id": revisionID.String(), "generation": generation,

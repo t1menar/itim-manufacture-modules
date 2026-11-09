@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,12 +158,51 @@ func (e *env) count(sql string, args ...any) int {
 	return n
 }
 
-func (e *env) idea(text string) int64 {
+// applyIdeaReady applies one idea.ready (D21). Duplicate message_id is a no-op.
+func (e *env) applyIdeaReady(id int64, rev int) error {
+	payload, _ := json.Marshal(map[string]any{
+		"idea_ref": map[string]any{"id": id, "rev": rev},
+		"language": "en", "pipeline_id": nil, "priority": 0,
+	})
+	msgID := messaging.IdeaReadyMessageID(id, rev)
+	env := messaging.Envelope{
+		MessageID: msgID, Type: "idea.ready", SchemaVersion: 1, OccurredAt: time.Now().UTC(),
+		Producer: "module:video", Payload: payload,
+	}
+	return db.WithTx(e.ctx, e.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(e.ctx, `INSERT INTO inbox (consumer, message_id, type, outcome) VALUES ('core.job-events', $1, 'idea.ready', 'applied')
+			ON CONFLICT DO NOTHING`, msgID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return nil
+		}
+		outcome, err := e.eng.HandleEvent(e.ctx, tx, env)
+		if err != nil {
+			return err
+		}
+		if outcome != messaging.Applied && outcome != messaging.Conflict {
+			return fmt.Errorf("idea.ready outcome %s", outcome)
+		}
+		return nil
+	})
+}
+
+func (e *env) ideaReady(id int64, rev int) {
 	e.t.Helper()
-	var id int64
-	if err := e.pool.QueryRow(e.ctx, `INSERT INTO ideas (text, status, queued_at) VALUES ($1, 'queued', now()) RETURNING id`, text).Scan(&id); err != nil {
+	if err := e.applyIdeaReady(id, rev); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+var testIdeaSeq int64
+
+func (e *env) idea(text string) int64 {
+	e.t.Helper()
+	_ = text
+	id := atomic.AddInt64(&testIdeaSeq, 1)
+	e.ideaReady(id, 1)
 	return id
 }
 
@@ -171,17 +211,14 @@ func (e *env) relay(worker string) *messaging.Relay {
 }
 
 func (e *env) consumer() *messaging.Consumer {
-	return &messaging.Consumer{Pool: e.pool, Name: "core.job-events", Queue: e.topo.CoreEvents(), Handler: e.eng.HandleJobEvent,
+	return &messaging.Consumer{Pool: e.pool, Name: "core.job-events", Queue: e.topo.CoreEvents(), Handler: e.eng.HandleEvent,
 		Log: e.log, RetryDelay: func(int64) time.Duration { return 50 * time.Millisecond }}
 }
 
-// startedJob runs one scheduler tick and returns the first (video) job.
+// startedJob applies one idea.ready and returns the first (video) job.
 func (e *env) startedJob() (jobID uuid.UUID, fence int) {
 	e.t.Helper()
 	e.idea("an idea")
-	if n, err := e.eng.Tick(e.ctx); err != nil || n != 1 {
-		e.t.Fatalf("tick: n=%d err=%v", n, err)
-	}
 	if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs`).Scan(&jobID, &fence); err != nil {
 		e.t.Fatal(err)
 	}
