@@ -204,4 +204,5 @@ class AgentStep(Step):
 
     # -- helpers for subclasses ---------------------------------------------------------------------
     async def read_json(self, ctx: RunContext, step: str, name: str) -> Any:
-        return json.loads(await ctx.storage.get_bytes(ctx.outputs[step][name].ref))
+        files = ctx.files(step) if step == "script" else ctx.outputs[step]
+        return json.loads(await ctx.storage.get_bytes(files[name].ref))

@@ -33,6 +33,18 @@ class RunContext:
     sandbox_mcp_url: str = ""
     fix_reports: dict[str, str] = field(default_factory=dict)  # step -> check report of a fix round
     usage: list[Any] = field(default_factory=list)  # Cost records of agent runs (accounted by the runner)
+    # revise mode: files of the last succeeded run of the production, and what this run found out
+    previous: dict[str, dict[str, Artifact]] = field(default_factory=dict)
+    values_changed: list[str] = field(default_factory=list)
+    sandbox_used: bool = (
+        False  # set by the capture step when it ran a sandbox (revise tests assert it did not)
+    )
+
+    def files(self, step: str) -> dict[str, Artifact]:
+        """Outputs of a step; in revise mode `script` is produced by `script-revise`."""
+        if step == "script" and "script-revise" in self.outputs:
+            return self.outputs["script-revise"]
+        return self.outputs[step]
 
     def key(self, step: str, name: str) -> str:
         return object_key(str(self.production_id), self.attempt, step, name)

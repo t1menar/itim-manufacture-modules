@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from mvideo.pipeline.context import RunContext
@@ -13,8 +14,11 @@ from mvideo.pipeline.steps.agent_step import (
     environment_json,
     jdump,
     limits_json,
+    parse_docs,
 )  # fmt: skip
 from mvideo.validate.issues import Issue
+from mvideo.validate.rules import RuleConfig
+from mvideo.validate.runner import validate_documents
 
 
 class AnalysisStep(AgentStep):
@@ -121,3 +125,60 @@ class ScriptStep(AgentStep):
         a = await self.read_json(ctx, "analysis", "analysis.json")
         research = await self.read_json(ctx, "research", "research.json")
         return await ctx.git_cache.ensure(ctx.settings, a["system"]["repo"], research["commit"])
+
+
+class ReviseScriptStep(AgentStep):
+    """script-revise (05 section 3, 06 section 9): a minimal edit of the previous script."""
+
+    name = "script-revise"
+    lo, hi = 0, 35
+    produces = ("script.en.json", "changes.en.json")
+    settings_keys = ("video", "text", "timing", "palette", "prompt_versions", "limits", "revise")
+
+    async def _previous_script(self, ctx: RunContext) -> bytes:
+        return await ctx.storage.get_bytes(ctx.previous["script"]["script.en.json"].ref)
+
+    async def inputs(self, ctx: RunContext) -> dict[str, bytes]:
+        get = ctx.storage.get_bytes
+        return {
+            "previous/script.en.json": await self._previous_script(ctx),
+            "research.json": await get(ctx.outputs["research"]["research.json"].ref),
+            "capture.json": await get(ctx.previous["capture"]["capture.json"].ref),
+            "channel.json": jdump(channel_json(ctx)),
+            "limits.json": jdump(limits_json(ctx)),
+        }
+
+    async def values(self, ctx: RunContext) -> dict[str, Any]:
+        v = common_values(ctx)
+        research = await self.read_json(ctx, "research", "research.json")
+        prev = ctx.input.previous
+        if prev is None:
+            raise StepError("fatal", "input_invalid", "revise needs input.previous", step=self.name)
+        return {k: v[k] for k in ("min_s", "max_s", "reading_wps")} | {
+            "review_reason": prev.review_reason,
+            "round": prev.round,
+            "commit": research["commit"],
+        }
+
+    async def src_volume(self, ctx: RunContext) -> str | None:
+        if ctx.git_cache is None:
+            return None
+        a = await self.read_json(ctx, "analysis", "analysis.json")
+        research = await self.read_json(
+            ctx, "research", "research.json"
+        )  # the pinned commit, never re-resolved
+        return await ctx.git_cache.ensure(ctx.settings, a["system"]["repo"], research["commit"])
+
+    def validate(self, ctx: RunContext, inputs: dict[str, bytes], out: dict[str, bytes]) -> list[Issue]:
+        docs = {
+            k: v
+            for k, v in {**parse_docs(inputs), **parse_docs(out)}.items()
+            if not k.startswith("previous/")
+        }
+        previous = json.loads(inputs["previous/script.en.json"])
+        report = validate_documents(
+            docs, source=ctx.source, cfg=RuleConfig.from_settings(ctx.settings.model_dump(mode="json")),
+            previous_script=previous,
+        )  # fmt: skip
+        produced = set(parse_docs(out))
+        return [i for i in report.issues if i.file in produced or not i.file]

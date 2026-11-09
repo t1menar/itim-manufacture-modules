@@ -104,7 +104,9 @@ class Runner:
         cancel_poll_s: float = 2.0,
         clock: Callable[[], dt.datetime] = _utcnow,
         services: dict[str, Any] | None = None,
+        revise_steps: list[Step] | None = None,
     ) -> None:
+        self._revise_steps = revise_steps  # None: revise runs the same steps (fakes)
         self._services = services or {}  # launcher, source, docker, ... for RunContext
         self._factory = factory
         self._storage = storage
@@ -272,8 +274,10 @@ class Runner:
                 if row.name not in existing or row.try_ > existing[row.name].try_:
                     existing[row.name] = row
         limits = ctx.settings.limits
+        if ctx.mode == "revise":
+            await self._load_previous(run, ctx)
 
-        for spec in self._steps:
+        for spec in self._revise_steps if ctx.mode == "revise" and self._revise_steps else self._steps:
             self._check_control(cancel, lost)
             row = existing.get(spec.name)
             if row is not None and row.status in ("succeeded", "reused"):
@@ -328,6 +332,21 @@ class Runner:
                     await repo.log_usage(s, "agent_run", run.id, step=spec.name, at=finished)
             ctx.outputs[spec.name] = produced
             await self._progress(call, spec.hi, spec.name, f"{spec.name} finished")
+
+    async def _load_previous(self, run: Run, ctx: RunContext) -> None:
+        """Revise: files of the last succeeded run; analysis and research stay as they were."""
+        async with self._factory() as s:
+            prev = await repo.previous_outputs(s, run.production_id, run.id)
+        need = ("analysis", "research", "capture", "package")
+        if prev is None or any(n not in prev for n in need):
+            raise StepError(
+                "fatal", "input_invalid", "no succeeded previous run to revise", step="script-revise"
+            )
+        ctx.previous = {name: _artifacts(files) for name, files in prev.items()}
+        if ctx.input.previous is None:
+            raise StepError("fatal", "input_invalid", "revise needs input.previous", step="script-revise")
+        ctx.previous["script"] = {"script.en.json": Artifact(ctx.input.previous.script_ref, "", 0, "json")}
+        ctx.outputs["analysis"], ctx.outputs["research"] = ctx.previous["analysis"], ctx.previous["research"]
 
     async def _race(
         self, spec: Step, ctx: RunContext, cancel: asyncio.Event, lost: asyncio.Event
