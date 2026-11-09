@@ -1,0 +1,109 @@
+# module-video with everything it needs on one machine.
+#   cp .env.example .env     # then edit the values you care about
+#   docker compose up -d --build
+# Agent image (needed once, before the first real job):  docker compose --profile build build video-agent
+services:
+  module-video:
+    build: .
+    image: module-video:dev
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    ports:
+      - "${VIDEO_PORT:-8080}:8080"
+    environment:
+      VIDEO_DATABASE_URL: postgresql+asyncpg://video:${POSTGRES_PASSWORD:-video}@postgres:5432/video
+      VIDEO_LISTEN_ADDR: 0.0.0.0:8080
+      MODULE_CORE_URL: ${MODULE_CORE_URL:-http://host.docker.internal:8000}
+      MODULE_CORE_TOKEN: ${MODULE_CORE_TOKEN:-dev-token}       # also the bearer token callers must send to this module
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-manufacture}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-manufacture_dev_secret}
+      S3_BUCKET: ${S3_BUCKET:-manufacture}
+      DOCKER_HOST: unix:///var/run/docker.sock
+      VIDEO_AGENT_NETWORK: video-agents
+      MODULE_AMQP_URL: amqp://guest:guest@rabbitmq:5672/    # empty: the idea scheduler and status consumer stay off
+      MVIDEO_PIPELINE: ${MVIDEO_PIPELINE:-real}              # `real` = Claude agents + sandbox + render; empty = fake steps
+      MVIDEO_SELF_HOST: module-video                         # how agent containers reach the sandbox MCP of this module
+      MVIDEO_AGENT_NETWORK: video-agents
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # The module starts sandbox and agent containers through the Docker socket. Use the group id of
+    # the socket on your machine: `stat -c %g /var/run/docker.sock` (Linux); on Docker Desktop use 0.
+    group_add: ["${DOCKER_GID:-0}"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [default, video-agents]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: video
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-video}
+      POSTGRES_DB: video
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"    # for psql: manage the `credentials` table here
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U video -d video"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "${RABBITMQ_PORT:-55672}:5672"
+      - "${RABBITMQ_UI_PORT:-55673}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  minio:
+    image: bitnami/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-manufacture}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-manufacture_dev_secret}
+      MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-manufacture}
+    ports:
+      - "${S3_PORT:-59000}:9000"
+      - "${S3_CONSOLE_PORT:-59001}:9001"
+    volumes:
+      - miniodata:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # Settings must name the agent image by digest, so a local image has to pass through a registry.
+  registry:
+    image: registry:2
+    profiles: [registry]
+    ports:
+      - "127.0.0.1:5000:5000"
+
+  # Build only: `docker compose --profile build build video-agent`
+  video-agent:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    image: video-agent:dev
+    profiles: [build]
+    entrypoint: ["true"]
+
+networks:
+  # Agent containers live here; the module joins it to serve the egress proxy and the sandbox MCP.
+  video-agents:
+    name: video-agents
+
+volumes:
+  pgdata:
+  miniodata:
