@@ -19,6 +19,7 @@ dependencies = [
     "pillow>=11",
     "numpy>=2",
     "fonttools>=4.50",
+    "scipy>=1.13",
 ]
 
 [project.scripts]
@@ -37,6 +38,7 @@ dev = [
     "testcontainers[postgres]>=4.8",
     "moto[server]>=5",
     "hypothesis>=6.170.15",
+    "imageio-ffmpeg>=0.8.1",
 ]
 
 [build-system]
@@ -77,7 +79,7 @@ strict = true
 files = ["src/mvrender"]
 
 [[tool.mypy.overrides]]
-module = ["fontTools.*"]
+module = ["fontTools.*", "scipy.*", "imageio_ffmpeg.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

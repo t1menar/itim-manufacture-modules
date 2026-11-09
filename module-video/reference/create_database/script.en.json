@@ -71,7 +71,7 @@
    "id": "s0-hook",
    "kind": "terminal",
    "hook": {
-    "impact_line": 1,
+    "impact_line": 2,
     "line_step_s": 1.2
    },
    "captions": [
