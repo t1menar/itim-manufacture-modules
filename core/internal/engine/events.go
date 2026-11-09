@@ -258,3 +258,25 @@ func (e *Engine) RetryVariant(ctx context.Context, tx pgx.Tx, variantID uuid.UUI
 
 // ErrInvalidState maps to 409 invalid_state.
 var ErrInvalidState = errors.New("invalid_state")
+
+// SkipVariant marks a needs_attention variant skipped (admin). Clears attention.
+func (e *Engine) SkipVariant(ctx context.Context, tx pgx.Tx, variantID uuid.UUID, reason string) error {
+	e.defaults()
+	var status string
+	if err := tx.QueryRow(ctx, `SELECT status FROM variants WHERE id = $1 FOR UPDATE`, variantID).Scan(&status); err != nil {
+		return err
+	}
+	if status != "needs_attention" {
+		return ErrInvalidState
+	}
+	attention, _ := json.Marshal(map[string]any{"reason": "skipped_by_admin", "message": reason})
+	_, err := tx.Exec(ctx, `UPDATE variants SET status = 'skipped', attention = $2, rev = rev + 1 WHERE id = $1`, variantID, attention)
+	if err != nil {
+		return err
+	}
+	var prod uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT production_id FROM variants WHERE id = $1`, variantID).Scan(&prod); err != nil {
+		return err
+	}
+	return e.completeProduction(ctx, tx, prod)
+}
