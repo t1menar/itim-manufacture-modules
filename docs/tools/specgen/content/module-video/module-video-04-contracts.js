@@ -14,7 +14,7 @@ module.exports = {
 ['table', ['Method and path', 'Auth', 'Answer'], [
   ['`GET /info`', 'none (internal network)', '`200` info document (§2.1)'],
   ['`GET /health`', 'none', '`200 {"status": "ok"}` when the process and DB are alive, else `503`'],
-  ['`GET /ready`', 'none', '`200 {"ready": true}` or `503 {"ready": false, "reasons": ["docker_proxy_unreachable", "agent_image_missing", "capacity_full", …]}`'],
+  ['`GET /ready`', 'none', '`200 {"ready": true}` or `503 {"ready": false, "reasons": ["docker_proxy_unreachable", "agent_image_missing", "capacity_full", …], "auth": "configured|missing"}`; a usage limit never makes it `503`'],
   ['`GET /metrics`', 'none', 'Prometheus text format'],
   ['`POST /v1/jobs`', 'Bearer module token', '`202 {"job_id", "status": "accepted"}`; repeated id → `202` with current status'],
   ['`GET /v1/jobs/{job_id}`', 'Bearer', '`200` job status (§2.4) or `404`'],
@@ -38,7 +38,7 @@ module.exports = {
   ['`input.channels[0]`', 'channel `itim`; `settings` keys used by the module in §2.3'],
   ['`input.previous`', 'revise only: `script_ref`, `review_reason`, `round`'],
   ['`settings`', '`{version, values}`; `values` validated against §10, else `422` code `settings_invalid`'],
-  ['`credentials`', 'must contain the reference named by setting `anthropic_credential` (default `cred:anthropic-main`)'],
+  ['`credentials`', 'must contain the reference named by setting `agent.auth.credential_ref` (default `cred:claude-subscription`)'],
   ['`callback.base_url`, `deadline`', 'callbacks; the run stops at `deadline − 60 s` with `transient` code `deadline`'],
 ], [1.6, 4.8]],
 ['code', `// input_schema (module view of "input")
@@ -92,7 +92,7 @@ module.exports = {
      "prompts": {"analysis": "analysis@1.0.0", "research": "research@1.0.0", "script": "script@1.0.0",
                  "capture": "capture@1.0.0", "package": "package@1.0.0"},
      "skill": "explainer-video@1.0.0",
-     "models": {"analysis": "claude-opus-5-5", "…": "…"},
+     "models": {"analysis": "claude-opus-5-5", "…": "…"}, "auth_mode": "subscription", "cost_mode": "estimate",
      "settings_version": 7, "renderer_version": "0.2.0",
      "fonts": {"Inter-Bold.ttf": "sha256:…", "…": "…"},
      "agent": {"image_digest": "sha256:…", "sdk_version": "…", "claude_code_version": "…"},
@@ -102,7 +102,7 @@ module.exports = {
                {"ref": "s3://…/cover.en.jpg", "sha256": "…", "size": 201133, "kind": "image"},
                {"ref": "s3://…/sheet.en.jpg", "sha256": "…", "size": 902114, "kind": "image"},
                {"ref": "s3://…/script.en.json", "sha256": "…", "size": 41022, "kind": "json"}, "…"],
- "metrics": {"cost_usd": 6.12, "tokens_in": 1830211, "tokens_out": 61204}}`],
+ "metrics": {"cost_usd": 6.12, "cost_estimated": true, "tokens_in": 1830211, "tokens_out": 61204}}`],
 ['p', '`tokens_in` = input + cache-read + cache-write tokens of all agent runs; `tokens_out` = output tokens. In revise mode `variants` holds the rejected variant only.'],
 ['h1', '3. Calls to the core and admin endpoints'],
 ['h2', '3.1 Callbacks'],
@@ -114,7 +114,7 @@ module.exports = {
 ['p', 'Callbacks are retried with exponential backoff (1 s → 60 s, up to 15 min) on network errors and `5xx`; `409` (callback for a stale attempt or cancelled job) stops the retries. Each carries `Authorization: Bearer MODULE_CORE_TOKEN`, `traceparent` and `X-Production-Id`.'],
 ['h2', '3.2 Reads from the core'],
 ['ul', [
-  '`GET /internal/v1/credentials/{ref}` → `{"ref", "kind": "anthropic_api_key", "value", "expires_at"}` once per job; never cached on disk.',
+  '`GET /internal/v1/credentials/{ref}` → `{"ref", "kind": "claude_oauth_token" | "anthropic_api_key", "value", "expires_at"}` once per job (access: job); kind must match `agent.auth.mode`; never cached on disk, never logged.',
   '`GET /internal/v1/productions/{id}` in revise mode to confirm the variant and the review round (informational; the module trusts `input.previous`).',
 ]],
 ['h2', '3.3 Other external interfaces'],
@@ -539,7 +539,11 @@ module.exports = {
   ['`not_reproducible`, `version_mismatch`', 'blocked', 'capture cannot reproduce the scene or the image version differs'],
   ['`schema_invalid`', 'fatal', 'agent output invalid after retries'],
   ['`check_failed`', 'fatal', 'a blocking check failed after fix rounds; `details.checks` lists them'],
-  ['`budget_exceeded`, `turns_exceeded`, `step_timeout`', 'fatal', 'limits from settings reached'],
+  ['`budget_exceeded`', 'fatal', '`limits.cost_mode = usd` only: job or step USD budget reached'],
+  ['`turns_exceeded`, `step_timeout`', 'fatal', 'limits from settings reached'],
+  ['`agent_auth_failed`', 'blocked', 'token invalid, expired or revoked (or credential kind does not match `agent.auth.mode`); message: "An admin must renew the Claude token (run claude setup-token and update the credential)"'],
+  ['`agent_rate_limited`', 'transient', 'rate or usage limit reported by the CLI; `details.retry_after` seconds (CLI reset time, else `limits.rate_limit_backoff_s`); not retried inside the job'],
+  ['`daily_job_limit`, `agent_run_rate_limit`', 'transient', '`limits.max_jobs_per_day` or `limits.max_agent_runs_per_hour` reached; `details.retry_after` computed from the module database'],
   ['`capture_missing`, `expect_mismatch`', 'fatal', 'render-time guard (should be caught earlier)'],
   ['`anthropic_unavailable`, `s3_unavailable`, `docker_unavailable`, `core_unavailable`', 'transient', 'dependency down after in-step retries'],
   ['`deadline`', 'transient', 'job deadline reached'],
@@ -552,7 +556,6 @@ module.exports = {
  "$id": "https://manufacture.local/schemas/video/settings-1.json",
  "type": "object", "additionalProperties": false,
  "properties": {
-  "anthropic_credential": {"type": "string", "default": "cred:anthropic-main"},
   "model":  {"type": "string", "default": "claude-opus-5-5"},
   "models": {"type": "object", "default": {},
              "propertyNames": {"enum": ["analysis", "research", "script", "capture", "package", "script-revise"]},
@@ -561,7 +564,12 @@ module.exports = {
                       "capture": "1.0.0", "package": "1.0.0", "script-revise": "1.0.0", "skill": "1.0.0"},
                       "additionalProperties": {"type": "string", "pattern": "^[0-9]+\\\\.[0-9]+\\\\.[0-9]+$"}},
   "limits": {"type": "object", "properties": {
+    "cost_mode": {"enum": ["usd", "estimate"],
+                  "description": "usd: job_budget_usd and step budget_usd are enforced. estimate: not enforced, cost is computed from usage. Default: usd when agent.auth.mode is api_key, estimate when subscription."},
     "job_budget_usd": {"type": "number", "minimum": 0, "default": 15},
+    "max_jobs_per_day": {"type": "integer", "minimum": 1, "default": 6},
+    "max_agent_runs_per_hour": {"type": "integer", "minimum": 1, "default": 12},
+    "rate_limit_backoff_s": {"type": "integer", "minimum": 60, "default": 900},
     "schema_retries": {"type": "integer", "minimum": 0, "maximum": 5, "default": 2},
     "fix_rounds": {"type": "integer", "minimum": 0, "maximum": 4, "default": 2},
     "steps": {"type": "object", "additionalProperties": {"type": "object",
@@ -585,6 +593,10 @@ module.exports = {
     "proxy_ports": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2, "default": [3200, 3299]}}},
   "agent": {"type": "object", "properties": {
     "image": {"type": "string", "pattern": "@sha256:[0-9a-f]{64}$"},
+    "auth": {"type": "object", "additionalProperties": false, "properties": {
+      "mode": {"enum": ["subscription", "api_key"], "default": "subscription"},
+      "credential_ref": {"type": "string", "default": "cred:claude-subscription",
+        "description": "subscription: credential kind claude_oauth_token (token from claude setup-token); api_key: kind anthropic_api_key, e.g. cred:anthropic-main"}}},
     "cpus": {"type": "number", "default": 1}, "memory_mb": {"type": "integer", "default": 2048},
     "pids": {"type": "integer", "default": 256}}, "required": ["image"]},
   "sources": {"type": "object", "properties": {
@@ -671,6 +683,7 @@ module.exports = {
  },
  "required": ["agent", "sandbox_images"]
 }`],
+['note', 'Auth: in subscription mode the container gets `CLAUDE_CODE_OAUTH_TOKEN`, in api_key mode `ANTHROPIC_API_KEY`, never both (verify variable names against current documentation). `limits.cost_mode` defaults follow the auth mode; the module resolves the default at job start and records the effective value in provenance.'],
 ['note', 'Instagram-related defaults (`platform.max_size_mb`, `video.max_bitrate_kbps`, `audio.bitrate_kbps`, `post.*`, `video.duration_s.max`) and Anthropic hosts: verify against current documentation before activating a settings version.'],
 ['h1', '11. Versioning and compatibility'],
 ['ul', [
@@ -689,6 +702,8 @@ module.exports = {
   ['PC2', 'In the canonical `/info` example, replace `admin_endpoints: ["/admin/v1/glossary"]` with this module\'s list (`/admin/v1/runs`, `/admin/v1/prompts`, `/admin/v1/golden`).', 'This module has no glossary endpoint in stage 1.'],
   ['PC3', 'Optional `output.variants[].preview` `{ref, size}`: a ≤ 45 MB re-encode for the Telegram bot (setting-controlled), so module-review need not transcode.', 'Telegram bot upload limit 50 MB.'],
   ['PC4', 'State explicitly that `variant` is non-null in `revise` jobs of production-scope stages.', 'Core sends a revise job "for that variant only".'],
+  ['PC6', 'New credential kind `claude_oauth_token` (long-lived token from `claude setup-token`) next to `anthropic_api_key`, readable with access `job`, write-only in the panel.', 'Subscription mode (DV9).'],
+  ['PC7', 'Optional `metrics.cost_estimated` (boolean) in the `result` callback; when true `cost_usd` is an estimate computed from usage, not a bill.', 'A subscription has no USD billing; core and panel must not treat the number as spend.'],
   ['PC5', 'Define how admin-api reaches module `/admin/v1/*` (proxied by core with the module token, or a separate admin token).', 'Needed for FR-VID-064 auth.'],
 ], [0.5, 3.8, 2.2]],
   ],

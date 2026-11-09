@@ -38,13 +38,14 @@ module.exports = {
   Dockerfile                   # module image: python, ffmpeg, fonts, mvrender
   agent/Dockerfile             # video-agent image: python, claude-agent-sdk, Claude Code CLI, git, rg
   agent/runner.py              # entrypoint inside agent container (reads /job/run.json)
-  alembic/                     # migrations
   src/mvideo/
     app.py                     # FastAPI app, lifespan (DB, S3, Docker, proxy, janitor)
     api/ info.py jobs.py health.py admin.py problems.py
     config.py                  # bootstrap env only
     settings_model.py          # Pydantic model of settings (source of settings_schema)
-    db/ models.py repo.py
+    ids.py                     # UUID v7
+    db/ models.py repo.py engine.py migrate.py
+    db/migrations/             # Alembic env + versions, inside the package so the image ships them
     core_client.py             # callbacks, credentials, productions
     storage.py                 # S3 paths, upload with sha256
     pipeline/ runner.py state.py cache.py budget.py
@@ -139,7 +140,7 @@ module.exports = {
 ['table', ['Aspect', 'Design'], [
   ['Image', '`video-agent` (built from `module-video/agent/Dockerfile`), pinned by digest in settings `agent.image`; contains Python 3.12, `claude-agent-sdk`, Claude Code CLI, git, ripgrep, the validator (`mvideo.validate` + `mvrender.timing`), non-root user `agent` (uid 10001)'],
   ['Mounts', '`/work` (rw, cwd: `CLAUDE.md`, `.claude/skills/…`, `task.md`), `/in` (ro, step inputs), `/src` (ro, source cache volume at the commit), `/ref` (ro, reference scenario), `/out` (rw, outputs); all named volumes or archive copies, no host paths'],
-  ['Env', '`ANTHROPIC_API_KEY` (from core credential), `HTTPS_PROXY=http://module-video:<step port>`, `NO_PROXY=module-video`, `MANUFACTURE_MCP_URL` (capture only), `CLAUDE_CONFIG_DIR=/work/.claude-home`'],
+  ['Env', 'exactly one auth variable, by `agent.auth.mode`: `CLAUDE_CODE_OAUTH_TOKEN` (subscription; token from `claude setup-token`) or `ANTHROPIC_API_KEY` (api_key); never both (verify variable names against current documentation); `HTTPS_PROXY=http://module-video:<step port>`, `NO_PROXY=module-video`, `MANUFACTURE_MCP_URL` (capture only), `CLAUDE_CONFIG_DIR=/work/.claude-home`'],
   ['Network', 'Docker network `video-agents` with `internal: true`: no route out; module-video is attached to it and runs the egress proxy and the MCP gateway'],
   ['Limits', '`agent.cpus` 1, `agent.memory_mb` 2048, `agent.pids` 256, read-only root fs with tmpfs `/tmp`, `no-new-privileges`, all capabilities dropped'],
   ['Entrypoint', '`python /opt/agent/runner.py /job/run.json`: builds `ClaudeAgentOptions` from `run.json`, runs one SDK session, streams every message as JSON lines to `/out/_transcript.jsonl`, writes `/out/_result.json` (session id, turns, cost, usage, stop reason)'],
@@ -189,12 +190,13 @@ module.exports = {
 ['p', 'Everything else is a setting in the job snapshot (schema in 04 §10): models, prompt versions, limits, network allowlists, repositories, sandbox images, agent image, video, audio, palette, timing, text, render, post, revise and runtime keys. The module keeps no settings of its own; jobs without settings are rejected.'],
 ['h1', '7. Data model (database `video`)'],
 ['table', ['Table', 'Columns (type)', 'Indexes and notes'], [
-  ['`runs`', '`id` uuid pk, `job_id` uuid not null, `attempt` int, `production_id` uuid, `mode` text (`create`|`revise`), `language` text, `variant_id` uuid null, `status` text, `current_step` text null, `percent` int, `settings_version` int, `settings` jsonb, `input` jsonb, `deadline` timestamptz, `cost_usd` numeric(10,4), `tokens_in` bigint, `tokens_out` bigint, `result` jsonb null, `error` jsonb null, `cancel_requested` bool, `lease_owner` text null, `lease_until` timestamptz null, `created_at`, `started_at`, `finished_at` timestamptz', 'unique (`job_id`); index (`production_id`, `created_at` desc); index (`status`) where status in (accepted, running)'],
+  ['`runs`', '`id` uuid pk, `job_id` uuid not null, `attempt` int, `production_id` uuid, `mode` text (`create`|`revise`), `language` text, `variant_id` uuid null, `status` text, `current_step` text null, `percent` int, `settings_version` int, `settings` jsonb, `input` jsonb, `deadline` timestamptz, `cost_usd` numeric(10,4), `tokens_in` bigint, `tokens_out` bigint, `result` jsonb null, `error` jsonb null, `cancel_requested` bool, `lease_owner` text null, `lease_until` timestamptz null, `callback_base_url` text null, `credential_refs` jsonb null, `traceparent` text null, `created_at`, `started_at`, `finished_at` timestamptz', 'unique (`job_id`); index (`production_id`, `created_at` desc); index (`status`) where status in (accepted, running)'],
   ['`steps`', '`id` uuid pk, `run_id` uuid fk, `name` text, `try` int, `status` text, `input_hash` text, `prompt_version` text null, `model` text null, `outputs` jsonb (name → {ref, sha256, size}), `reused_from` uuid null, `error` jsonb null, `cost_usd` numeric(10,4), `tokens_in`, `tokens_out`, `cache_read_tokens`, `cache_write_tokens` bigint, `num_turns` int, `session_id` text null, `started_at`, `finished_at` timestamptz, `duration_s` real', 'unique (`run_id`, `name`, `try`); index (`input_hash`) for reuse lookup'],
   ['`checks`', '`id` bigserial, `run_id` uuid, `step_id` uuid, `check` text, `status` text (`pass`|`warn`|`fail`), `value` jsonb, `limit` jsonb, `details` jsonb, `created_at`', 'index (`run_id`)'],
   ['`sandbox_runs`', '`id` uuid, `step_id` uuid, `purpose` text (`capture`|`scratch`), `image` text, `digest` text, `version_string` text, `container_id` text, `limits` jsonb, `exit` text, `log_ref` text, `started_at`, `finished_at`', 'index (`step_id`)'],
   ['`agent_runs`', '`id` uuid, `step_id` uuid, `container_id` text, `image_digest` text, `sdk_version` text, `cli_version` text, `session_id` text, `stop_reason` text, `turns` int, `cost_usd`, `usage` jsonb, `transcript_ref` text, `egress_denied` int, `started_at`, `finished_at`', 'one row per agent invocation (incl. resumes)'],
   ['`source_cache`', '`repo_url` text, `commit` char(40), `volume` text, `size_bytes` bigint, `created_at`, `last_used_at`', 'pk (`repo_url`, `commit`)'],
+  ['`usage_log`', '`id` bigserial, `kind` text (`job`|`agent_run`), `run_id` uuid, `step` text null, `at` timestamptz', 'index (`kind`, `at`); counts for `limits.max_jobs_per_day` (calendar day UTC) and `limits.max_agent_runs_per_hour` (sliding hour); rows older than 7 days deleted by the janitor'],
   ['`golden_runs`', '`id` uuid, `requested_by` text, `overrides` jsonb, `status`, `report` jsonb, `created_at`, `finished_at`', 'admin golden-set runs'],
 ], [0.9, 4, 1.6]],
 ['p', 'Migrations: Alembic, forward-only, one revision per change, run at startup under an advisory lock; a release may only add nullable columns or new tables (expand), removals follow one release later (contract). Run data older than `runtime.retention_days` (default 180) is deleted by the janitor; S3 objects follow the system retention rule (intermediate files 30 days).'],
@@ -210,7 +212,9 @@ module.exports = {
   ['`video_blocked_total`', 'counter', '`step`'],
   ['`video_agent_turns`', 'histogram', '`step`'],
   ['`video_tokens_total`', 'counter', '`step`, `kind` (input, output, cache_read, cache_write)'],
-  ['`video_cost_usd_total`', 'counter', '`step`, `model`'],
+  ['`video_cost_usd_total`', 'counter', '`step`, `model`, `estimated` (true/false)'],
+  ['`video_agent_auth_failures_total`, `video_rate_limited_total`', 'counter', '`step`'],
+  ['`video_jobs_today`, `video_agent_runs_last_hour`', 'gauge', '—'],
   ['`video_cost_usd`', 'histogram (per job)', '`mode`'],
   ['`video_egress_denied_total`', 'counter', '`step`'],
   ['`video_sandbox_seconds`', 'histogram', '`purpose`'],
@@ -233,7 +237,7 @@ module.exports = {
 ]],
 ['h1', '9. Security'],
 ['ul', [
-  '**Secrets**: Anthropic key fetched per job (`GET /internal/v1/credentials/{ref}`), held in memory, given only to the agent container env; never logged (structlog redaction processor for keys matching `*key*`, `*token*`, `authorization`).',
+  '**Secrets**: the Claude credential (`agent.auth.credential_ref`; kind `claude_oauth_token` in subscription mode, `anthropic_api_key` in api_key mode) is fetched per job (`GET /internal/v1/credentials/{ref}`, access: job), held in memory, given only to the agent container env as the one variable of its mode; never written to disk or logs. The structlog redaction processor masks keys matching `*key*`, `*token*`, `*oauth*`, `authorization` and the exact value of the credential (value scrubbing over every log line and transcript before upload).',
   '**Least privilege per step**: tools allowlist, no `Bash`, read-only inputs, network allowlist through the proxy, no Docker access for agents (DV1, DV2).',
   '**Prompt injection**: web pages, source comments, command output are files in `/in` or `/src` and are described as data in every `CLAUDE.md`; the agent cannot act outside its tools anyway; outputs are schema-validated.',
   '**Docker socket**: only through `docker-socket-proxy` with `CONTAINERS=1, EXEC=1, IMAGES=1, NETWORKS=1, VOLUMES=1, POST=1`, everything else 0; container templates are code-reviewed and unit-tested to have no binds, no privileged, no host network (NFR-VID-009).',
@@ -273,7 +277,7 @@ networks:
 ['ul', [
   'Dockerfile (module): `python:3.12-slim` by digest; ffmpeg static build by sha256; fonts by sha256; `uv sync --frozen`; non-root user; `ENTRYPOINT ["mvideo"]`.',
   'Agent image: `python:3.12-slim` + Node LTS (for Claude Code CLI if the SDK needs it; verify), `claude-agent-sdk` pinned, git, ripgrep; built and pushed with the module; digest written into settings by the admin.',
-  '`/health`: process alive and DB reachable. `/ready`: DB, S3, Docker proxy, agent image present, fonts present, ffmpeg runnable, running jobs < `runtime.max_parallel_jobs`.',
+  '`/health`: process alive and DB reachable. `/ready`: DB, S3, Docker proxy, agent image present, fonts present, ffmpeg runnable, running jobs < `runtime.max_parallel_jobs`, and `auth: configured|missing` (credential reference set and fetchable). A usage or rate limit never makes the module not ready.',
 ]],
 ['h1', '12. Local development'],
 ['ul', [

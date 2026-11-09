@@ -54,6 +54,7 @@ R([
 ]),
 ['h2', '2.5 Credentials'],
 R([
+  f('FR-CORE-054', 'Core MUST keep billed and estimated costs apart: `metrics.cost_estimated = true` jobs are excluded from the daily budget alert and shown as a separate total.', 'subscription use is not billed', 'result with `cost_estimated: true` and `cost_usd: 5` does not raise `budget_exceeded`; `/overview` shows `cost_today_estimated_usd`', '04 §2.16, §7.4; 03 §6.1'),
   f('FR-CORE-050', 'Credentials MUST be stored AES-256-GCM encrypted and their values MUST never be returned by the admin API or written to logs or events.', 'write-only secrets', 'API tests: no endpoint returns `value`; log grep of e2e run finds no seeded secret', '03 §3.17, §7'),
   f('FR-CORE-051', 'A module MUST read a credential only if listed in `allowed_modules` and (access `module`, or access `job` with a live job of that module listing the ref); every read attempt MUST be logged.', 'least privilege, audit', 'read without job → 403 and a `denied` log row', '04 §4.1'),
   f('FR-CORE-052', 'Only the `owner_module` MAY write a new value (token refresh).', 'Instagram token refresh', 'other module PUT → 403', '04 §4.1'),

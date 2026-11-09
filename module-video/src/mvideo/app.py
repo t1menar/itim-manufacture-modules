@@ -1,0 +1,109 @@
+"""FastAPI application factory."""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from mvideo import __version__
+from mvideo.api import health, info, jobs
+from mvideo.api.health import AuthStatus, Check
+from mvideo.api.problems import install_problem_handlers
+from mvideo.config import BootstrapConfig
+from mvideo.core_client import CoreGateway
+from mvideo.db.engine import db_health_check, session_factory
+from mvideo.db.migrate import upgrade
+from mvideo.db.repo import LEASE_TTL_S
+from mvideo.observability.metrics import Metrics
+from mvideo.pipeline.runner import AuthState, Finalize, Runner
+from mvideo.pipeline.steps.base import Step
+from mvideo.pipeline.worker import Worker
+from mvideo.service import JobService
+from mvideo.storage import Storage
+
+
+def create_app(
+    config: BootstrapConfig,
+    *,
+    engine: AsyncEngine | None = None,
+    migrate_on_start: bool = False,
+    storage: Storage | None = None,
+    core: CoreGateway | None = None,
+    steps: list[Step] | None = None,
+    finalize: Finalize | None = None,
+    worker_poll_s: float = 1.0,
+    lease_renew_s: float = 20.0,
+    cancel_poll_s: float = 2.0,
+    health_checks: list[Check] | None = None,
+    ready_checks: list[Check] | None = None,
+    auth_status: AuthStatus | None = None,
+) -> FastAPI:
+    auth = AuthState()
+    worker: Worker | None = None
+    runner: Runner | None = None
+    service: JobService | None = None
+    if (
+        engine is not None
+        and storage is not None
+        and core is not None
+        and steps is not None
+        and finalize is not None
+    ):
+        factory = session_factory(engine)
+        runner = Runner(
+            factory=factory,
+            storage=storage,
+            core=core,
+            steps=steps,
+            finalize=finalize,
+            owner=f"mvideo-{uuid.uuid4().hex[:8]}",
+            auth_state=auth,
+            lease_ttl_s=LEASE_TTL_S,
+            lease_renew_s=lease_renew_s,
+            cancel_poll_s=cancel_poll_s,
+        )
+        worker = Worker(factory=factory, runner=runner, poll_s=worker_poll_s, lease_ttl_s=LEASE_TTL_S)
+        service = JobService(factory, worker, runner)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if engine is not None and migrate_on_start:
+            await upgrade(engine)
+        if worker is not None:
+            worker.start()
+        try:
+            yield
+        finally:
+            if worker is not None:
+                await worker.stop()
+            if engine is not None:
+                await engine.dispose()
+
+    app = FastAPI(
+        title="module-video",
+        version=__version__,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=lifespan,
+    )
+    app.state.config = config
+    app.state.metrics = Metrics()
+    app.state.engine = engine
+    app.state.health_checks = list(health_checks or [])
+    if engine is not None:
+        app.state.health_checks.append(db_health_check(engine))
+    app.state.ready_checks = ready_checks if ready_checks is not None else []
+    app.state.auth_status = auth_status or auth.status
+    app.state.service = service
+    app.state.worker = worker
+    app.state.runner = runner
+    install_problem_handlers(app)
+    app.include_router(info.router)
+    app.include_router(health.router)
+    app.include_router(jobs.router)
+    return app

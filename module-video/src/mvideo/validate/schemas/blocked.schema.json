@@ -1,0 +1,43 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://manufacture.local/schemas/video/blocked-1.json",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "format",
+  "step",
+  "reason",
+  "missing"
+ ],
+ "properties": {
+  "format": {
+   "const": "manufacture.blocked/1"
+  },
+  "step": {
+   "enum": [
+    "analysis",
+    "research",
+    "script",
+    "capture",
+    "package",
+    "script-revise"
+   ]
+  },
+  "reason": {
+   "type": "string",
+   "minLength": 20,
+   "maxLength": 1000
+  },
+  "missing": {
+   "type": "array",
+   "items": {
+    "type": "string",
+    "maxLength": 200
+   }
+  },
+  "suggestion": {
+   "type": "string",
+   "maxLength": 500
+  }
+ }
+}
