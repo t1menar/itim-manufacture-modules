@@ -38,13 +38,14 @@ module.exports = {
   Dockerfile                   # module image: python, ffmpeg, fonts, mvrender
   agent/Dockerfile             # video-agent image: python, claude-agent-sdk, Claude Code CLI, git, rg
   agent/runner.py              # entrypoint inside agent container (reads /job/run.json)
-  alembic/                     # migrations
   src/mvideo/
     app.py                     # FastAPI app, lifespan (DB, S3, Docker, proxy, janitor)
     api/ info.py jobs.py health.py admin.py problems.py
     config.py                  # bootstrap env only
     settings_model.py          # Pydantic model of settings (source of settings_schema)
-    db/ models.py repo.py
+    ids.py                     # UUID v7
+    db/ models.py repo.py engine.py migrate.py
+    db/migrations/             # Alembic env + versions, inside the package so the image ships them
     core_client.py             # callbacks, credentials, productions
     storage.py                 # S3 paths, upload with sha256
     pipeline/ runner.py state.py cache.py budget.py

@@ -8,6 +8,7 @@ import uvicorn
 
 from mvideo.app import create_app
 from mvideo.config import BootstrapConfig, ConfigError
+from mvideo.db.engine import create_engine
 from mvideo.observability.logging import configure_logging
 
 
@@ -18,7 +19,8 @@ def main() -> None:
         sys.stderr.write(f"mvideo: configuration error: {exc}\n")
         raise SystemExit(2) from exc
     configure_logging()
-    uvicorn.run(create_app(config), host=config.host, port=config.port, log_config=None)
+    app = create_app(config, engine=create_engine(config.database_url), migrate_on_start=True)
+    uvicorn.run(app, host=config.host, port=config.port, log_config=None)
 
 
 if __name__ == "__main__":

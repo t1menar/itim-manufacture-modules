@@ -33,3 +33,6 @@ def config(env: dict[str, str]) -> BootstrapConfig:
 @pytest.fixture
 def client(config: BootstrapConfig) -> TestClient:
     return TestClient(create_app(config))
+
+
+pytest_plugins = ["tests.conftest_db"]

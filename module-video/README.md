@@ -7,13 +7,14 @@ Specification: `../docs/module-video/` (`module-video-01-description.docx` … `
 ## Status
 
 - B0 done: service skeleton, `/info` `/health` `/ready` `/metrics`, bootstrap config, settings and contract models.
-- Next: B1 database, B2 job API (see the messaging note below), B3 schemas and validator, B4 renderer.
+- B1 done: database `video` (8 tables, one Alembic revision run at start-up under an advisory lock), async repositories (idempotent `create_run`, leases, step upsert and reuse lookup, `add_cost`).
+- Next: B2 job API (see the messaging note below), B3 schemas and validator, B4 renderer.
 
 ## Develop
 
 ```bash
 uv sync
-make check        # ruff, mypy --strict (mvrender), import-linter, pytest
+make check        # ruff, mypy --strict (mvrender), import-linter, pytest (database tests need Docker)
 uv run mvideo     # needs the bootstrap variables of docs 03 section 6
 docker build -t module-video:dev .
 ```
