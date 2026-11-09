@@ -2,6 +2,8 @@
 
 Stage `video`: idea → finished English video (Python 3.12).
 
+Ideas/topics backlog ownership and the `idea.ready` scheduler: see [`docs/IDEAS.md`](docs/IDEAS.md) (D21).
+
 Specification: `../docs/module-video/` (`module-video-01-description.docx` … `module-video-06-prompts.docx`). Build phases B0–B12 are in `module-video-06-prompts`.
 
 ## Status
