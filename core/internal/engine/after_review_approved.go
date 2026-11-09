@@ -189,7 +189,15 @@ func (e *Engine) CreateFirstPublishJob(ctx context.Context, tx pgx.Tx, variantID
 	for _, in := range intents {
 		intentRows = append(intentRows, map[string]any{
 			"intent_id": in.ID.String(), "content_revision_id": revisionID.String(), "generation": in.Generation,
+			"platform_account_id": in.PlatformAccountID.String(),
 		})
+	}
+	var revBody json.RawMessage
+	_ = tx.QueryRow(ctx, `SELECT body FROM content_revisions WHERE id = $1`, revisionID).Scan(&revBody)
+	upstream := map[string]any{}
+	if len(revBody) > 0 {
+		upstream["content_revision"] = json.RawMessage(revBody)
+		upstream["content_revision_id"] = revisionID.String()
 	}
 	if moduleID == nil {
 		e.Log.Warn("no active publish module; publish job stays queued", "job_id", jobID)
@@ -201,7 +209,7 @@ func (e *Engine) CreateFirstPublishJob(ctx context.Context, tx pgx.Tx, variantID
 		"variant": map[string]any{"id": variantID.String(), "language": language},
 		"input": map[string]any{
 			"idea":     map[string]any{"id": ideaID, "text": ideaText, "language": language},
-			"channels": []any{}, "upstream": map[string]any{}, "intents": intentRows,
+			"channels": []any{}, "upstream": upstream, "intents": intentRows,
 		},
 		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
 		"credentials": []string{},
