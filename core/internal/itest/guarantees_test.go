@@ -112,6 +112,9 @@ func TestTwoWorkersRaceOnOneVariant(t *testing.T) {
 func TestHappyPathThroughBroker(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
+	account := uuid.Must(uuid.NewV7())
+	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
+		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
 	// relay publishes job.requested to the module queue
 	r := e.relay("w1")
 	r.OnSent = func(ctx context.Context, id uuid.UUID, body []byte) {
@@ -148,12 +151,22 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	}
 	_ = job
 	_ = fence
-	step("vidmod", "video", map[string]any{"ok": true})
+	step("vidmod", "video", videoStageOutput("happy"))
 	step("revmod", "review", map[string]any{
 		"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
 		"decided_at": "2026-01-01T00:00:00Z", "round": 1,
 	})
-	step("pubmod", "publish", map[string]any{"publications": []any{}})
+	if n := e.count(`SELECT count(*) FROM publish_intents WHERE generation = 1`); n != 1 {
+		t.Fatalf("intents after approve = %d", n)
+	}
+	if n := e.count(`SELECT count(*) FROM outbox WHERE status = 'pending' OR status = 'sent'`); n < 2 {
+		t.Fatalf("expected publish job.requested in outbox, outbox rows=%d", n)
+	}
+	step("pubmod", "publish", map[string]any{"publications": []any{map[string]any{
+		"platform": "instagram", "platform_account_id": account.String(), "handle": "@itim",
+		"external_post_id": "1789", "url": "https://www.instagram.com/reel/example/",
+		"published_at": "2026-11-08T17:02:11Z", "status": "published",
+	}}})
 	if n := e.count(`SELECT count(*) FROM productions WHERE status = 'done'`); n != 1 {
 		t.Fatal("production not done")
 	}
@@ -206,7 +219,7 @@ func TestDuplicateEventAppliedOnce(t *testing.T) {
 	_ = e.pool.QueryRow(e.ctx, `SELECT production_id FROM jobs`).Scan(&prod)
 	body := mustJSON(messaging.Envelope{MessageID: id, Type: "job.succeeded", SchemaVersion: 1, OccurredAt: time.Now().UTC(),
 		Producer: "module:vidmod", ProductionID: &prod, Job: &messaging.JobRef{JobID: job, Fence: fence},
-		Payload: json.RawMessage(`{"output":{"ok":true}}`)})
+		Payload: json.RawMessage(`{"output":{"variants":[{"language":"en","video":{"ref":"s3://x","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","duration_s":1,"size":1,"width":1,"height":1,"fps":1},"post":{"caption":"c","hashtags":["#pg"]},"metadata":{"title":"t","description":"d","topics":["postgres"],"platforms":{"instagram":{"caption":"c","hashtags":["#postgresql"]}}}}],"provenance":{}}}`)})
 	e.publishRaw(id.String(), body)
 	e.publishRaw(id.String(), body)
 	if err := e.consumeUntil(e.consumer(), func() bool { return e.queueLen(e.topo.CoreEvents()) == 0 }); err != nil {
@@ -224,7 +237,7 @@ func TestDuplicateEventAppliedOnce(t *testing.T) {
 func TestConsumerCrashBeforeCommitRedelivers(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
-	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
+	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	c := e.consumer()
 	c.BeforeCommit = func(messaging.Envelope) error { return errors.New("crash") }
 	if err := c.Consume(e.ctx, e.conn); err == nil {
@@ -244,7 +257,7 @@ func TestConsumerCrashBeforeCommitRedelivers(t *testing.T) {
 func TestConsumerCrashAfterCommitBeforeAckDedups(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
-	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
+	e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	c := e.consumer()
 	c.AfterCommit = func(messaging.Envelope) error { return errors.New("crash") }
 	if err := c.Consume(e.ctx, e.conn); err == nil {
@@ -274,7 +287,7 @@ func TestTakeoverFencesStaleEvents(t *testing.T) {
 	if n := e.count(`SELECT count(DISTINCT message_id) FROM outbox`); n != 2 {
 		t.Fatal("takeover must enqueue a new request")
 	}
-	old := e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
+	old := e.moduleEvent("vidmod", "job.succeeded", job, fence, map[string]any{"output": videoStageOutput("ev")})
 	stale := e.moduleEvent("vidmod2", "job.succeeded", job, fence, map[string]any{"output": map[string]any{}})
 	if err := e.consumeUntil(e.consumer(), func() bool { return e.count(`SELECT count(*) FROM inbox`) == 2 }); err != nil {
 		t.Fatal(err)

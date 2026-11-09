@@ -19,6 +19,7 @@ import (
 
 	"github.com/t1menar/manufacture/core/internal/db"
 	"github.com/t1menar/manufacture/core/internal/messaging"
+	"github.com/t1menar/manufacture/core/internal/publish"
 )
 
 type Engine struct {
@@ -29,6 +30,7 @@ type Engine struct {
 	MaxConcurrent   int // overridden by settings.scheduler.max_concurrent_productions when Settings is set
 	DefaultLanguage string
 	CallbackBaseURL string
+	Publish         *publish.Store
 	Settings        SettingsSource // optional; nil keeps struct defaults
 	reviewMaxRounds int
 }

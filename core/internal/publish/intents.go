@@ -54,26 +54,31 @@ type Intent struct {
 
 // CreateRevision appends an immutable content revision for the variant (body snapshotted as-is).
 func (s *Store) CreateRevision(ctx context.Context, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
+	var out Revision
+	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.CreateRevisionInTx(ctx, tx, variantID, sourceJob, body)
+		return err
+	})
+	return out, err
+}
+
+// CreateRevisionInTx is CreateRevision inside the caller's transaction.
+func (s *Store) CreateRevisionInTx(ctx context.Context, tx pgx.Tx, variantID, sourceJob uuid.UUID, body json.RawMessage) (Revision, error) {
 	if len(body) == 0 || body[0] != '{' {
 		return Revision{}, fmt.Errorf("body must be a JSON object")
 	}
 	sum := sha256.Sum256(body)
-	var out Revision
-	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
-		var next int
-		if err := tx.QueryRow(ctx, `SELECT coalesce(max(revision), 0) + 1 FROM content_revisions WHERE variant_id = $1`, variantID).Scan(&next); err != nil {
-			return err
-		}
-		id := uuid.Must(uuid.NewV7())
-		_, err := tx.Exec(ctx, `INSERT INTO content_revisions (id, variant_id, revision, body, sha256, source_job_id)
-			VALUES ($1,$2,$3,$4,$5,$6)`, id, variantID, next, body, sum[:], sourceJob)
-		if err != nil {
-			return err
-		}
-		out = Revision{ID: id, VariantID: variantID, Revision: next, Body: append(json.RawMessage(nil), body...), SHA256: sum[:]}
-		return nil
-	})
-	return out, err
+	var next int
+	if err := tx.QueryRow(ctx, `SELECT coalesce(max(revision), 0) + 1 FROM content_revisions WHERE variant_id = $1`, variantID).Scan(&next); err != nil {
+		return Revision{}, err
+	}
+	id := uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO content_revisions (id, variant_id, revision, body, sha256, source_job_id)
+		VALUES ($1,$2,$3,$4,$5,$6)`, id, variantID, next, body, sum[:], sourceJob); err != nil {
+		return Revision{}, err
+	}
+	return Revision{ID: id, VariantID: variantID, Revision: next, Body: append(json.RawMessage(nil), body...), SHA256: sum[:]}, nil
 }
 
 // ApproveRevision marks the revision approved and creates generation-1 intents for every
@@ -82,67 +87,73 @@ func (s *Store) CreateRevision(ctx context.Context, variantID, sourceJob uuid.UU
 func (s *Store) ApproveAndCreateIntents(ctx context.Context, revisionID uuid.UUID, round int) ([]Intent, error) {
 	var out []Intent
 	err := db.WithTx(ctx, s.Pool, func(tx pgx.Tx) error {
-		var variantID uuid.UUID
-		var approved *int
-		if err := tx.QueryRow(ctx, `SELECT variant_id, approved_round FROM content_revisions WHERE id = $1 FOR UPDATE`, revisionID).
-			Scan(&variantID, &approved); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return ErrNotFound
-			}
-			return err
-		}
-		if approved != nil {
-			// Already approved: return existing generation-1 intents (idempotent).
-			rows, err := tx.Query(ctx, `SELECT id, variant_id, platform_account_id, generation, content_revision_id, status
-				FROM publish_intents WHERE variant_id = $1 AND generation = 1 AND content_revision_id = $2`, variantID, revisionID)
-			if err != nil {
-				return err
-			}
-			out, err = pgx.CollectRows(rows, scanIntent)
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE content_revisions SET approved_round = $2 WHERE id = $1 AND approved_round IS NULL`, revisionID, round); err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, `
-			SELECT pa.id FROM platform_accounts pa
-			JOIN variants v ON v.id = $1
-			WHERE pa.enabled AND pa.channel_id = ANY (v.channels)
-			ORDER BY pa.id
-			FOR UPDATE OF pa`, variantID)
-		if err != nil {
-			return err
-		}
-		accounts, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		if err != nil {
-			return err
-		}
-		for _, acc := range accounts {
-			id := uuid.Must(uuid.NewV7())
-			tag, err := tx.Exec(ctx, `INSERT INTO publish_intents
-				(id, variant_id, platform_account_id, generation, content_revision_id, status)
-				VALUES ($1,$2,$3,1,$4,'pending')
-				ON CONFLICT (variant_id, platform_account_id, generation) DO NOTHING`,
-				id, variantID, acc, revisionID)
-			if err != nil {
-				return err
-			}
-			if tag.RowsAffected() == 0 {
-				// Concurrent creator won; load existing.
-				var existing Intent
-				if err := tx.QueryRow(ctx, `SELECT id, variant_id, platform_account_id, generation, content_revision_id, status
-					FROM publish_intents WHERE variant_id=$1 AND platform_account_id=$2 AND generation=1`,
-					variantID, acc).Scan(&existing.ID, &existing.VariantID, &existing.PlatformAccountID, &existing.Generation, &existing.ContentRevisionID, &existing.Status); err != nil {
-					return err
-				}
-				out = append(out, existing)
-				continue
-			}
-			out = append(out, Intent{ID: id, VariantID: variantID, PlatformAccountID: acc, Generation: 1, ContentRevisionID: revisionID, Status: "pending"})
-		}
-		return nil
+		var err error
+		out, err = s.ApproveAndCreateIntentsInTx(ctx, tx, revisionID, round)
+		return err
 	})
 	return out, err
+}
+
+// ApproveAndCreateIntentsInTx is ApproveAndCreateIntents inside the caller's transaction
+// (review approve → intents + publish outbox in one commit).
+func (s *Store) ApproveAndCreateIntentsInTx(ctx context.Context, tx pgx.Tx, revisionID uuid.UUID, round int) ([]Intent, error) {
+	var out []Intent
+	var variantID uuid.UUID
+	var approved *int
+	if err := tx.QueryRow(ctx, `SELECT variant_id, approved_round FROM content_revisions WHERE id = $1 FOR UPDATE`, revisionID).
+		Scan(&variantID, &approved); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if approved != nil {
+		rows, err := tx.Query(ctx, `SELECT id, variant_id, platform_account_id, generation, content_revision_id, status
+			FROM publish_intents WHERE variant_id = $1 AND generation = 1 AND content_revision_id = $2`, variantID, revisionID)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, scanIntent)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE content_revisions SET approved_round = $2 WHERE id = $1 AND approved_round IS NULL`, revisionID, round); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT pa.id FROM platform_accounts pa
+		JOIN variants v ON v.id = $1
+		WHERE pa.enabled AND pa.channel_id = ANY (v.channels)
+		ORDER BY pa.id
+		FOR UPDATE OF pa`, variantID)
+	if err != nil {
+		return nil, err
+	}
+	accounts, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return nil, err
+	}
+	for _, acc := range accounts {
+		id := uuid.Must(uuid.NewV7())
+		tag, err := tx.Exec(ctx, `INSERT INTO publish_intents
+			(id, variant_id, platform_account_id, generation, content_revision_id, status)
+			VALUES ($1,$2,$3,1,$4,'pending')
+			ON CONFLICT (variant_id, platform_account_id, generation) DO NOTHING`,
+			id, variantID, acc, revisionID)
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() == 0 {
+			var existing Intent
+			if err := tx.QueryRow(ctx, `SELECT id, variant_id, platform_account_id, generation, content_revision_id, status
+				FROM publish_intents WHERE variant_id=$1 AND platform_account_id=$2 AND generation=1`,
+				variantID, acc).Scan(&existing.ID, &existing.VariantID, &existing.PlatformAccountID, &existing.Generation, &existing.ContentRevisionID, &existing.Status); err != nil {
+				return nil, err
+			}
+			out = append(out, existing)
+			continue
+		}
+		out = append(out, Intent{ID: id, VariantID: variantID, PlatformAccountID: acc, Generation: 1, ContentRevisionID: revisionID, Status: "pending"})
+	}
+	return out, nil
 }
 
 func scanIntent(row pgx.CollectableRow) (Intent, error) {
