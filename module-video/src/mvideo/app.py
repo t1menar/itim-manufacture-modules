@@ -12,11 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from mvideo import __version__
 from mvideo.agents.prompts import PROMPTS_ROOT, PromptStore
-from mvideo.api import admin_prompts, health, info, jobs, mcp_sandbox
+from mvideo.api import admin_credentials, admin_prompts, health, info, jobs, mcp_sandbox
 from mvideo.api.health import AuthStatus, Check
 from mvideo.api.problems import install_problem_handlers
 from mvideo.config import BootstrapConfig
 from mvideo.core_client import CoreGateway
+from mvideo.credential_gateway import LocalCredentialGateway
 from mvideo.db import prompts_repo
 from mvideo.db.engine import db_health_check, session_factory
 from mvideo.db.migrate import upgrade
@@ -66,7 +67,7 @@ def create_app(
         runner = Runner(
             factory=factory,
             storage=storage,
-            core=core,
+            core=LocalCredentialGateway(core, factory),
             steps=steps,
             finalize=finalize,
             owner=f"mvideo-{uuid.uuid4().hex[:8]}",
@@ -137,4 +138,5 @@ def create_app(
     app.include_router(jobs.router)
     app.include_router(mcp_sandbox.router)
     app.include_router(admin_prompts.router)
+    app.include_router(admin_credentials.router)
     return app

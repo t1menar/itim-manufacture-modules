@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from mvideo.api.problems import ProblemError
-from mvideo.db import repo
+from mvideo.db import credentials_repo, repo
 from mvideo.db.models import Run
 from mvideo.db.repo import NewRun
 from mvideo.ideas import repo as idea_repo
@@ -37,6 +37,10 @@ class JobService:
         self._worker = worker
         self._runner = runner
         self._clock = clock
+
+    async def local_credentials(self) -> frozenset[str]:
+        async with self._factory() as s:
+            return frozenset(await credentials_repo.refs(s))
 
     async def accept(self, job: ValidJob, traceparent: str | None) -> Run:
         """Store the run (idempotent on job_id) and apply the daily usage gate (05 section 2.1)."""

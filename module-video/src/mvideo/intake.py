@@ -27,7 +27,7 @@ def _errors(exc: ValidationError) -> list[dict[str, Any]]:
     return [{"loc": [str(p) for p in e["loc"]], "msg": e["msg"]} for e in exc.errors()]
 
 
-def validate_job(raw: Any) -> ValidJob:
+def validate_job(raw: Any, local_credentials: frozenset[str] = frozenset()) -> ValidJob:
     if not isinstance(raw, dict):
         raise ProblemError(422, "input_invalid", "Request body must be a JSON object")
     try:
@@ -53,7 +53,7 @@ def validate_job(raw: Any) -> ValidJob:
         raise ProblemError(422, "input_invalid", "Job input is invalid", errors=_errors(exc)) from exc
 
     ref = settings.agent.auth.credential_ref
-    if ref not in request.credentials:
+    if ref not in request.credentials and ref not in local_credentials:
         raise ProblemError(
             422,
             "settings_invalid",
