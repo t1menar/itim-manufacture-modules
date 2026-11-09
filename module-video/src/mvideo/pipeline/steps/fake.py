@@ -92,6 +92,12 @@ def fake_finalize(ctx: RunContext) -> tuple[dict[str, Any], list[Artifact]]:
                 "contact_sheet": render["sheet.en.jpg"].ref,
                 "cover": pkg["cover.en.jpg"].ref,
                 "post": {"caption": "Fake caption", "hashtags": ["postgresql"]},
+                "metadata": {
+                    "title": "Fake title",
+                    "description": "Fake description",
+                    "topics": ["postgresql"],
+                    "platforms": {"instagram": {"caption": "Fake caption", "hashtags": ["#postgresql"]}},
+                },
                 "checks": {"duration": {"status": "pass", "value": 61.0, "limit": "60-180"}},
             }
         ],

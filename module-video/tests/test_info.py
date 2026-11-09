@@ -111,3 +111,14 @@ def test_output_schema_has_exactly_one_variant(client: TestClient) -> None:
     variants = schema["properties"]["variants"]
     assert (variants["minItems"], variants["maxItems"]) == (1, 1)
     assert set(schema["required"]) == {"variants", "provenance"}
+
+
+def test_output_schema_requires_variant_metadata(client: TestClient) -> None:
+    """D19 / C39: the core rejects a result without variants[].metadata (422 output_invalid)."""
+    variant = info(client)["output_schema"]["$defs"]["Variant"]
+    assert "metadata" in variant["required"]
+    meta = info(client)["output_schema"]["$defs"]["Metadata"]
+    assert set(meta["required"]) == {"title", "description", "topics", "platforms"}
+    platform = info(client)["output_schema"]["$defs"]["PlatformMetadata"]
+    assert set(platform["required"]) == {"caption", "hashtags"}
+    assert platform["properties"]["hashtags"]["items"]["pattern"] == r"^#\S+$"

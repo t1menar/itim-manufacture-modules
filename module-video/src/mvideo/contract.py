@@ -71,12 +71,33 @@ class Post(BaseModel):
     hashtags: list[str]
 
 
+Hashtag = Annotated[str, Field(pattern=r"^#\S+$")]
+
+
+class PlatformMetadata(BaseModel):
+    """Caption and hashtags for one platform (instagram first); `fields` holds platform extras."""
+
+    caption: str
+    hashtags: list[Hashtag]
+    fields: dict[str, Any] | None = None
+
+
+class Metadata(BaseModel):
+    """Accepted D19 / C39: produced with the reel, snapshotted by the core into a content revision."""
+
+    title: Annotated[str, Field(min_length=1)]
+    description: str
+    topics: list[str]
+    platforms: dict[str, PlatformMetadata]
+
+
 class Variant(BaseModel):
     language: Literal["en"]
     video: VideoFile
     contact_sheet: str
     cover: str
     post: Post
+    metadata: Metadata
     checks: dict[str, CheckResult]
 
 
