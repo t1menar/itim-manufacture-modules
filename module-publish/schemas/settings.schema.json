@@ -30,6 +30,10 @@
         "max_hashtags": {
           "type": "integer",
           "default": 30
+        },
+        "caption_hashtag_separator": {
+          "type": "string",
+          "default": "\n\n"
         }
       },
       "additionalProperties": false

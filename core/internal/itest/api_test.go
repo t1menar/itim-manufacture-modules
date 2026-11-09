@@ -299,9 +299,7 @@ func TestDispatchedAfterConfirm(t *testing.T) {
 func TestReviewApproveCreatesPublishIntents(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
-	account := uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
-		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	// D23: platform_accounts live in module-publish; core intents start with NULL account.
 	srv := e.api()
 	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("approve"), "artifacts": []any{}})
 	if res.StatusCode != 200 {
@@ -324,7 +322,7 @@ func TestReviewApproveCreatesPublishIntents(t *testing.T) {
 		t.Fatalf("approve: %d %s", res.StatusCode, problemCode(t, res))
 	}
 	res.Body.Close()
-	if n := e.count(`SELECT count(*) FROM publish_intents WHERE platform_account_id = $1 AND generation = 1 AND status = 'pending'`, account); n != 1 {
+	if n := e.count(`SELECT count(*) FROM publish_intents WHERE platform_account_id IS NULL AND generation = 1 AND status = 'pending'`); n != 1 {
 		t.Fatalf("intents=%d", n)
 	}
 	if n := e.count(`SELECT count(*) FROM content_revisions WHERE approved_round = 1`); n != 1 {
@@ -347,8 +345,12 @@ func TestReviewApproveCreatesPublishIntents(t *testing.T) {
 		t.Fatalf("request intents=%v", input["intents"])
 	}
 	intent0, _ := intents[0].(map[string]any)
-	if intent0["platform_account_id"] == nil || intent0["platform_account_id"] == "" {
-		t.Fatalf("intent missing platform_account_id: %v", intent0)
+	// D23: platform_account_id is bound by module-publish; may be null on first create.
+	if _, ok := intent0["platform_account_id"]; !ok {
+		t.Fatalf("intent missing platform_account_id key: %v", intent0)
+	}
+	if intent0["intent_id"] == nil || intent0["intent_id"] == "" {
+		t.Fatalf("intent missing intent_id: %v", intent0)
 	}
 	upstream, _ := input["upstream"].(map[string]any)
 	if upstream == nil || upstream["content_revision"] == nil {
@@ -372,6 +374,7 @@ func TestReviewApproveCreatesPublishIntents(t *testing.T) {
 }
 
 func TestSystemSettingsIncludeInstagramLimits(t *testing.T) {
+	// D23: IG limits moved to module-publish; core still exposes hard-coded defaults for compat.
 	e := setup(t)
 	lim, err := e.settings.InstagramLimits(e.ctx)
 	if err != nil {
@@ -379,6 +382,15 @@ func TestSystemSettingsIncludeInstagramLimits(t *testing.T) {
 	}
 	if lim.MaxCaptionChars != 2200 || lim.MaxHashtags != 30 {
 		t.Fatalf("%+v", lim)
+	}
+	cur, err := e.settings.GetCore(e.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values map[string]any
+	_ = json.Unmarshal(cur.Values, &values)
+	if _, ok := values["instagram"]; ok {
+		t.Fatal("core system_settings must not own instagram limits after D23")
 	}
 }
 

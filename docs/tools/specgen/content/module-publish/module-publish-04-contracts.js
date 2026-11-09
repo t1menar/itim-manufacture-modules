@@ -155,7 +155,7 @@ module.exports = {
 ['code', '{"publications": [\n  {"platform": "instagram", "platform_account_id": "019a4f00-...-c01",\n   "external_post_id": "17895695668004550", "url": "https://www.instagram.com/reel/C9xYz.../",\n   "published_at": "2026-11-08T10:06:41Z", "status": "published", "error": null}\n]}'],
 ['table', ['Field', 'Type', 'Meaning'], [
   ['`platform`', 'string', '`instagram` (later `youtube`, `tiktok`)'],
-  ['`platform_account_id`', 'uuid string', 'Core `platform_accounts.id` (not the Instagram id)'],
+  ['`platform_account_id`', 'uuid string', 'D23: module-publish `platform_accounts.id` (opaque to Core; not the Instagram id)'],
   ['`external_post_id`', 'string or null', 'Instagram media id; null when failed'],
   ['`url`', 'string or null', '`permalink` of the media; required when `status = published` (core-04 §8.3), see FR-PUB-053'],
   ['`published_at`', 'RFC 3339 or null', 'media `timestamp`'],

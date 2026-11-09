@@ -26,7 +26,7 @@ module.exports = {
 ['h1', '4. Main concepts and glossary'],
 ['table', ['Term', 'Meaning in this module'], [
   ['Publish job', 'One Core job of stage `publish` for one variant. Identified by `job_id`; the Core may resend it (at-least-once).'],
-  ['Platform account', 'A Core record (`platform_accounts`) of a channel on a platform: `id`, `platform`, `external_id` (the Instagram professional account id), `handle`, credential ref, `enabled`.'],
+  ['Platform account', '**D23:** a module-publish record (`platform_accounts` in the module DB) of a channel on a platform: `id`, `platform`, `external_id`, `handle`, `enabled`. Core keeps only an opaque `platform_account_id` on orchestration intents.'],
   ['Adapter', 'A Python class implementing `PlatformAdapter` for one platform (`instagram`, later `youtube`, `tiktok`). Chosen by `platform_accounts.platform` through the adapter registry.'],
   ['Post', 'The module\'s record of publishing one variant to one platform account. Unique per (`variant_id`, `platform_account_id`); carries the publish state machine.'],
   ['Container', 'Instagram media container (`IG Container`): created by `POST /{ig-user-id}/media`, processed asynchronously, published by `POST /{ig-user-id}/media_publish`. Expires 24 h after creation if not published.'],

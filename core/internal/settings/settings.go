@@ -131,34 +131,15 @@ func (s *Store) CallbackBaseURL(ctx context.Context) (string, error) {
 	return v.Callbacks.BaseURL, nil
 }
 
-// InstagramLimits holds caption/hashtag caps from system_settings.instagram (D20-era defaults).
+// InstagramLimits is deprecated in core (D23: limits live in module-publish settings).
+// Kept as hard-coded adapter defaults for any leftover core readers.
 type InstagramLimits struct {
 	MaxCaptionChars int
 	MaxHashtags     int
 }
 
 func (s *Store) InstagramLimits(ctx context.Context) (InstagramLimits, error) {
-	out := InstagramLimits{MaxCaptionChars: 2200, MaxHashtags: 30}
-	cur, err := s.GetCore(ctx)
-	if err != nil {
-		return out, err
-	}
-	var wrap struct {
-		Instagram *struct {
-			MaxCaptionChars *int `json:"max_caption_chars"`
-			MaxHashtags     *int `json:"max_hashtags"`
-		} `json:"instagram"`
-	}
-	if err := json.Unmarshal(cur.Values, &wrap); err != nil {
-		return out, err
-	}
-	if wrap.Instagram != nil {
-		if wrap.Instagram.MaxCaptionChars != nil {
-			out.MaxCaptionChars = *wrap.Instagram.MaxCaptionChars
-		}
-		if wrap.Instagram.MaxHashtags != nil {
-			out.MaxHashtags = *wrap.Instagram.MaxHashtags
-		}
-	}
-	return out, nil
+	_ = ctx
+	_ = s
+	return InstagramLimits{MaxCaptionChars: 2200, MaxHashtags: 30}, nil
 }

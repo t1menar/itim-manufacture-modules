@@ -122,8 +122,7 @@ func TestHappyPathThroughBroker(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()
 	account := uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
-		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	// D23: platform_accounts live in module-publish.
 	// relay publishes job.requested to the module queue
 	r := e.relay("w1")
 	r.OnSent = func(ctx context.Context, id uuid.UUID, body []byte) {

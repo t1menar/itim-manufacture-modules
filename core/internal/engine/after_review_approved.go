@@ -164,10 +164,15 @@ func (e *Engine) CreateFirstPublishJob(ctx context.Context, tx pgx.Tx, variantID
 	}
 	intentRows := make([]map[string]any, 0, len(intents))
 	for _, in := range intents {
-		intentRows = append(intentRows, map[string]any{
+		row := map[string]any{
 			"intent_id": in.ID.String(), "content_revision_id": revisionID.String(), "generation": in.Generation,
-			"platform_account_id": in.PlatformAccountID.String(),
-		})
+		}
+		if in.PlatformAccountID != uuid.Nil {
+			row["platform_account_id"] = in.PlatformAccountID.String()
+		} else {
+			row["platform_account_id"] = nil
+		}
+		intentRows = append(intentRows, row)
 	}
 	var revBody json.RawMessage
 	_ = tx.QueryRow(ctx, `SELECT body FROM content_revisions WHERE id = $1`, revisionID).Scan(&revBody)

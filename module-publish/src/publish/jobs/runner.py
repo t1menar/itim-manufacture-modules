@@ -71,6 +71,7 @@ class JobRunner:
             payload_input = dict(run.input or {})
             deadline = run.deadline
             cancel_requested = run.cancel_requested
+            variant_id = run.variant_id
 
         if callback is None:
             async with self._factory() as s, s.begin():
@@ -116,18 +117,47 @@ class JobRunner:
             return
 
         intents = list(payload_input.get("intents") or [])
-        # Enrich intents with platform_account_id when Core only sent intent_id/content_revision_id.
-        # Fake path: platform_account_id may be nested or absent — use intent_id as account key fallback.
+        # D23: resolve platform accounts from module-publish DB when Core left them null.
+        channel_ids: list[str] = []
+        for ch in payload_input.get("channels") or []:
+            if isinstance(ch, dict) and ch.get("id"):
+                channel_ids.append(str(ch["id"]))
+            elif isinstance(ch, str):
+                channel_ids.append(ch)
+        async with self._factory() as s:
+            accounts = await repo.list_enabled_accounts(s, channel_ids=channel_ids or None)
+        account_by_channel: dict[str, list] = {}
+        for acc in accounts:
+            account_by_channel.setdefault(acc.channel_id, []).append(acc)
+        default_accounts = accounts
+
         normalized: list[dict[str, Any]] = []
         for raw in intents:
             if not isinstance(raw, dict):
                 continue
             item = dict(raw)
-            if not item.get("platform_account_id"):
+            if item.get("platform_account_id"):
+                normalized.append(item)
+                continue
+            # Expand one core orchestration intent across local accounts for the job channels.
+            chosen = default_accounts
+            if channel_ids:
+                chosen = []
+                for cid in channel_ids:
+                    chosen.extend(account_by_channel.get(cid, []))
+            if not chosen:
                 item["platform_account_id"] = item.get("account_id") or str(
                     item.get("intent_id") or uuid.uuid4()
                 )
-            normalized.append(item)
+                normalized.append(item)
+                continue
+            for acc in chosen:
+                expanded = dict(item)
+                expanded["platform_account_id"] = str(acc.id)
+                expanded["handle"] = acc.handle
+                expanded["platform"] = acc.platform
+                expanded["channel_id"] = acc.channel_id
+                normalized.append(expanded)
 
         await self._progress(run_id, callback, fence, 40, "publish")
         publications: list[dict[str, Any]] = []
@@ -221,7 +251,50 @@ class JobRunner:
             await self._fail(run_id, callback, fence, "transient", str(exc), "instagram_error")
             return
 
-        # If helper path unused — still fine; we built publications above.
+        # D23: mirror orchestration outcomes into module-publish.publish_intents (best-effort).
+        variant_raw = variant_id
+        try:
+            async with self._factory() as s, s.begin():
+                for item, pub in zip(normalized, publications, strict=False):
+                    try:
+                        intent_uuid = uuid.UUID(str(item.get("intent_id")))
+                        account_uuid = uuid.UUID(str(pub.get("platform_account_id")))
+                    except (TypeError, ValueError):
+                        continue
+                    # Skip when the account is not in the local registry (tests / opaque ids).
+                    if await repo.get_platform_account(s, account_uuid) is None:
+                        continue
+                    rev_raw = item.get("content_revision_id")
+                    try:
+                        rev_uuid = uuid.UUID(str(rev_raw)) if rev_raw else None
+                    except (TypeError, ValueError):
+                        rev_uuid = None
+                    gen = int(item.get("generation") or 1)
+                    published_at = None
+                    if pub.get("published_at"):
+                        try:
+                            published_at = dt.datetime.fromisoformat(
+                                str(pub["published_at"]).replace("Z", "+00:00")
+                            )
+                        except ValueError:
+                            published_at = None
+                    await repo.upsert_local_intent(
+                        s,
+                        intent_id=intent_uuid,
+                        variant_id=variant_raw,
+                        platform_account_id=account_uuid,
+                        generation=gen,
+                        content_revision_id=rev_uuid,
+                        status=str(pub.get("status") or "pending"),
+                        external_post_id=pub.get("external_post_id"),
+                        url=pub.get("url"),
+                        published_at=published_at,
+                        last_error=pub.get("error_detail")
+                        if isinstance(pub.get("error_detail"), dict)
+                        else None,
+                    )
+        except Exception:
+            log.exception("local_intent_mirror_failed", run_id=str(run_id))
         _ = run_publish_intents  # kept for unit tests / alternative path
 
         output = {"publications": publications}

@@ -31,8 +31,7 @@ func (e *env) seedAccount() (variant, account uuid.UUID, job uuid.UUID) {
 	job, _ = e.startedJob()
 	_ = e.pool.QueryRow(e.ctx, `SELECT id FROM variants`).Scan(&variant)
 	account = uuid.Must(uuid.NewV7())
-	e.exec(`INSERT INTO platform_accounts (id, channel_id, platform, handle, enabled)
-		VALUES ($1, 'itim', 'instagram', '@itim', true)`, account)
+	// D23: platform_accounts live in module-publish.
 	return variant, account, job
 }
 
