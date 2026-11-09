@@ -160,7 +160,6 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	})
 }
 
-
 // loadJobChannels builds the job-request channels array from the variant (or the
 // production's variants when the stage is production-scoped). Module-video requires
 // at least one channel object with id/language/name/settings (D21 job input).
