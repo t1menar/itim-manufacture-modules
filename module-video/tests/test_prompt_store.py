@@ -95,7 +95,7 @@ async def test_editing_a_prompt_changes_the_step_hash(seeded: Any) -> None:
     assert prov["prompts"]["analysis"] == "analysis@1.0.1"
     assert {
         "prompt_id": "analysis@1.0.1",
-        "version": "1.0.1",
+        "version": 10001,
         "sha256": ctx.prompt_cache["analysis"].sha256,
     } in prov["prompt_refs"]
 

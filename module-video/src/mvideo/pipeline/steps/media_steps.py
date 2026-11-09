@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from mvideo.agents.prompts import semver_number
 from mvideo.observability.tracing import span
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
@@ -525,7 +526,7 @@ def _provenance(ctx: RunContext) -> dict[str, Any]:
         "cost_mode": ctx.settings.resolved_cost_mode(),
     }
     refs = [
-        {"prompt_id": p.id, "version": p.version, "sha256": p.sha256}
+        {"prompt_id": p.id, "version": semver_number(p.version), "sha256": p.sha256}
         for k, p in cache.items()
         if k in steps or k == "skill"
     ]

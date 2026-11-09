@@ -71,8 +71,17 @@ def render(template: str, values: Mapping[str, object]) -> str:
     return PLACEHOLDER.sub(lambda m: str(values[m.group(1)]), template)
 
 
-SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+SEMVER = re.compile(r"^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$")  # minor and patch below 100: see semver_number
 ACTIVE = "active"
+
+
+def semver_number(version: str) -> int:
+    """`MAJOR.MINOR.PATCH` as one integer (`1.0.1` -> 10001): the core wants an integer in prompt_refs.
+
+    The semver itself stays in `prompt_id` (`analysis@1.0.1`). Minor and patch are below 100.
+    """
+    major, minor, patch = semver_key(version)
+    return major * 10_000 + minor * 100 + patch
 
 
 def semver_key(version: str) -> tuple[int, ...]:
