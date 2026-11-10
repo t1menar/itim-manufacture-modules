@@ -10,9 +10,12 @@ Start with [`AGENTS.md`](AGENTS.md) if you are working in this repo.
 
 | Path | Role |
 |------|------|
+| `modules/module-idea/` | New pipeline, stage `idea`: idea backlog, playlists, rubrics, scheduling, cost and outcomes. |
+| `modules/module-scenario/` | New pipeline, stage `scenario`: research (verified facts, knowledge cache) and the scenario in one module. See `docs/PIPELINE.md`. |
 | `modules/module-video/` | Stage `video` (module id `video-claude`): ideas DB and scheduler, Claude agent steps, sandbox capture, ffmpeg render. |
 | `modules/module-review/` | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
 | `modules/module-publish/` | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
+| `packages/mvrender/` | Standalone renderer and timing library for scenarios. |
 | `packages/mf-storage/` | Shared S3/MinIO helpers used by module-review and module-publish. |
 | `deploy/` | Standalone MinIO for local module tests (`compose.minio.yml`). |
 | `docs/` | Maintainer notes: decisions, content strategy, review findings. |
