@@ -336,6 +336,6 @@ mf_table \
 
 printf '\n'
 mf_info "Креды модулей: SQL INSERT в БД review/publish (см. README модулей). Telegram/Instagram = fake."
-mf_info "Live Instagram: cloudflared tunnel --url http://127.0.0.1:${MINIO_API_PORT:-59000} → S3_PUBLIC_ENDPOINT"
+mf_info "Видео в Telegram и Instagram загружается файлом из MinIO: туннель не нужен. Настройки video: ./deploy/scripts/video-prepare.sh"
 mf_info "Остановка: ./deploy/down.sh"
 mf_summary_footer
