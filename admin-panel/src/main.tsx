@@ -30,7 +30,10 @@ function readScheme(): "light" | "dark" {
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
-    onError: (error) => {
+    onError: (error, query) => {
+      if (query.meta && query.meta.silent) {
+        return;
+      }
       showProblem(error instanceof ProblemError ? error.problem : { title: error.message });
     },
   }),

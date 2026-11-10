@@ -67,6 +67,7 @@ export function IdeasPage() {
       return (data.items ?? []) as Topic[];
     },
     retry: false,
+    meta: { silent: true },
   });
   const [status, setStatus] = useState("");
   const [topicId, setTopicId] = useState("");
@@ -84,6 +85,7 @@ export function IdeasPage() {
       return data as { items?: Idea[]; next_cursor?: string };
     },
     retry: false,
+    meta: { silent: true },
   });
 
   const unsupported = isNotImplemented(topicsQ.error) && isNotImplemented(ideasQ.error);
