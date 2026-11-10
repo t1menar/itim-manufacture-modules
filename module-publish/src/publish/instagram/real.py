@@ -26,6 +26,7 @@ log = get_logger(__name__)
 # default v22.0 matches Meta IG User Media reference examples.
 DEFAULT_API_VERSION = "v22.0"
 DEFAULT_GRAPH_BASE = "https://graph.instagram.com"
+DEFAULT_UPLOAD_BASE = "https://rupload.facebook.com"  # resumable upload host (Meta docs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,8 @@ class RealInstagramClient:
         poll_max_attempts: int = 60,
         client: httpx.AsyncClient | None = None,
         video_url_resolver: Callable[[str], Awaitable[str]] | None = None,
+        video_loader: Callable[[str], Awaitable[bytes]] | None = None,
+        upload_base: str = DEFAULT_UPLOAD_BASE,
     ) -> None:
         self._resolve = resolve_account
         self._base = graph_base.rstrip("/")
@@ -69,6 +72,9 @@ class RealInstagramClient:
         self._poll_max = poll_max_attempts
         self._client = client
         self._video_url_resolver = video_url_resolver
+        # With a loader an s3:// video is uploaded as a file (resumable upload): no public URL needed.
+        self._video_loader = video_loader
+        self._upload_base = upload_base.rstrip("/")
         # Last container id per account for reconcile after unknown.
         self._last_container: dict[str, str] = {}
 
@@ -88,7 +94,11 @@ class RealInstagramClient:
         intent_id: str | None = None,
     ) -> PublishResult:
         _ = intent_id
-        if self._video_url_resolver is not None and video_ref.startswith("s3://"):
+        video_bytes: bytes | None = None
+        video_url: str | None = None
+        if self._video_loader is not None and video_ref.startswith("s3://"):
+            video_bytes = await self._video_loader(video_ref)
+        elif self._video_url_resolver is not None and video_ref.startswith("s3://"):
             video_url = await self._video_url_resolver(video_ref)
         else:
             video_url = _require_public_https_url(video_ref)
@@ -106,6 +116,8 @@ class RealInstagramClient:
         )
         self._last_container[account_id] = container_id
         try:
+            if video_bytes is not None:
+                await self._upload_video(auth, container_id, video_bytes)
             await self._wait_container_finished(auth, container_id)
             media_id = await self._media_publish(auth, container_id)
         except Exception as exc:
@@ -164,16 +176,19 @@ class RealInstagramClient:
         self,
         auth: AccountAuth,
         *,
-        video_url: str,
+        video_url: str | None,
         caption: str,
         cover_url: str | None,
     ) -> str:
         body: dict[str, Any] = {
             "media_type": "REELS",
-            "video_url": video_url,
             "caption": caption,
             "access_token": auth.access_token,
         }
+        if video_url is not None:
+            body["video_url"] = video_url
+        else:
+            body["upload_type"] = "resumable"  # the file follows to the upload host
         if cover_url and cover_url.startswith("https://"):
             body["cover_url"] = cover_url
         data = await self._post(f"{auth.ig_user_id}/media", auth, data=body)
@@ -184,6 +199,46 @@ class RealInstagramClient:
                 status_code=200,
             )
         return str(cid)
+
+    async def _upload_video(self, auth: AccountAuth, container_id: str, data: bytes) -> None:
+        """Send the file to the container (Meta resumable upload). Safe to repeat: offset 0 restarts it."""
+        url = f"{self._upload_base}/ig-api-upload/{self._version}/{container_id}"
+        headers = {
+            "Authorization": f"OAuth {auth.access_token}",
+            "offset": "0",
+            "file_size": str(len(data)),
+            "Content-Type": "application/octet-stream",
+        }
+        client = self._client or httpx.AsyncClient(timeout=max(self._timeout, 300.0))
+        owns = self._client is None
+        try:
+            delay = 1.0
+            for attempt in range(3):
+                try:
+                    resp = await client.post(url, content=data, headers=headers)
+                except httpx.HTTPError as exc:
+                    log.warning("instagram_upload_transport_error", attempt=attempt + 1)
+                    if attempt == 2:
+                        raise InstagramAPIError(
+                            ClassifiedError("instagram_upload_transport", True, str(exc))
+                        ) from exc
+                    await asyncio.sleep(delay)
+                    delay *= 2
+                    continue
+                body = _json(resp)
+                if resp.status_code >= 500 and attempt < 2:
+                    await asyncio.sleep(delay)
+                    delay *= 2
+                    continue
+                if resp.status_code >= 400 or (isinstance(body, dict) and body.get("success") is False):
+                    classified = classify_graph_error(
+                        status_code=resp.status_code, body=body if isinstance(body, dict) else None
+                    )
+                    raise InstagramAPIError(classified, status_code=resp.status_code)
+                return
+        finally:
+            if owns:
+                await client.aclose()
 
     async def _wait_container_finished(self, auth: AccountAuth, container_id: str) -> None:
         for _ in range(self._poll_max):

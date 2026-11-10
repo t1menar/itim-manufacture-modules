@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -72,9 +73,25 @@ def build_instagram_client(
         except StorageError as exc:
             raise RuntimeError(f"presign failed: {exc}") from exc
 
+    async def load_video(video_ref: str) -> bytes:
+        """Read the video from MinIO over the internal endpoint (the file stays in MinIO)."""
+        if factory is None:
+            raise RuntimeError("s3:// video_ref requires DB session factory for MinIO config")
+        async with factory() as session:
+            storage = await load_storage_client(session, env_fallback=config.s3_env_fallback)
+        if storage is None:
+            raise RuntimeError("s3:// video_ref but MinIO/S3 is not configured")
+        try:
+            return await asyncio.to_thread(storage.get_bytes, video_ref)
+        except StorageError as exc:
+            raise RuntimeError(f"video read failed: {exc}") from exc
+
+    direct = config.instagram_upload_mode != "url" and factory is not None
     return RealInstagramClient(
         resolve_account=resolve,
         graph_base=config.instagram_graph_base,
         api_version=config.instagram_api_version,
         video_url_resolver=resolve_video_url if factory is not None else None,
+        video_loader=load_video if direct else None,
+        upload_base=config.instagram_upload_base,
     )

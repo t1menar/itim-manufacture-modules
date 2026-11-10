@@ -150,3 +150,24 @@ async def test_get_updates_offset() -> None:
     )
     updates = await bot.get_updates(offset=5, long_poll_s=0)
     assert len(updates) == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_video_bytes_are_uploaded_as_multipart_without_a_url(bot: RealTelegramBot) -> None:
+    route = respx.post(f"{API}/botTEST_TOKEN_NOT_A_SECRET/sendVideo").mock(
+        return_value=httpx.Response(200, json={"ok": True, "result": {"message_id": 9}})
+    )
+    payload = b"\x00\x00\x00\x18ftypmp42" + b"x" * 100
+    sent = await bot.send_video(
+        42,
+        "s3://manufacture/p/video/1/package/final.en.mp4",
+        video_bytes=payload,
+        caption="cap",
+        reply_markup={"inline_keyboard": []},
+    )
+    assert sent["message_id"] == 9
+    req = route.calls.last.request
+    assert req.headers["content-type"].startswith("multipart/form-data")
+    assert payload in req.content and b'name="chat_id"' in req.content
+    assert b"s3://" not in req.content  # the private ref never reaches Telegram

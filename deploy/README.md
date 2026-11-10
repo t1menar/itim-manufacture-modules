@@ -39,7 +39,7 @@
 ./deploy/scripts/publish-instagram.sh   # INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID -> аккаунт itim
 ```
 
-`--dry-run` печатает SQL с замаскированными секретами. И Telegram (большие файлы), и Instagram (всегда) берут видео по публичной HTTPS-ссылке MinIO, поэтому нужен туннель на `:56000`; его хост пропишите в `deploy/.env` (`S3_PUBLIC_ENDPOINT=<host>`, `S3_PUBLIC_SECURE=1`) до запуска скриптов.
+`--dry-run` печатает SQL с замаскированными секретами. Туннель и публичный адрес MinIO не нужны: файл ролика читается из локального MinIO и загружается напрямую в Telegram (multipart, до 50 МБ; больше — ссылка) и в Instagram (resumable upload через `rupload.facebook.com`). Режим по ссылке остаётся запасным: `PUBLISH_INSTAGRAM_UPLOAD_MODE=url`. Готовые ролики всегда остаются в MinIO (бакет `manufacture`) как история.
 
 ## Порты (по умолчанию)
 

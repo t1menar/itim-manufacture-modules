@@ -215,12 +215,23 @@ class RealTelegramBot:
         chat_id: int,
         video: str,
         *,
+        video_bytes: bytes | None = None,
         caption: str | None = None,
         reply_to_message_id: int | None = None,
         allow_sending_without_reply: bool = False,
         reply_markup: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        size = await _probe_size(video)
+        if video_bytes is not None and len(video_bytes) <= BOT_API_UPLOAD_LIMIT_BYTES:
+            return await self._send_video_file(
+                chat_id,
+                video,
+                video_bytes,
+                caption=caption,
+                reply_to_message_id=reply_to_message_id,
+                allow_sending_without_reply=allow_sending_without_reply,
+                reply_markup=reply_markup,
+            )
+        size = len(video_bytes) if video_bytes is not None else await _probe_size(video)
         if size is not None and size > BOT_API_UPLOAD_LIMIT_BYTES:
             log.warning("telegram_video_too_large", size=size, limit=BOT_API_UPLOAD_LIMIT_BYTES)
             text = (
@@ -268,6 +279,36 @@ class RealTelegramBot:
             "message_id": int(result["message_id"]),
             "chat_id": chat_id,
             "video": video,
+            "caption": caption,
+        }
+
+    async def _send_video_file(
+        self,
+        chat_id: int,
+        video_ref: str,
+        video_bytes: bytes,
+        *,
+        caption: str | None,
+        reply_to_message_id: int | None,
+        allow_sending_without_reply: bool,
+        reply_markup: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Multipart upload of the file itself: no public URL needed (Bot API limit 50 MB)."""
+        form: dict[str, Any] = {"chat_id": str(chat_id), "supports_streaming": "true"}
+        if caption:
+            form["caption"] = caption[:1024]
+        if reply_to_message_id is not None:
+            form["reply_to_message_id"] = str(reply_to_message_id)
+            form["allow_sending_without_reply"] = "true" if allow_sending_without_reply else "false"
+        if reply_markup is not None:
+            form["reply_markup"] = json.dumps(reply_markup)
+        result = await self._request(
+            "sendVideo", data=form, files={"video": ("video.mp4", video_bytes, "video/mp4")}
+        )
+        return {
+            "message_id": int(result["message_id"]),
+            "chat_id": chat_id,
+            "video": video_ref,
             "caption": caption,
         }
 

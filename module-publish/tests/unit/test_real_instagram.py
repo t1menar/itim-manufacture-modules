@@ -136,3 +136,54 @@ def test_classify_quota() -> None:
         body={"error": {"code": 9, "error_subcode": 2207042, "message": "quota"}},
     )
     assert c.retryable and c.code == "instagram_rate_limit"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_s3_video_is_uploaded_as_a_file_without_a_public_url() -> None:
+    uploaded: list[bytes] = []
+
+    async def load(ref: str) -> bytes:
+        assert ref == "s3://manufacture/p/video/1/package/final.en.mp4"
+        return b"VIDEO-BYTES" * 10
+
+    c = RealInstagramClient(
+        resolve_account=_resolve,
+        graph_base=GRAPH,
+        api_version=VER,
+        poll_interval_s=0.01,
+        poll_max_attempts=5,
+        timeout_s=5.0,
+        video_loader=load,
+        upload_base="https://rupload.test",
+    )
+    respx.get(f"{GRAPH}/{VER}/{IG}/content_publishing_limit").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    create = respx.post(f"{GRAPH}/{VER}/{IG}/media").mock(
+        return_value=httpx.Response(200, json={"id": "container7"})
+    )
+
+    def _upload(request: httpx.Request) -> httpx.Response:
+        uploaded.append(request.content)
+        return httpx.Response(200, json={"success": True})
+
+    up = respx.post(f"https://rupload.test/ig-api-upload/{VER}/container7").mock(side_effect=_upload)
+    respx.get(f"{GRAPH}/{VER}/container7").mock(
+        return_value=httpx.Response(200, json={"status_code": "FINISHED"})
+    )
+    respx.post(f"{GRAPH}/{VER}/{IG}/media_publish").mock(return_value=httpx.Response(200, json={"id": "m1"}))
+    respx.get(f"{GRAPH}/{VER}/m1").mock(
+        return_value=httpx.Response(200, json={"id": "m1", "permalink": "https://www.instagram.com/reel/X/"})
+    )
+    result = await c.publish_reel(
+        account_id="0193a000-0000-7000-8000-000000000001",
+        video_ref="s3://manufacture/p/video/1/package/final.en.mp4",
+        caption="hello",
+    )
+    assert result.external_post_id == "m1"
+    body = create.calls.last.request.content
+    assert b"upload_type=resumable" in body and b"video_url" not in body
+    assert uploaded == [b"VIDEO-BYTES" * 10]
+    h = up.calls.last.request.headers
+    assert h["authorization"] == f"OAuth {TOKEN}" and h["offset"] == "0" and h["file_size"] == "110"

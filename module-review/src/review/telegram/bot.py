@@ -21,6 +21,7 @@ class TelegramBot(Protocol):
         chat_id: int,
         video: str,
         *,
+        video_bytes: bytes | None = None,
         caption: str | None = None,
         reply_to_message_id: int | None = None,
         allow_sending_without_reply: bool = False,

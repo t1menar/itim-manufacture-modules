@@ -105,3 +105,7 @@ Bootstrap env: `PUBLISH_DATABASE_URL`, `PUBLISH_LISTEN_ADDR`, `MODULE_CORE_URL`,
 Real Instagram publish resolves `s3://` artifact refs to a **public** presigned HTTPS `video_url` (SigV4 signed for `public_endpoint`, not the internal `minio:9000` host). Config from module DB (`s3.*`) with env fallback. Package: `packages/mf-storage`. Local default: `http://127.0.0.1:59000` via `deploy/compose.minio.yml`. For live Instagram, tunnel that port (cloudflared/ngrok) and set `public_endpoint` to the tunnel host — no permanent domain/TLS required.
 
 **module-video** must upload the object to the same bucket/key; this module does not change video upload.
+
+## Direct upload (default)
+
+For an `s3://` video the module reads the file from MinIO (internal endpoint) and uploads it to Instagram with the resumable upload flow (`POST /{ig-user}/media?upload_type=resumable`, then the bytes to `{PUBLISH_INSTAGRAM_UPLOAD_BASE}/ig-api-upload/{version}/{container}` with `Authorization: OAuth`, `offset`, `file_size`). No public URL or tunnel is needed and the file stays in MinIO. `PUBLISH_INSTAGRAM_UPLOAD_MODE=url` switches back to a public presigned `video_url`. The cover is sent only when it is already an https URL.

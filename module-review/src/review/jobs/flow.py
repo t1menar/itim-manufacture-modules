@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import uuid
 from datetime import UTC, datetime
@@ -71,9 +72,13 @@ class ReviewFlow:
             fence = run.fence
             job_id_s = str(run.job_id)
             chat_id = self._review_chat_id()
+            s3_ref: str | None = None
+            storage = None
             if video_ref.startswith("s3://"):
                 storage = await load_storage_client(s, env_fallback=self._s3_env)
                 if storage is not None:
+                    s3_ref = video_ref
+                    # Link only as a fallback for files over the Bot API upload limit.
                     video_ref = storage.resolve_https(video_ref, ttl_s=3600, public=True)
             if chat_id == 0:
                 await repo.store_outcome(
@@ -88,9 +93,12 @@ class ReviewFlow:
                 )
                 return
 
+        # The file itself goes to Telegram from MinIO (internal endpoint): no public link needed.
+        video_bytes = await _read_object(storage, s3_ref) if storage is not None and s3_ref else None
         sent = await self._bot.send_video(
             chat_id,
             video_ref,
+            video_bytes=video_bytes,
             caption=caption,
             reply_to_message_id=reply_to,
             allow_sending_without_reply=True,
@@ -254,6 +262,20 @@ class ReviewFlow:
         if callback:
             with contextlib.suppress(Exception):
                 await self._core.fail(callback, fence, body)
+
+
+async def _read_object(storage: Any, ref: str) -> bytes | None:
+    """Read the video from MinIO unless it is over the Bot API upload limit (then a link is sent)."""
+    from review.telegram.real import BOT_API_UPLOAD_LIMIT_BYTES
+
+    try:
+        size = int((await asyncio.to_thread(storage.stat, ref))["size"])  # type: ignore[call-overload]
+        if size > BOT_API_UPLOAD_LIMIT_BYTES:
+            return None
+        return await asyncio.to_thread(storage.get_bytes, ref)
+    except Exception:
+        log.warning("video_read_failed_using_link")
+        return None
 
 
 def _run_snapshot(run: Any) -> dict[str, Any]:

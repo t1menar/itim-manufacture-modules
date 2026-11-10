@@ -32,6 +32,8 @@ OPTIONAL_VARS = (
     "PUBLISH_INSTAGRAM_IG_USER_ID",  # optional default IG user id when account.external_id empty
     "PUBLISH_INSTAGRAM_GRAPH_BASE",  # default https://graph.instagram.com
     "PUBLISH_INSTAGRAM_API_VERSION",  # default v22.0
+    "PUBLISH_INSTAGRAM_UPLOAD_MODE",  # direct (file from MinIO, default) | url (public presigned link)
+    "PUBLISH_INSTAGRAM_UPLOAD_BASE",  # default https://rupload.facebook.com
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
 )
@@ -56,6 +58,8 @@ class BootstrapConfig:
     instagram_ig_user_id: str | None = None
     instagram_graph_base: str = "https://graph.instagram.com"
     instagram_api_version: str = "v22.0"
+    instagram_upload_mode: str = "direct"
+    instagram_upload_base: str = "https://rupload.facebook.com"
 
     s3_env_fallback: dict[str, str] = field(default_factory=dict, repr=False)
 
@@ -118,5 +122,12 @@ class BootstrapConfig:
             .strip()
             .rstrip("/"),
             instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v22.0").strip() or "v22.0",
+            instagram_upload_mode=(source.get("PUBLISH_INSTAGRAM_UPLOAD_MODE") or "direct").strip().lower()
+            or "direct",
+            instagram_upload_base=(
+                source.get("PUBLISH_INSTAGRAM_UPLOAD_BASE") or "https://rupload.facebook.com"
+            )
+            .strip()
+            .rstrip("/"),
             s3_env_fallback=s3_env,
         )

@@ -14,5 +14,4 @@ export TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_IDS TELEGRAM_CHAT_IDS
 if [[ "${1:-}" == "--dry-run" ]]; then python3 "$D/real-mode.py" review --dry-run; exit 0; fi
 python3 "$D/real-mode.py" review | docker compose -f "$ROOT/deploy/compose.yml" --env-file "$ROOT/deploy/.env" \
   exec -T postgres psql -U "${POSTGRES_USER:-manufacture}" -d review -v ON_ERROR_STOP=1 -q
-[[ "${S3_PUBLIC_SECURE:-0}" == "1" ]] || echo "warning: S3_PUBLIC_ENDPOINT is not a public HTTPS host; Telegram cannot fetch large videos until a tunnel is set (see deploy/README.md)" >&2
 echo "review: telegram.mode=real"
