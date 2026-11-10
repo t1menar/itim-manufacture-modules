@@ -3,6 +3,8 @@ import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/
 import { AppLayout } from "./components/AppLayout";
 import { StubPage } from "./components/StubPage";
 import { OverviewPage } from "./pages/OverviewPage";
+import { ProductionDetailPage } from "./pages/ProductionDetailPage";
+import { ProductionsPage } from "./pages/ProductionsPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -25,7 +27,13 @@ const ideasRoute = createRoute({
 const productionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/productions",
-  component: () => <StubPage title="Productions" hint="Список производств, джобы, retry / skip / cancel." />,
+  component: ProductionsPage,
+});
+
+const productionDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/productions/$id",
+  component: ProductionDetailPage,
 });
 
 const reviewRoute = createRoute({
@@ -70,6 +78,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   ideasRoute,
   productionsRoute,
+  productionDetailRoute,
   reviewRoute,
   accountsRoute,
   promptsRoute,

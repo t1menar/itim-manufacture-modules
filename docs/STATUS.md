@@ -4,7 +4,7 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 ## On main
 
-#7–#25 merged. Head includes admin-api (D24, merge `#25` / `31fb3ac`). CI on that merge commit was green (admin-api, core, module-publish, module-review, contracts, deploy-shell).
+#7–#26 merged. Head includes admin-api (D24, `#25` / `31fb3ac`) and the admin-panel shell (`#26` / `ab82ac0`).
 
 ## Accepted decisions
 
@@ -17,7 +17,8 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| (this) | Каркас **admin-panel** (React + TS), same-origin раздача из admin-api, живой экран «Обзор» | owner — ждать (**не мержить**) |
+| #26 | Каркас admin-panel | смержен |
+| (this) | Экран **Productions** (список, детали, cancel/retry/skip) | owner — ждать (**не мержить**) |
 
 ## Local deploy
 

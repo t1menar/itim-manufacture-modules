@@ -47,15 +47,30 @@ paths:
         - { name: status, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
         - { name: cursor, in: query, schema: { type: string } }
-      responses: { "200": { description: list } }
+      responses:
+        "200":
+          description: list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductionList" }
   /api/v1/productions/{id}:
     get:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses: { "200": { description: production with variants, jobs, events } }
+      responses:
+        "200":
+          description: production with variants, jobs, events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Production" }
   /api/v1/jobs/{id}:
     get:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses: { "200": { description: job } }
+      responses:
+        "200":
+          description: job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
   /api/v1/jobs/{id}/cancel:
     post:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
@@ -67,7 +82,15 @@ paths:
   /api/v1/variants/{id}/retry:
     post:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses: { "200": { description: new job id } }
+      responses:
+        "200":
+          description: new job id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id: { type: string, format: uuid }
   /api/v1/variants/{id}/skip:
     post:
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
@@ -209,4 +232,83 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Module" }
+
+    ProductionSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        idea_id: { type: integer }
+        idea_ref: { type: string }
+        idea_rev: { type: integer }
+        run_no: { type: integer }
+        pipeline_id: { type: string }
+        status: { type: string }
+        language: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        rev: { type: integer }
+    ProductionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProductionSummary" }
+        next_cursor: { type: string, nullable: true }
+    Variant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        language: { type: string }
+        status: { type: string }
+        position: { type: integer }
+        channels:
+          type: array
+          items: { type: string }
+        attention: {}
+        rev: { type: integer }
+    Job:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        production_id: { type: string, format: uuid }
+        variant_id: { type: string, format: uuid }
+        stage_id: { type: string }
+        module_id: { type: string }
+        position: { type: integer }
+        attempt: { type: integer }
+        status: { type: string }
+        mode: { type: string }
+        fence: { type: integer }
+        cancel_requested: { type: boolean }
+        error: {}
+        progress: {}
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        rev: { type: integer }
+    Event:
+      type: object
+      properties:
+        id: { type: integer }
+        variant_id: {}
+        job_id: {}
+        type: { type: string }
+        actor: { type: string }
+        payload: {}
+        at: { type: string, format: date-time }
+    Production:
+      allOf:
+        - { $ref: "#/components/schemas/ProductionSummary" }
+        - type: object
+          properties:
+            pipeline_snapshot: {}
+            variants:
+              type: array
+              items: { $ref: "#/components/schemas/Variant" }
+            jobs:
+              type: array
+              items: { $ref: "#/components/schemas/Job" }
+            events:
+              type: array
+              items: { $ref: "#/components/schemas/Event" }
 
