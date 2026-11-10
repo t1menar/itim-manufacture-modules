@@ -99,6 +99,75 @@ wait_http_net() {
 
 
 # ---------- 1. deps ----------
+
+# After module migrations: warn about missing real-mode credentials (never print values, never fail).
+mf_secret_present() {
+  local db="$1" key="$2"
+  local present
+  present="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-manufacture}" -d "$db" -tAc \
+    "SELECT CASE WHEN EXISTS (SELECT 1 FROM module_secrets WHERE key = '$key' AND length(trim(coalesce(value, ''))) > 0) THEN 'yes' ELSE 'no' END" \
+    2>/dev/null || echo "error")"
+  present="${present//$'\n'/}"
+  printf '%s' "$present"
+}
+
+mf_warn_missing_secret() {
+  local db="$1" key="$2"
+  local present
+  present="$(mf_secret_present "$db" "$key")"
+  if [[ "$present" == "yes" ]]; then
+    mf_info "$db.module_secrets.$key: задан"
+  elif [[ "$present" == "error" ]]; then
+    mf_warn "не удалось проверить $db.module_secrets.$key (БД или таблица недоступны)"
+  else
+    mf_warn "нет значения $db.module_secrets.$key — в real-режиме модуль не сможет работать. Задайте ключ в БД или в admin-panel (значение не печатаем)."
+  fi
+}
+
+mf_check_real_credentials() {
+  local review_mode publish_mode accounts tokens def
+  review_mode="${REVIEW_TELEGRAM_MODE:-real}"
+  publish_mode="${PUBLISH_INSTAGRAM_MODE:-real}"
+  mf_step_begin "Проверка кредов для real-режимов (значения не печатаем)"
+  if [[ "$review_mode" == "real" ]]; then
+    mf_info "REVIEW_TELEGRAM_MODE=real"
+    mf_warn_missing_secret review telegram.bot_token
+    mf_warn_missing_secret review s3.access_key
+    mf_warn_missing_secret review s3.secret_key
+  else
+    mf_info "REVIEW_TELEGRAM_MODE=$review_mode — проверку кредов Telegram пропускаем"
+  fi
+  if [[ "$publish_mode" == "real" ]]; then
+    mf_info "PUBLISH_INSTAGRAM_MODE=real"
+    mf_warn_missing_secret publish instagram.default_access_token
+    mf_warn_missing_secret publish s3.access_key
+    mf_warn_missing_secret publish s3.secret_key
+    accounts="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-manufacture}" -d publish -tAc \
+      "SELECT count(*) FROM platform_accounts" 2>/dev/null || echo "error")"
+    tokens="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-manufacture}" -d publish -tAc \
+      "SELECT count(*) FROM platform_accounts WHERE length(trim(coalesce(access_token, ''))) > 0" 2>/dev/null || echo "error")"
+    accounts="${accounts//$'\n'/}"
+    tokens="${tokens//$'\n'/}"
+    if [[ "$accounts" == "error" || "$tokens" == "error" ]]; then
+      mf_warn "не удалось проверить publish.platform_accounts"
+    else
+      mf_info "publish.platform_accounts: $accounts записей, из них с access_token: $tokens"
+      if [[ "$accounts" == "0" ]]; then
+        mf_warn "в publish нет platform_accounts — в real-режиме публиковать некуда. Добавьте аккаунт в БД или в admin-panel."
+      elif [[ "$tokens" == "0" ]]; then
+        def="$(mf_secret_present publish instagram.default_access_token)"
+        if [[ "$def" != "yes" ]]; then
+          mf_warn "ни у одного platform_account нет access_token и нет instagram.default_access_token"
+        fi
+      fi
+    fi
+  else
+    mf_info "PUBLISH_INSTAGRAM_MODE=$publish_mode — проверку кредов Instagram пропускаем"
+  fi
+  mf_step_end ok "проверка кредов завершена (предупреждения не останавливают up.sh)"
+}
+
+
 mf_step_begin "Проверка docker / compose / curl / python3"
 mf_run bash -c 'command -v docker >/dev/null'
 mf_run bash -c 'docker info >/dev/null'
@@ -295,6 +364,8 @@ mf_step_end ok "модули active"
 
 
 # ---------- 12. admin-api ----------
+mf_check_real_credentials
+
 mf_step_begin "Старт admin-api (localhost-only)"
 # re-source tokens after registration
 set -a
@@ -377,7 +448,8 @@ mf_table \
   "minio console|http://127.0.0.1:${MINIO_CONSOLE_PORT:-59001}"
 
 printf '\n'
-mf_info "Креды модулей: SQL INSERT в БД review/publish (см. README модулей). Telegram/Instagram = fake."
+mf_info "Креды модулей: SQL INSERT в БД review/publish (см. README модулей) или экран «Аккаунты и креды» в admin-panel."
+mf_warn "REVIEW_TELEGRAM_MODE и PUBLISH_INSTAGRAM_MODE по умолчанию real: будут реальные отправки. Нужны креды в БД модулей (up.sh предупреждает о недостающих ключах, значения не печатает). Для локальной отладки без реальных постов задайте REVIEW_TELEGRAM_MODE=fake и PUBLISH_INSTAGRAM_MODE=fake в deploy/.env."
 mf_info "Видео в Telegram и Instagram загружается файлом из MinIO: туннель не нужен. Настройки video: ./deploy/scripts/video-prepare.sh"
 mf_info "Остановка: ./deploy/down.sh"
 mf_summary_footer

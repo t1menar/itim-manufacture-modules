@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from review import __version__
 from review.settings import SCHEMAS_DIR, load_settings_schema
@@ -22,9 +22,14 @@ def _load(name: str) -> dict[str, Any]:
 
 
 @router.get("/info")
-async def info() -> dict[str, Any]:
+async def info(request: Request) -> dict[str, Any]:
+    config = getattr(request.app.state, "config", None)
+    mode = getattr(config, "telegram_mode", "fake") if config is not None else "fake"
+    if mode not in ("real", "fake"):
+        mode = "fake"
     return {
-        "name": "Review (Telegram bot)",
+        "name": f"Review (Telegram bot, {mode})",
+        "telegram_mode": mode,
         "version": __version__,
         "contract": 1,
         "stages": ["review"],
