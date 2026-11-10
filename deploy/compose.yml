@@ -111,8 +111,8 @@ services:
     <<: *module-common
     image: ${VIDEO_IMAGE:-manufacture-video:local}
     build:
-      context: ..
-      dockerfile: deploy/Dockerfile.video
+      context: ../module-video
+      dockerfile: Dockerfile
     environment:
       VIDEO_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/video
       VIDEO_LISTEN_ADDR: "0.0.0.0:8080"
@@ -128,7 +128,11 @@ services:
       S3_PUBLIC_SECURE: ${S3_PUBLIC_SECURE:-0}
       DOCKER_HOST: unix:///var/run/docker.sock
       VIDEO_AGENT_NETWORK: ${VIDEO_AGENT_NETWORK:-manufacture_agents}
-      VIDEO_IDEAS_PAUSED: ${VIDEO_IDEAS_PAUSED:-1}
+      VIDEO_IDEAS_PAUSED: ${VIDEO_IDEAS_PAUSED:-0}
+      MVIDEO_PIPELINE: ${MVIDEO_PIPELINE:-real}
+      MVIDEO_SELF_HOST: module-video
+      MVIDEO_AGENT_NETWORK: ${VIDEO_AGENT_NETWORK:-manufacture_agents}
+    group_add: ["${DOCKER_GID:-0}"]
     ports:
       - "${VIDEO_PORT:-58081}:8080"
     volumes:
@@ -157,6 +161,7 @@ services:
     networks:
       manufacture:
         ipv4_address: 172.28.0.21
+      agents: {}
 
   module-review:
     <<: *module-common
@@ -252,6 +257,15 @@ services:
       manufacture:
         ipv4_address: 172.28.0.23
 
+  # Local registry: job settings name the agent image by digest, and a local image only gets one by a push.
+  registry:
+    image: registry:2
+    ports:
+      - "127.0.0.1:5000:5000"
+    restart: unless-stopped
+    networks:
+      manufacture: {}
+
 networks:
   manufacture:
     name: manufacture
@@ -260,7 +274,11 @@ networks:
       config:
         - subnet: 172.28.0.0/16
           gateway: 172.28.0.1
-  # Agent sandbox network (module-video DOCKER_HOST); created by up.sh if missing.
+  # Agent sandbox network: agent containers reach the egress proxy and sandbox MCP of module-video here.
+  # Created by up.sh if missing.
+  agents:
+    name: ${VIDEO_AGENT_NETWORK:-manufacture_agents}
+    external: true
 
 volumes:
   pg_data:

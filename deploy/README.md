@@ -17,6 +17,18 @@
 
 Повторный `up.sh` идемпотентен: реестр модулей, тома и `.env` переиспользуются.
 
+## Video: реальная генерация
+
+`up.sh` собирает module-video из `module-video/Dockerfile` (ffmpeg, prompts, reference), запускает его с `MVIDEO_PIPELINE=real` и снятой паузой идей. Дальше один раз:
+
+```bash
+./deploy/scripts/video-prepare.sh      # registry :5000, образ агента по digest, digest postgres:17, настройки video-claude в core
+./deploy/scripts/video-credential.sh   # токен Claude -> таблица credentials (ввод скрыт); REF по умолчанию CLAUDE_OAUTH_TOKEN
+./deploy/scripts/video-idea.sh "Title" "Description" "Hook line"   # идея -> очередь шедулера
+```
+
+Шедулер module-video отдаёт `idea.ready` в core, core создаёт задание, готовый ролик попадает в MinIO (бакет `manufacture`). Образ агента `video-agent:dev` собирается из `module-video/agent/Dockerfile`, если его нет.
+
 ## Порты (по умолчанию)
 
 | Сервис | URL |
