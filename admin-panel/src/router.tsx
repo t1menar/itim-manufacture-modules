@@ -9,6 +9,7 @@ import { ReviewPublishPage } from "./pages/ReviewPublishPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { PromptsPage } from "./pages/PromptsPage";
 import { AuditPage } from "./pages/AuditPage";
+import { IdeasPage } from "./pages/IdeasPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -23,9 +24,7 @@ const indexRoute = createRoute({
 const ideasRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/ideas",
-  component: () => (
-    <StubPage title="Идеи и темы" hint="CRUD идей и тем пойдёт через контракт module-video, который проксирует admin-api." />
-  ),
+  component: IdeasPage,
 });
 
 const productionsRoute = createRoute({

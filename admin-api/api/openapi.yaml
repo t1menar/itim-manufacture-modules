@@ -102,8 +102,40 @@ paths:
   /api/v1/ideas:
     get:
       summary: List ideas (module-video; see docs/VIDEO_ADMIN_ROUTES.md)
-      responses: { "200": { description: list }, "503": { description: upstream_unavailable } }
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: topic_id, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { type: object } }
+                  next_cursor: { type: string }
+        "404": { description: not implemented by module-video }
+        "503": { description: upstream_unavailable }
     post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic_id, title]
+              properties:
+                topic_id: {}
+                title: { type: string }
+                description: { type: string }
+                hook: { type: string }
+                language: { type: string }
+                priority: { type: integer }
+                tags: { type: array, items: { type: string } }
+                author: { type: string }
       responses: { "201": { description: created } }
   /api/v1/ideas/{id}:
     get:
@@ -111,6 +143,20 @@ paths:
       responses: { "200": { description: idea } }
     patch:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic_id: {}
+                title: { type: string }
+                description: { type: string }
+                hook: { type: string }
+                language: { type: string }
+                priority: { type: integer }
+                tags: { type: array, items: { type: string } }
+                author: { type: string }
       responses: { "200": { description: updated } }
     delete:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
@@ -125,8 +171,32 @@ paths:
       responses: { "200": { description: queued } }
   /api/v1/topics:
     get:
-      responses: { "200": { description: list } }
+      responses:
+        "200":
+          description: list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { type: object } }
+        "404": { description: not implemented by module-video }
+        "503": { description: upstream_unavailable }
     post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, title]
+              properties:
+                code: { type: string }
+                title: { type: string }
+                description: { type: string }
+                default_tags: { type: array, items: { type: string } }
+                default_platforms: { type: array, items: { type: string } }
+                active: { type: boolean }
       responses: { "201": { description: created } }
   /api/v1/topics/{id}:
     get:
@@ -134,6 +204,18 @@ paths:
       responses: { "200": { description: topic } }
     patch:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                title: { type: string }
+                description: { type: string }
+                default_tags: { type: array, items: { type: string } }
+                default_platforms: { type: array, items: { type: string } }
+                active: { type: boolean }
       responses: { "200": { description: updated } }
     delete:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
