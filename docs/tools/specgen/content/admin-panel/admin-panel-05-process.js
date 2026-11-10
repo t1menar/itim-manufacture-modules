@@ -4,8 +4,9 @@ module.exports = {
   dir: 'admin-panel',
   file: 'admin-panel-05-process.docx',
   meta: { title: 'admin-panel — Process', subtitle: 'User flows, client state machines, polling, error handling, edge cases',
-    doc: 'admin-panel-05-process', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'admin-panel-05-process', version: '0.2', status: 'Draft', date: '2026-11-10' },
   blocks: [
+['note', '**D24 (2026-11-10).** The admin panel returns to scope in later PRs. There is **no login**. The panel talks only to local `admin-api` (`http://127.0.0.1:58084` by default). Chapters below that describe sign-in, 2FA or a public host are superseded.'],
 ['h1', '1. Conventions'],
 ['p', 'Steps name the screen (route), the user action and the admin-api call (paths relative to `/api/v1`). "Invalidate X" means the TanStack Query keys of X are invalidated and refetched. The panel never changes state on its own: every state shown comes from a response.'],
 ['h1', '2. Session flows'],

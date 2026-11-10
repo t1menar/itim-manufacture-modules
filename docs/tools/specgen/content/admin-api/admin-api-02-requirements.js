@@ -8,9 +8,10 @@ module.exports = {
   meta: {
     title: 'admin-api — Requirements',
     subtitle: 'Functional and non-functional requirements · FR-AAPI / NFR-AAPI',
-    doc: 'admin-api-02-requirements', version: '0.2', status: 'Draft', date: '2026-11-08',
+    doc: 'admin-api-02-requirements', version: '0.2', status: 'Draft', date: '2026-11-10',
   },
   blocks: [
+['note', '**D24.** Login, sessions, TOTP, invitations, roles and a public TLS hostname are withdrawn. Access is localhost-only with a Host/Origin allowlist; see admin-api-01 v0.3. Implement the public surface listed there and in `admin-api/api/openapi.yaml`.'],
 ['h1', '1. Conventions'],
 ['p', 'Keywords MUST, SHOULD, MAY follow RFC 2119. Every value called a "setting" is a key of the admin-api settings document stored in the core (schema in 04 §10); the default is given in brackets. Acceptance checks are written so that an automated test can run them; "audit row" means a row in `audit_log` with the named `action` and `outcome`.'],
 ['note', 'Stage 1 is English only: ideas have no language fields and the only channel is `itim`. No requirement below depends on the number of channels or languages.'],

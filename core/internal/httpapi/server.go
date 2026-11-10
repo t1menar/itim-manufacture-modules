@@ -69,6 +69,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /internal/v1/modules/{id}/deactivate", s.requireAdmin(s.deactivateModule))
 	mux.HandleFunc("POST /internal/v1/variants/{id}/retry", s.requireAdmin(s.retryVariant))
 	mux.HandleFunc("POST /internal/v1/variants/{id}/skip", s.requireAdmin(s.skipVariant))
+	mux.HandleFunc("GET /internal/v1/modules", s.requireAdmin(s.listModules))
+	mux.HandleFunc("GET /internal/v1/modules/{id}", s.requireAdmin(s.getModule))
+	mux.HandleFunc("GET /internal/v1/overview", s.requireAdmin(s.overview))
+	mux.HandleFunc("GET /internal/v1/productions", s.requireAdmin(s.listProductions))
+	mux.HandleFunc("GET /internal/v1/productions/{id}", s.requireAdmin(s.getProduction))
+	mux.HandleFunc("GET /internal/v1/jobs/{id}", s.requireAdmin(s.getJob))
+	mux.HandleFunc("POST /internal/v1/jobs/{id}/cancel", s.requireAdmin(s.cancelJob))
 
 	mux.HandleFunc("/internal/", func(w http.ResponseWriter, _ *http.Request) {
 		problem(w, http.StatusNotImplemented, "not_implemented", "This endpoint is specified in core-04 but not implemented yet")
@@ -626,8 +633,10 @@ func adminActor(raw string) string {
 	if raw == "" {
 		return "admin"
 	}
-	if strings.HasPrefix(raw, "user:") || strings.HasPrefix(raw, "tg:") {
-		return raw
+	for _, pfx := range []string{"user:", "tg:", "local:", "deploy:"} {
+		if strings.HasPrefix(raw, pfx) {
+			return raw
+		}
 	}
 	return "user:" + raw
 }

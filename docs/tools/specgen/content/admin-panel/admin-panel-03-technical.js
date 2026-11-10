@@ -4,8 +4,9 @@ module.exports = {
   dir: 'admin-panel',
   file: 'admin-panel-03-technical.docx',
   meta: { title: 'admin-panel — Technical Design', subtitle: 'Stack, structure, state, security, accessibility, performance, delivery, testing',
-    doc: 'admin-panel-03-technical', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'admin-panel-03-technical', version: '0.2', status: 'Draft', date: '2026-11-10' },
   blocks: [
+['note', '**D24 (2026-11-10).** The admin panel returns to scope in later PRs. There is **no login**. The panel talks only to local `admin-api` (`http://127.0.0.1:58084` by default). Chapters below that describe sign-in, 2FA or a public host are superseded.'],
 ['h1', '1. Design summary'],
 ['p', 'A Vite-built React single-page application in the monorepo folder `admin-panel/`. Server data lives only in the TanStack Query cache; view state lives in the URL through TanStack Router; forms keep their own local state. The API client is generated from `admin-api/api/openapi.yaml`, so a contract change shows up as a TypeScript error. Module settings forms are generated at run time from each module\'s JSON Schema with react-jsonschema-form. The build is a set of static files served by an unprivileged nginx container behind the same reverse proxy as admin-api, so the panel and the API share one origin and the bundle needs no environment-specific configuration.'],
 ['h1', '2. Stack'],

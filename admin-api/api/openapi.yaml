@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: Manufacture admin-api
+  version: 0.3.0
+  description: |
+    Localhost-only administrative facade (D24). No login.
+    Errors are RFC 9457 application/problem+json.
+servers:
+  - url: http://127.0.0.1:58084
+paths:
+  /health:
+    get:
+      summary: Liveness
+      responses:
+        "200": { description: ok }
+  /ready:
+    get:
+      summary: Readiness (database ping)
+      responses:
+        "200": { description: ready }
+        "503": { description: not ready }
+  /api/v1/overview:
+    get:
+      summary: Counters and module health (core)
+      responses: { "200": { description: overview } }
+  /api/v1/modules:
+    get:
+      summary: Registered modules (no tokens)
+      responses: { "200": { description: list } }
+  /api/v1/modules/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: module } }
+  /api/v1/productions:
+    get:
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses: { "200": { description: list } }
+  /api/v1/productions/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { "200": { description: production with variants, jobs, events } }
+  /api/v1/jobs/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { "200": { description: job } }
+  /api/v1/jobs/{id}/cancel:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { reason: { type: string } } }
+      responses: { "204": { description: cancelled } }
+  /api/v1/variants/{id}/retry:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { "200": { description: new job id } }
+  /api/v1/variants/{id}/skip:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string } } }
+      responses: { "204": { description: skipped } }
+  /api/v1/ideas:
+    get:
+      summary: List ideas (module-video; see docs/VIDEO_ADMIN_ROUTES.md)
+      responses: { "200": { description: list }, "503": { description: upstream_unavailable } }
+    post:
+      responses: { "201": { description: created } }
+  /api/v1/ideas/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: idea } }
+    patch:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: updated } }
+    delete:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "204": { description: deleted } }
+  /api/v1/ideas/{id}/ready:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: ready } }
+  /api/v1/ideas/{id}/queue:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: queued } }
+  /api/v1/topics:
+    get:
+      responses: { "200": { description: list } }
+    post:
+      responses: { "201": { description: created } }
+  /api/v1/topics/{id}:
+    get:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: topic } }
+    patch:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: updated } }
+    delete:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "204": { description: deleted } }
+  /api/v1/video/prompts:
+    get:
+      responses: { "200": { description: list } }
+  /api/v1/video/credentials:
+    get:
+      summary: Metadata only (no values)
+      responses: { "200": { description: list } }
+  /api/v1/review/runs:
+    get:
+      responses: { "200": { description: list } }
+  /api/v1/review/pending:
+    get:
+      responses: { "200": { description: pending rejects and cards } }
+  /api/v1/review/secrets:
+    get:
+      summary: Presence/length only
+      responses: { "200": { description: list } }
+  /api/v1/publish/accounts:
+    get:
+      summary: Accounts with has_token, never the token
+      responses: { "200": { description: list } }
+  /api/v1/publish/intents:
+    get:
+      responses: { "200": { description: list } }
+  /api/v1/publish-intents/{id}/republish:
+    post:
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+                base_generation: { type: integer }
+      responses: { "200": { description: accepted } }
+  /api/v1/audit:
+    get:
+      responses: { "200": { description: audit log } }

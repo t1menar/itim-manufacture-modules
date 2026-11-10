@@ -2,8 +2,9 @@ module.exports = {
   dir: 'admin-panel',
   file: 'admin-panel-01-description.docx',
   meta: { title: 'admin-panel — Description', subtitle: 'What the web client is and why · React + TypeScript',
-    doc: 'admin-panel-01-description', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'admin-panel-01-description', version: '0.2', status: 'Draft', date: '2026-11-10' },
   blocks: [
+['note', '**D24 (2026-11-10).** The admin panel returns to scope in later PRs. There is **no login**. The panel talks only to local `admin-api` (`http://127.0.0.1:58084` by default). Chapters below that describe sign-in, 2FA or a public host are superseded.'],
 ['note', '**Deferred from the MVP (D13, accepted 2026-11-08).** This specification is kept for a later stage; admin-api implements the full API without a web client in the MVP.'],
 ['h1', '1. Purpose'],
 ['p', '`admin-panel` is the web client in which the owner and a few helpers configure and watch Manufacture. It is a static single-page application (React + TypeScript) served next to admin-api by the same reverse proxy. Its only backend is **admin-api**: every value it shows and every change it makes goes through `/api/v1`. It holds no business rules, no secrets and no state that is not also on the server.'],

@@ -22,7 +22,7 @@ module.exports = {
   'Core: pipeline engine, module registry, channels and routing, settings, credentials\nAdmin API (Go) and admin panel (web)\nModule **video**: idea → finished English video\nModule **review**: Telegram bot with access keys, approve / reject with a text reason\nModule **publish**: Instagram Reels (primary platform)\nMetrics, logs and traces for all services',
   'Localization (translated copies) and a Russian-language channel\nIntro module (channel intro is created later, plugged in as a module)\nSeveral modules on one stage running in parallel, with merged output\nYouTube Shorts and TikTok publishing adapters\nReach analytics and A/B testing\nAutomatic idea generation; voice rejection reasons\nSecrets in Vault',
 ]], [1, 1]],
-['note', '**MVP scope (updated 2026-11-09, D20/D21):** stage-1 backend without web UI and without **admin-api**. The Telegram review bot does **review cards + publish notifications only** (Approve/Reject + reason; revised card replies to previous; publish notify replies to approved card); admin slash commands are not routed. Administration on MVP is via the database (core admin HTTP #11 remains). Ideas/topics live in module-video; a module scheduler publishes `idea.ready` to RabbitMQ (D21). `admin-panel` and `admin-api` are deferred. Modules video (owner), review and publish stay in scope.'],
+['note', '**MVP scope (updated 2026-11-10, D24):** stage-1 backend **plus admin-api** (localhost-only, no login). The web **admin-panel** follows in later PRs. The Telegram review bot does **review cards + publish notifications only** (Approve/Reject + reason; revised card replies to previous; publish notify replies to approved card); admin slash commands are not routed. Administration on MVP is via the database (core admin HTTP #11 remains). Ideas/topics live in module-video; a module scheduler publishes `idea.ready` to RabbitMQ (D21). Administration is via admin-api on localhost (D24) and still via the database. Modules video (owner), review and publish stay in scope.'],
 ['h1', '3. Glossary'],
 ['table', ['Term', 'Meaning'], [
   ['Brand', 'The umbrella name of the content line: **iTim**. Channels belong to a brand.'],
@@ -52,7 +52,7 @@ module.exports = {
 ['p', 'Stage 1 consists of six services. All of them live in one public git repository, `github.com/t1menar/manufacture` (local copy `~/projects/manufacture/`): each service is a top-level folder, and `docs/` has a folder with the same name holding its specification. Services are still built, versioned and deployed independently.'],
 ['table', ['Service', 'Language', 'Responsibility', 'Own database'], [
   ['`core`', 'Go', 'Pipeline engine, job queue, module registry, channels and routing, ideas and productions, module settings, credentials store.', '`core`'],
-  ['`admin-api` (deferred D20)', 'Go', 'Single entry point for the admin panel: login, 2FA, roles, audit; exposes and proxies all administrative operations.', '`admin`'],
+  ['`admin-api` (D24)', 'Go', 'Single entry point for the admin panel: no login, localhost-only, audit log; proxies core and module admin APIs under `/api/v1`.', '`admin`'],
   ['`admin-panel`', 'TypeScript (React)', 'Web client for all configuration and monitoring. No business logic.', '—'],
   ['`module-video`', 'Python', 'Stage `video`: analysis, research, script, capture, render, package. Uses Claude Code.', '`video`'],
   ['`module-review`', 'Python', 'Stage `review`: Telegram bot — video review cards (approve/reject + reason) and publish notifications.', '`review`'],
@@ -132,7 +132,7 @@ module.exports = {
 ], [2, 1.6, 2.6]],
 ['h1', '13. Roadmap'],
 ['table', ['Stage', 'Content', 'Done when'], [
-  ['1. Foundation', 'Core; modules video, review, publish (Instagram); metrics. admin-api and admin-panel deferred (D13/D20). Review bot = cards + publish notify; admin via DB.', 'An idea (seeded or inserted in DB) becomes an English video, is reviewed in Telegram and is published to the iTim Instagram account; a rejection with a reason returns a corrected version.'],
+  ['1. Foundation', 'Core; modules video, review, publish (Instagram); metrics; admin-api on localhost (D24). admin-panel in a later PR. Review bot = cards + publish notify.', 'An idea (seeded or inserted in DB or, later, in the panel) becomes an English video, is reviewed in Telegram and is published to the iTim Instagram account; a rejection with a reason returns a corrected version.'],
   ['2. Extensibility', 'Localization (`localize` stage, RU channel); intro module; parallel modules per stage with merge; YouTube and TikTok adapters', 'A second module on a stage is registered and run in parallel without Core code changes.'],
   ['3. Growth', 'Reach analytics, A/B tests, idea generation, Vault, voice reasons', 'Metrics from published posts influence which ideas are produced next.'],
 ], [1, 2.5, 3.5]],
@@ -161,6 +161,7 @@ module.exports = {
   ['D21', 'Ideas and topics live only in **module-video**. Statuses: `draft` → `ready` → `queued` → `dispatched` → `in_production` → `done`/`failed` (plus cancelled/archived). Scheduler in module-video publishes orchestration-only `idea.ready` (idea_ref + language/pipeline/priority) via transactional outbox; reverse statuses `idea.in_production`/`done`/`failed` over RabbitMQ with stable UUIDv5 message_id and module inbox dedup. Core stores only opaque `idea_ref` on the production, never idea body; video job input carries `idea_ref` and the module loads the document from its DB. Table core.`ideas` is removed with **no** data migration. Principle: core orchestrates the system; module domain stays in modules. Spec: `module-video/docs/IDEAS.md`.', 'owner\'s decision 2026-11-09; Q\&A closed'],
   ['D22', 'Content revisions stored in core are an **opaque JSON blob** with sha256. Core does not treat video metadata fields as its domain model (orchestration may still schema-validate stage output).', 'owner\'s decision 2026-11-09'],
   ['D23', 'Publish intents belong to **module-publish**. Core retains only intent **id/generation** (and fencing) needed for admin republish. Broader rule: core orchestrates the system; module domain data stays in modules.', 'owner\'s decision 2026-11-09'],
+  ['D24', '**admin-api** and **admin-panel** return to scope. Delivery order: admin-api, then the panel shell, then screens (separate PRs). The admin UI has **no login**. admin-api is reachable only on localhost (Compose publishes `127.0.0.1:PORT`). Protection against CSRF and DNS rebinding is a Host/Origin allowlist (`localhost` / `127.0.0.1`); no CORS `*`. `mfa_` stays in env (`MODULE_CORE_ADMIN_TOKEN` / `CORE_ADMIN_TOKEN`) with `X-Admin-Actor: local:admin`. This supersedes the “admin-api deferred” part of D20; the Telegram bot remains review + publish notify only.', 'owner\'s decision 2026-11-10'],
 ], [0.4, 3, 3]],
 ['h2', '14.1 Proposed defaults (not yet accepted)'],
 ['table', ['#', 'Proposal', 'Alternative'], [

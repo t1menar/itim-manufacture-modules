@@ -4,9 +4,10 @@ module.exports = {
   meta: {
     title: 'admin-api — Process',
     subtitle: 'Login, 2FA, session lifecycle, request pipeline, proxying, error mapping, audit write path, recovery',
-    doc: 'admin-api-05-process', version: '0.2', status: 'Draft', date: '2026-11-08',
+    doc: 'admin-api-05-process', version: '0.2', status: 'Draft', date: '2026-11-10',
   },
   blocks: [
+['note', '**D24.** Login, sessions, TOTP, invitations, roles and a public TLS hostname are withdrawn. Access is localhost-only with a Host/Origin allowlist; see admin-api-01 v0.3. Implement the public surface listed there and in `admin-api/api/openapi.yaml`.'],
 ['h1', '1. Flows at a glance'],
 ['table', ['Flow', 'Trigger', 'Section'], [
   ['First admin bootstrap', 'empty `users` table, operator runs `setup-token`', '§2'],

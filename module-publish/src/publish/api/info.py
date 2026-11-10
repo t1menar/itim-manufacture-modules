@@ -33,6 +33,8 @@ async def info() -> dict[str, Any]:
         "output_schema": _load("output.schema.json"),
         "admin_endpoints": [
             "/admin/v1/accounts",
+            "/admin/v1/intents",
+            "/admin/v1/secrets",
             "/admin/v1/ledger",
             "/admin/v1/dry-run",
         ],
