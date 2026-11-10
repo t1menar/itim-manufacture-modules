@@ -24,6 +24,40 @@ def draw_window_frame(cv: Canvas, rect: tuple[int, int, int, int], title: str) -
     cv.text((x0 + x1) / 2 - tw / 2 + 40, y0 + 15, title, "window_title", pal.win_muted)
 
 
+def _break_points(line: str, cols: int) -> list[int]:
+    """Where a terminal soft-wraps `line`: after the last space that fits, else at the column limit."""
+    points: list[int] = []
+    start = 0
+    while len(line) - start > cols:
+        window = line[start : start + cols]
+        cut = window.rfind(" ") + 1
+        cut = cut if cut > 10 else cols
+        start += cut
+        points.append(start)
+    return points
+
+
+def wrap_segments(segs: Segments, points: list[int]) -> list[Segments]:
+    """Split highlighted `segs` at the flat character offsets `points`."""
+    rows: list[Segments] = [[]]
+    pos, bounds = 0, iter(points)
+    nxt = next(bounds, None)
+    for text, color in segs:
+        while text:
+            if nxt is not None and pos + len(text) > nxt:
+                head = text[: nxt - pos]
+                if head:
+                    rows[-1].append((head, color))
+                text, pos = text[nxt - pos :], nxt
+                rows.append([])
+                nxt = next(bounds, None)
+            else:
+                rows[-1].append((text, color))
+                pos += len(text)
+                text = ""
+    return rows
+
+
 def _ease(x: float) -> float:
     return max(0.0, min(1.0, x))
 
@@ -48,8 +82,20 @@ def terminal_state(
             p = _ease((t - ev.t) / ev.dur) if ev.dur > 0 else 1.0
             n = round(len(text) * p)
             prompt = str(spec.get("prompt", ""))
-            rows.append([(prompt, pal.accent), *highlight_cmd(text[:n], pal)])
-            cursor = (len(rows) - 1, len(prompt) + n) if p < 1 else None
+            # A typed command longer than the window soft-wraps like in a real terminal; the break
+            # points come from the whole line so the wrap does not jump while it is being typed.
+            points = _break_points(prompt + text, geo.term_cols - 2)
+            wrapped = wrap_segments([(prompt, pal.accent), *highlight_cmd(text[:n], pal)], points)
+            first = len(rows)
+            for k, seg in enumerate(wrapped):
+                rows.append(seg if k == 0 else [("  ", pal.accent), *seg])
+            if p < 1:
+                idx = len(prompt) + n
+                k = sum(1 for b in points if b <= idx)
+                start = points[k - 1] if k else 0
+                cursor = (first + k, idx - start + (2 if k else 0))
+            else:
+                cursor = None
         elif ev.kind == "out":
             cid, k = ev.payload
             spec = next(e for e in _cmd_events(tt) if e.ref == cid).payload

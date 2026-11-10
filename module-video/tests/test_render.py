@@ -230,3 +230,17 @@ def test_no_reference_content_remains_in_mvrender() -> None:
             for m in re.findall(r"\b(?:4813|4837|1405|1458|769)\b", text)
         ]
     assert offenders == []
+
+
+def test_long_typed_command_soft_wraps_and_stays_in_the_safe_zone():
+    from mvrender.draw.terminal import _break_points, wrap_segments
+
+    line = "$ /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders"
+    points = _break_points(line, 40)
+    rows = wrap_segments([(line, (0, 0, 0))], points)
+    texts = ["".join(t for t, _ in r) for r in rows]
+    assert "".join(texts) == line
+    assert all(len(t) <= 40 for t in texts)
+    assert len(texts) == len(points) + 1 > 1
+    # a prefix is cut at the same places, so the wrap does not move while the command is typed
+    assert wrap_segments([(line[:50], (0, 0, 0))], points)[0][0][0] == texts[0]
