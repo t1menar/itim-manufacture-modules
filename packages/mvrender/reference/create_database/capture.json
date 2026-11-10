@@ -1,0 +1,308 @@
+{
+ "format": "manufacture.capture/1",
+ "plan_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+ "started_at": "2026-11-08T15:20:03Z",
+ "finished_at": "2026-11-08T15:20:41Z",
+ "image": {
+  "key": "postgres17",
+  "ref": "postgres:17@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+ },
+ "version": {
+  "cmd": "psql -U postgres -tAc 'SELECT version()'",
+  "output": "PostgreSQL 17.6 (Debian 17.6-1.pgdg120+1) on x86_64-pc-linux-gnu",
+  "expect": "PostgreSQL 17.",
+  "pass": true
+ },
+ "limits": {
+  "cpus": 2,
+  "memory_mb": 2048,
+  "pids": 512,
+  "network": "none"
+ },
+ "sessions": {
+  "psql": {
+   "kind": "psql",
+   "database": "postgres"
+  },
+  "sh": {
+   "kind": "sh",
+   "workdir": "/var/lib/postgresql/data"
+  },
+  "other": {
+   "kind": "psql",
+   "database": "template1"
+  }
+ },
+ "commands": {
+  "c-list-dbs": {
+   "seq": 1,
+   "session": "psql",
+   "text": "SELECT oid, datname FROM pg_database;",
+   "prompt_before": "postgres=# ",
+   "prompt_after": "postgres=# ",
+   "output": [
+    " oid |  datname",
+    "-----+-----------",
+    "   5 | postgres",
+    "   1 | template1",
+    "   4 | template0",
+    "(3 rows)",
+    ""
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "tx_state": "idle"
+  },
+  "c-ls-base": {
+   "seq": 2,
+   "session": "sh",
+   "text": "ls $PGDATA/base",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "1",
+    "4",
+    "5"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-ls-base1": {
+   "seq": 3,
+   "session": "sh",
+   "text": "ls $PGDATA/base/1 | head -4",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "112",
+    "113",
+    "1247",
+    "1247_fsm"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-create-shop-2": {
+   "seq": 4,
+   "session": "psql",
+   "text": "CREATE DATABASE shop;",
+   "prompt_before": "postgres=# ",
+   "prompt_after": "postgres=# ",
+   "output": [
+    "CREATE DATABASE"
+   ],
+   "status": "ok",
+   "duration_ms": 61,
+   "tx_state": "idle"
+  },
+  "c-ls-after": {
+   "seq": 5,
+   "session": "sh",
+   "text": "ls $PGDATA/base",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "1",
+    "16384",
+    "4",
+    "5"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-count-1": {
+   "seq": 6,
+   "session": "sh",
+   "text": "ls $PGDATA/base/1 | wc -l",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "298"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-count-2": {
+   "seq": 7,
+   "session": "sh",
+   "text": "ls $PGDATA/base/16384 | wc -l",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "298"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-diff": {
+   "seq": 8,
+   "session": "sh",
+   "text": "diff <(ls $PGDATA/base/1) <(ls $PGDATA/base/16384)",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-begin": {
+   "seq": 9,
+   "session": "psql",
+   "text": "BEGIN;",
+   "prompt_before": "postgres=# ",
+   "prompt_after": "postgres=*# ",
+   "output": [
+    "BEGIN"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "tx_state": "in_tx"
+  },
+  "c-create-x": {
+   "seq": 10,
+   "session": "psql",
+   "text": "CREATE DATABASE x;",
+   "prompt_before": "postgres=*# ",
+   "prompt_after": "postgres=!# ",
+   "output": [
+    "ERROR:  CREATE DATABASE cannot run inside a transaction block"
+   ],
+   "status": "error",
+   "duration_ms": 10,
+   "tx_state": "failed"
+  },
+  "c-create-blog": {
+   "seq": 11,
+   "session": "psql",
+   "text": "CREATE DATABASE blog;",
+   "prompt_before": "postgres=# ",
+   "prompt_after": "postgres=# ",
+   "output": [
+    "ERROR:  source database \"template1\" is being accessed by other users",
+    "DETAIL:  There is 1 other session using the database."
+   ],
+   "status": "error",
+   "duration_ms": 10,
+   "tx_state": "idle"
+  },
+  "c-ext": {
+   "seq": 12,
+   "session": "sh",
+   "text": "psql -d template1 -c \"CREATE EXTENSION pg_trgm;\"",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "CREATE EXTENSION"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-db-blog": {
+   "seq": 13,
+   "session": "sh",
+   "text": "psql -c \"CREATE DATABASE blog;\"",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    "CREATE DATABASE"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  },
+  "c-ext-list": {
+   "seq": 14,
+   "session": "sh",
+   "text": "psql -d blog -c \"SELECT extname FROM pg_extension;\"",
+   "prompt_before": "$ ",
+   "prompt_after": "$ ",
+   "output": [
+    " extname",
+    "---------",
+    " plpgsql",
+    " pg_trgm",
+    "(2 rows)"
+   ],
+   "status": "ok",
+   "duration_ms": 10,
+   "exit": 0
+  }
+ },
+ "values": {
+  "oid_shop": {
+   "value": "16384",
+   "kind": "number",
+   "session": "psql",
+   "query": "SELECT oid FROM pg_database WHERE datname = 'shop'",
+   "after": "c-create-shop-2",
+   "raw": [
+    "16384"
+   ],
+   "why_equal": "dboid is stored as pg_database.oid by CatalogTupleInsert at dbcommands.c:1458"
+  },
+  "oid_blog": {
+   "value": "16466",
+   "kind": "number",
+   "session": "psql",
+   "query": "SELECT oid FROM pg_database WHERE datname = 'blog'",
+   "after": "c-db-blog",
+   "raw": [
+    "16466"
+   ],
+   "why_equal": "the new database folder is named by its pg_database.oid"
+  },
+  "n_relations": {
+   "value": "222",
+   "kind": "number",
+   "session": "psql",
+   "query": "SELECT count(*) FROM pg_class WHERE NOT relisshared AND relkind IN ('r', 'i', 't', 'm', 'S')",
+   "after": "c-create-shop-2",
+   "raw": [
+    "222"
+   ],
+   "why_equal": "ScanSourceDatabasePgClass lists the non-shared relations with storage of the template (rlocatorlist)"
+  },
+  "n_pages": {
+   "value": "14",
+   "kind": "number",
+   "session": "psql",
+   "query": "SELECT pg_relation_size('pg_class') / 8192",
+   "after": "c-create-shop-2",
+   "raw": [
+    "14"
+   ],
+   "why_equal": "RelationCopyStorageUsingBuffer loops nblocks = relation size / BLCKSZ times"
+  },
+  "n_files": {
+   "value": "298",
+   "kind": "number",
+   "session": "sh",
+   "query": "ls $PGDATA/base/1 | wc -l",
+   "after": "c-count-1",
+   "raw": [
+    "298"
+   ],
+   "why_equal": "the shown count is the printed output of the same command"
+  }
+ },
+ "hidden": [
+  {
+   "session": "psql",
+   "text": "ROLLBACK;",
+   "status": "ok"
+  },
+  {
+   "session": "other",
+   "text": "SELECT 1;",
+   "status": "ok"
+  }
+ ],
+ "log_ref": "s3://manufacture/reference/capture/capture.log"
+}

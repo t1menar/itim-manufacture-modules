@@ -1,0 +1,71 @@
+{
+ "format": "manufacture.analysis/1",
+ "decision": "go",
+ "topic": "What CREATE DATABASE does inside PostgreSQL",
+ "system": {
+  "name": "PostgreSQL",
+  "version": "17",
+  "repo": "https://github.com/postgres/postgres",
+  "ref": "REL_17_STABLE",
+  "entry_points": [
+   "createdb"
+  ]
+ },
+ "sandbox_image": "postgres17",
+ "angle": "CREATE DATABASE creates nothing from scratch: it copies a template, which explains three everyday surprises.",
+ "hooks": [
+  {
+   "lines": [
+    "CREATE DATABASE",
+    "creates nothing.",
+    "It copies."
+   ],
+   "why": "a short contradiction that makes the viewer ask how"
+  },
+  {
+   "lines": [
+    "A database is",
+    "just a folder"
+   ],
+   "why": "concrete and checkable in the terminal"
+  },
+  {
+   "lines": [
+    "Why can't you CREATE DATABASE",
+    "inside a transaction?"
+   ],
+   "why": "a practical error many people have hit"
+  }
+ ],
+ "target_duration_s": 160,
+ "what_to_run": [
+  {
+   "purpose": "list databases",
+   "command": "SELECT oid, datname FROM pg_database;",
+   "session": "psql"
+  },
+  {
+   "purpose": "show database folders",
+   "command": "ls $PGDATA/base",
+   "session": "sh"
+  },
+  {
+   "purpose": "create the database",
+   "command": "CREATE DATABASE shop;",
+   "session": "psql"
+  }
+ ],
+ "audience": {
+  "level": "beginner",
+  "assumed_knowledge": [
+   "what a table is",
+   "what a terminal is"
+  ]
+ },
+ "risks": [
+  "the debugger scene is a rendering of source steps, not a live gdb session"
+ ],
+ "sources_consulted": [
+  "https://www.postgresql.org/docs/17/sql-createdatabase.html"
+ ]
+}

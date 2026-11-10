@@ -1,0 +1,146 @@
+{
+ "format": "manufacture.capture-plan/1",
+ "image": "postgres17",
+ "sessions": {
+  "psql": {
+   "kind": "psql",
+   "database": "postgres",
+   "open_at_start": true
+  },
+  "sh": {
+   "kind": "sh",
+   "workdir": "/var/lib/postgresql/data",
+   "open_at_start": true
+  },
+  "other": {
+   "kind": "psql",
+   "database": "template1"
+  }
+ },
+ "ops": [
+  {
+   "op": "open",
+   "session": "psql"
+  },
+  {
+   "op": "open",
+   "session": "sh"
+  },
+  {
+   "op": "run",
+   "cmd": "c-list-dbs"
+  },
+  {
+   "op": "run",
+   "cmd": "c-ls-base"
+  },
+  {
+   "op": "run",
+   "cmd": "c-ls-base1"
+  },
+  {
+   "op": "run",
+   "cmd": "c-create-shop-2"
+  },
+  {
+   "op": "value",
+   "name": "oid_shop",
+   "session": "psql",
+   "query": "SELECT oid FROM pg_database WHERE datname = 'shop'",
+   "parse": "single",
+   "why_equal": "dboid is stored as pg_database.oid by CatalogTupleInsert at dbcommands.c:1458"
+  },
+  {
+   "op": "value",
+   "name": "n_relations",
+   "session": "psql",
+   "query": "SELECT count(*) FROM pg_class WHERE NOT relisshared AND relkind IN ('r', 'i', 't', 'm', 'S')",
+   "parse": "single",
+   "why_equal": "ScanSourceDatabasePgClass lists the non-shared relations with storage of the template (rlocatorlist)"
+  },
+  {
+   "op": "value",
+   "name": "n_pages",
+   "session": "psql",
+   "query": "SELECT pg_relation_size('pg_class') / 8192",
+   "parse": "single",
+   "why_equal": "RelationCopyStorageUsingBuffer loops nblocks = relation size / BLCKSZ times"
+  },
+  {
+   "op": "run",
+   "cmd": "c-ls-after"
+  },
+  {
+   "op": "run",
+   "cmd": "c-count-1"
+  },
+  {
+   "op": "value",
+   "name": "n_files",
+   "session": "sh",
+   "query": "ls $PGDATA/base/1 | wc -l",
+   "parse": "single",
+   "why_equal": "the shown count is the printed output of the same command"
+  },
+  {
+   "op": "run",
+   "cmd": "c-count-2"
+  },
+  {
+   "op": "run",
+   "cmd": "c-diff"
+  },
+  {
+   "op": "run",
+   "cmd": "c-begin"
+  },
+  {
+   "op": "run",
+   "cmd": "c-create-x"
+  },
+  {
+   "op": "setup",
+   "session": "psql",
+   "text": "ROLLBACK;",
+   "why": "ends the failed transaction so the next command starts from an idle session"
+  },
+  {
+   "op": "open",
+   "session": "other"
+  },
+  {
+   "op": "setup",
+   "session": "other",
+   "text": "SELECT 1;",
+   "why": "keeps a session open on template1"
+  },
+  {
+   "op": "run",
+   "cmd": "c-create-blog"
+  },
+  {
+   "op": "close",
+   "session": "other"
+  },
+  {
+   "op": "run",
+   "cmd": "c-ext"
+  },
+  {
+   "op": "run",
+   "cmd": "c-db-blog"
+  },
+  {
+   "op": "value",
+   "name": "oid_blog",
+   "session": "psql",
+   "query": "SELECT oid FROM pg_database WHERE datname = 'blog'",
+   "parse": "single",
+   "why_equal": "the new database folder is named by its pg_database.oid"
+  },
+  {
+   "op": "run",
+   "cmd": "c-ext-list"
+  }
+ ]
+}

@@ -1,0 +1,53 @@
+[project]
+name = "mvrender"
+version = "0.2.0"
+description = "Standalone renderer and timing library for Manufacture scenarios (manufacture.scenario/1)"
+requires-python = ">=3.12"
+dependencies = []  # `mvrender.timing` and the scenario model use only the standard library
+
+[project.optional-dependencies]
+render = [
+    "pillow>=11",
+    "numpy>=2",
+    "fonttools>=4.50",
+    "scipy>=1.13",
+    "imageio-ffmpeg>=0.8.1",
+]
+
+[project.scripts]
+mvrender = "mvrender.cli:main"
+
+[dependency-groups]
+dev = ["mvrender[render]", "pytest>=8.3", "hypothesis>=6.100", "ruff>=0.8", "mypy>=1.13"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mvrender"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "ASYNC", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/mvrender/draw/debugger.py" = ["RUF001"]  # the call-stack separator is a typographic arrow
+"tests/**" = ["S101", "S104", "S105", "S106", "S107", "S108", "S607"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/mvrender"]
+
+[[tool.mypy.overrides]]
+module = ["fontTools.*", "scipy.*", "imageio_ffmpeg.*"]
+ignore_missing_imports = true

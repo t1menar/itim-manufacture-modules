@@ -1,0 +1,92 @@
+{
+ "total": 162.14165092260683,
+ "scenes": [
+  {
+   "dur": 4.6
+  },
+  {
+   "dur": 9.98
+  },
+  {
+   "dur": 8.42
+  },
+  {
+   "dur": 12.78
+  },
+  {
+   "dur": 85.437
+  },
+  {
+   "dur": 10.599
+  },
+  {
+   "dur": 7.754
+  },
+  {
+   "dur": 6.83
+  },
+  {
+   "dur": 9.742
+  },
+  {
+   "dur": 6.0
+  }
+ ],
+ "starts": [
+  0.0,
+  4.6,
+  14.58,
+  23.0,
+  35.78,
+  121.217,
+  131.816,
+  139.57,
+  146.4,
+  156.142
+ ],
+ "steps": [
+  {
+   "dur": 5.56,
+   "start": 2.667
+  },
+  {
+   "dur": 7.66,
+   "start": 8.227
+  },
+  {
+   "dur": 8.1,
+   "start": 15.887
+  },
+  {
+   "dur": 7.22,
+   "start": 23.987
+  },
+  {
+   "dur": 7.66,
+   "start": 31.207
+  },
+  {
+   "dur": 7.22,
+   "start": 38.867
+  },
+  {
+   "dur": 8.76,
+   "start": 46.087
+  },
+  {
+   "dur": 8.54,
+   "start": 54.847
+  },
+  {
+   "dur": 7.44,
+   "start": 63.387
+  },
+  {
+   "dur": 12.62,
+   "start": 70.827
+  }
+ ],
+ "dbg_t0": 2.666666666666667,
+ "resume": 83.84666666666666,
+ "_note": "Durations of create-database-video/render_en.py (scene durations, total, debugger steps), dumped once; the timing estimate must stay within 3 % of the total."
+}

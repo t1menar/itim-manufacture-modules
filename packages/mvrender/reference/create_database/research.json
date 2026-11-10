@@ -1,0 +1,209 @@
+{
+ "format": "manufacture.research/1",
+ "commit": "e6b2f7c2b41d6261dac15825dede55e94ca35614",
+ "viewer_questions": [
+  {
+   "question": "Does CREATE DATABASE build everything from scratch?",
+   "source": "https://www.postgresql.org/docs/17/sql-createdatabase.html"
+  },
+  {
+   "question": "Why can't I create a database inside a transaction?",
+   "source": "https://stackoverflow.com/questions/18083439"
+  },
+  {
+   "question": "Why must nobody be connected to template1?",
+   "source": "https://www.postgresql.org/docs/17/manage-ag-templatedbs.html"
+  }
+ ],
+ "misconceptions": [
+  {
+   "claim": "CREATE DATABASE builds a new database from nothing",
+   "truth": "it copies a template database",
+   "facts": [
+    "f9",
+    "f13"
+   ]
+  }
+ ],
+ "call_path": [
+  {
+   "function": "createdb",
+   "file": "src/backend/commands/dbcommands.c",
+   "line_start": 700,
+   "line_end": 1600,
+   "role": "does all the work of CREATE DATABASE",
+   "key_lines": [
+    {
+     "n": 1405,
+     "expect": "GetNewOidWithIndex",
+     "why": "picks the new OID"
+    }
+   ]
+  }
+ ],
+ "facts": [
+  {
+   "id": "f1",
+   "text": "standard_ProcessUtility dispatches T_CreatedbStmt to createdb()",
+   "cite": {
+    "file": "src/backend/tcop/utility.c",
+    "line": 769,
+    "quote": "createdb("
+   }
+  },
+  {
+   "id": "f2",
+   "text": "createdb() checks have_createdb_privilege(); the superuser created by initdb has OID 10",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 962,
+    "quote": "have_createdb_privilege"
+   }
+  },
+  {
+   "id": "f3",
+   "text": "template1 has OID 1 and lives in base/1; template0 is base/4, postgres is base/5",
+   "cite": {
+    "url": "https://www.postgresql.org/docs/17/manage-ag-templatedbs.html",
+    "quote": "template1"
+   }
+  },
+  {
+   "id": "f4",
+   "text": "createdb() locks the template with ShareLock through get_db_info()",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 981,
+    "quote": "get_db_info(dbtemplate, ShareLock"
+   }
+  },
+  {
+   "id": "f5",
+   "text": "CountOtherDBBackends() makes createdb fail while other sessions use the template",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 1367,
+    "quote": "CountOtherDBBackends"
+   }
+  },
+  {
+   "id": "f6",
+   "text": "GetNewOidWithIndex() picks the OID; user objects start at FirstNormalObjectId, 16384",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 1405,
+    "quote": "GetNewOidWithIndex"
+   }
+  },
+  {
+   "id": "f7",
+   "text": "pg_database is a shared catalog stored in global/1262",
+   "cite": {
+    "url": "https://www.postgresql.org/docs/17/catalog-pg-database.html",
+    "quote": "pg_database"
+   }
+  },
+  {
+   "id": "f8",
+   "text": "check_db_file_conflict() is false when no directory exists for the OID",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 1407,
+    "quote": "check_db_file_conflict"
+   }
+  },
+  {
+   "id": "f9",
+   "text": "since PG 15 the default strategy is WAL_LOG; FILE_COPY needs 2 checkpoints",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 1508,
+    "quote": "CREATEDB_WAL_LOG"
+   }
+  },
+  {
+   "id": "f10",
+   "text": "CreateDirAndVersionFile creates base/<OID> with a PG_VERSION file holding 17",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 166,
+    "quote": "CreateDirAndVersionFile"
+   }
+  },
+  {
+   "id": "f11",
+   "text": "ScanSourceDatabasePgClass reads pg_class of the template, stored as base/1/1259",
+   "cite": {
+    "file": "src/backend/commands/dbcommands.c",
+    "line": 172,
+    "quote": "ScanSourceDatabasePgClass"
+   }
+  },
+  {
+   "id": "f12",
+   "text": "a page is 8192 bytes (8 KB)",
+   "cite": {
+    "url": "https://www.postgresql.org/docs/17/storage-page-layout.html",
+    "quote": "8 kB"
+   }
+  },
+  {
+   "id": "f13",
+   "text": "RelationCopyStorageUsingBuffer WAL-logs every copied page with log_newpage_buffer",
+   "cite": {
+    "file": "src/backend/storage/buffer/bufmgr.c",
+    "line": 4837,
+    "quote": "log_newpage_buffer"
+   }
+  },
+  {
+   "id": "f14",
+   "text": "PreventInTransactionBlock makes CREATE DATABASE fail inside BEGIN",
+   "cite": {
+    "file": "src/backend/tcop/utility.c",
+    "line": 768,
+    "quote": "PreventInTransactionBlock"
+   }
+  },
+  {
+   "id": "f15",
+   "text": "_fsm and _vm are the free-space and visibility map forks of a relation",
+   "cite": {
+    "url": "https://www.postgresql.org/docs/17/storage-file-layout.html",
+    "quote": "_fsm"
+   }
+  },
+  {
+   "id": "f16",
+   "text": "files 112, 113 and 1247 in base/1 are catalog tables and indexes",
+   "cite": {
+    "url": "https://www.postgresql.org/docs/17/storage-file-layout.html",
+    "quote": "database"
+   }
+  }
+ ],
+ "terms": [
+  {
+   "term": "Transaction",
+   "explain": "a group of commands applied as a whole or not at all",
+   "must_explain": true
+  },
+  {
+   "term": "OID",
+   "explain": "Object Identifier: the internal numeric ID of an object",
+   "must_explain": true
+  },
+  {
+   "term": "ShareLock",
+   "explain": "a lock that allows other readers but no changes",
+   "must_explain": true
+  }
+ ],
+ "capture_needs": [
+  {
+   "name": "oid_shop",
+   "meaning": "OID of the new database",
+   "how": "SELECT oid FROM pg_database WHERE datname = 'shop'"
+  }
+ ]
+}
