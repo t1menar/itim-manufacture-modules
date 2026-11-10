@@ -3,7 +3,7 @@
 `contracts/` holds JSON Schemas shared with module-video: `topic.json`, `idea.json` (idea document,
 lives only in module-video), `events/idea.ready.json` (module-video → core orchestration payload),
 `events/idea.status.json` (core → module-video `in_production|done|failed`). They are vendored into
-`video-modules/module-video/src/mvideo/ideas/schemas/`; a test fails when copies drift, so change
+`modules/module-video/src/mvideo/ideas/schemas/`; a test fails when copies drift, so change
 both together. Keep this directory at the repo root.
 
 Legacy core wire schemas lived in `core/schemas/` and are available on tag `v1-legacy`. The new

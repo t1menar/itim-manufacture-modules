@@ -17,15 +17,15 @@ only the module(s) you touch. `docs/STATUS.md` holds decisions that still apply 
 
 | Folder | Lang | Role |
 |---|---|---|
-| `video-modules/module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
-| `video-modules/module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
-| `video-modules/module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
+| `modules/module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
+| `modules/module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
+| `modules/module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
 | `contracts/` | JSON Schema | Shared idea/topic/event schemas (vendored into module-video; a test fails on drift). Must stay at the repo root. |
 | `packages/mf-storage/` | Python | Shared S3/MinIO helpers (s3:// parsing, presign) for review and publish. |
 | `deploy/` | compose | Standalone MinIO for local module tests (`compose.minio.yml`, `scripts/mfinfra-minio.sh`). |
 | `docs/` | md | `STATUS.md` (module decisions), `CONTENT.md` (content strategy), `REVIEW.md` (open findings). |
 
-Do not flatten `video-modules/`. The previous `core/`, `admin-api/` and `admin-panel/` trees are gone from `main`; recover them from `v1-legacy` or work in the new core repositories instead.
+Each module lives in `modules/<module_name>/` (formerly `video-modules/`, renamed). The previous `core/`, `admin-api/` and `admin-panel/` trees are gone from `main`; recover them from `v1-legacy` or work in the new core repositories instead.
 
 ## How the modules fit together
 
@@ -49,7 +49,7 @@ video DB idea (queued)
 The new core is not compatible with these modules until they are ported onto the SDK. Until then,
 an end-to-end video pipeline on `main` is not expected to run.
 
-`video-modules/module-video/tests/test_core_contract.py` looks for `core/schemas/` next to the
+`modules/module-video/tests/test_core_contract.py` looks for `core/schemas/` next to the
 module and **skips** when that tree is absent. The idea/topic drift test still requires
 `contracts/` at the repository root.
 
@@ -57,9 +57,12 @@ module and **skips** when that tree is absent. The idea/topic drift test still r
 
 ```bash
 # Python modules (uv):
-cd video-modules/module-video && uv sync && make check   # ruff, mypy, import-linter, pytest
-cd video-modules/module-review && uv sync && make check
-cd video-modules/module-publish && uv sync && make check
+cd modules/module-video && uv sync && make check   # ruff, mypy, import-linter, pytest
+cd modules/module-review && uv sync && make check
+cd modules/module-publish && uv sync && make check
+
+# Single test:
+cd modules/module-<x> && uv run pytest tests/path/test_file.py::test_name
 
 # Shared S3 helpers:
 cd packages/mf-storage && uv sync && uv run pytest
@@ -72,9 +75,11 @@ docker compose -f deploy/compose.minio.yml up -d
 Build review/publish images from the repository root (Dockerfiles copy `packages/mf-storage`):
 
 ```bash
-docker build -f video-modules/module-review/Dockerfile -t module-review:local .
-docker build -f video-modules/module-publish/Dockerfile -t module-publish:local .
+docker build -f modules/module-review/Dockerfile -t module-review:local .
+docker build -f modules/module-publish/Dockerfile -t module-publish:local .
 ```
+
+`make check` differs per module: video = lint+mypy+import-linter+test, review = lint+mypy+test, publish = lint+test (`check-strict` adds mypy).
 
 CI lives in `.github/workflows/module-*.yml`, `mf-storage.yml` and `deploy-shell.yml`. Workflows
 are path-filtered. Local module ports from the legacy stack (for reading older docs): video 58081,
@@ -102,5 +107,5 @@ review 58082, publish 58083; MinIO in this repo is 59000/59001.
 ## Where things are not finished
 
 - These modules still speak the legacy core protocol. Porting them onto the new SDK is future work; do not start it unless the owner asks.
-- `video-modules/module-video/uv.lock` predates the OpenTelemetry deps; `agent/prices.json` has placeholder prices.
+- `modules/module-video/uv.lock` predates the OpenTelemetry deps; `agent/prices.json` has placeholder prices.
 - Not implemented in module-video: `/admin/v1/runs`, `/admin/v1/golden`, janitor for old artifacts.

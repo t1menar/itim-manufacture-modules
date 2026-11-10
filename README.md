@@ -10,28 +10,28 @@ Start with [`AGENTS.md`](AGENTS.md) if you are working in this repo.
 
 | Path | Role |
 |------|------|
-| `video-modules/module-video/` | Stage `video` (module id `video-claude`): ideas DB and scheduler, Claude agent steps, sandbox capture, ffmpeg render. |
-| `video-modules/module-review/` | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
-| `video-modules/module-publish/` | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
+| `modules/module-video/` | Stage `video` (module id `video-claude`): ideas DB and scheduler, Claude agent steps, sandbox capture, ffmpeg render. |
+| `modules/module-review/` | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
+| `modules/module-publish/` | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
 | `contracts/` | Shared idea/topic/event JSON Schema. Vendored into module-video; a test fails on drift. Keep this directory at the repo root so that test still works. |
 | `packages/mf-storage/` | Shared S3/MinIO helpers used by module-review and module-publish. |
 | `deploy/` | Standalone MinIO for local module tests (`compose.minio.yml`). |
 | `docs/` | Maintainer notes: decisions, content strategy, review findings. |
 
-Paths under `video-modules/` are intentional and are not being flattened.
+Each module lives in its own package `modules/<module_name>/`.
 
 ## Working on a module
 
 ```bash
-cd video-modules/module-video    # or module-review, module-publish
+cd modules/module-video    # or module-review, module-publish
 uv sync && make check            # ruff, mypy, tests (import-linter in module-video)
 ```
 
 Build images from the repository root (they copy `packages/mf-storage`):
 
 ```bash
-docker build -f video-modules/module-review/Dockerfile -t module-review:local .
-docker build -f video-modules/module-publish/Dockerfile -t module-publish:local .
+docker build -f modules/module-review/Dockerfile -t module-review:local .
+docker build -f modules/module-publish/Dockerfile -t module-publish:local .
 ```
 
 Standalone MinIO (API `127.0.0.1:59000`, console `59001`):
