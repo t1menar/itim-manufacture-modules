@@ -34,6 +34,10 @@ OPTIONAL_VARS = (
     "PUBLISH_INSTAGRAM_API_VERSION",  # default v27.0
     "PUBLISH_INSTAGRAM_UPLOAD_MODE",  # direct (file from MinIO, default) | url (public presigned link)
     "PUBLISH_INSTAGRAM_UPLOAD_BASE",  # default https://rupload.facebook.com
+    "PUBLISH_VIDEO_HOST",  # user@host for the SFTP video host (upload mode url)
+    "PUBLISH_VIDEO_HOST_DIR",  # remote folder, e.g. /var/www/reels
+    "PUBLISH_VIDEO_HOST_URL",  # public https base of that folder, e.g. https://ziphy.ru/reels
+    "PUBLISH_VIDEO_HOST_KEY_B64",  # base64 of the private key PEM
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "OTEL_SERVICE_NAME",
 )
@@ -60,6 +64,10 @@ class BootstrapConfig:
     instagram_api_version: str = "v27.0"
     instagram_upload_mode: str = "direct"
     instagram_upload_base: str = "https://rupload.facebook.com"
+    video_host: str | None = None
+    video_host_dir: str = "/var/www/reels"
+    video_host_url: str | None = None
+    video_host_key_b64: str | None = field(default=None, repr=False)
 
     s3_env_fallback: dict[str, str] = field(default_factory=dict, repr=False)
 
@@ -129,5 +137,9 @@ class BootstrapConfig:
             )
             .strip()
             .rstrip("/"),
+            video_host=(source.get("PUBLISH_VIDEO_HOST") or "").strip() or None,
+            video_host_dir=(source.get("PUBLISH_VIDEO_HOST_DIR") or "/var/www/reels").strip(),
+            video_host_url=(source.get("PUBLISH_VIDEO_HOST_URL") or "").strip() or None,
+            video_host_key_b64=(source.get("PUBLISH_VIDEO_HOST_KEY_B64") or "").strip() or None,
             s3_env_fallback=s3_env,
         )

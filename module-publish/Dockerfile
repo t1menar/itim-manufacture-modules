@@ -16,6 +16,9 @@ RUN if [ -f uv.lock ]; then uv sync --frozen --no-dev --no-editable; \
     else uv lock && uv sync --no-dev --no-editable; fi
 
 FROM ${PYTHON_IMAGE}
+# sftp copies the video to the public video host (upload mode url)
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client \
+ && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10002 --no-create-home --shell /usr/sbin/nologin publish
 COPY --from=build /src/module-publish/.venv /app/.venv
 COPY --from=build /src/module-publish/schemas /app/.venv/lib/python3.12/schemas

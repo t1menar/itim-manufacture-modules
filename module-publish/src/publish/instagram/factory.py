@@ -14,6 +14,7 @@ from publish.db.secrets import get_secret
 from publish.instagram.base import InstagramClient
 from publish.instagram.fake import FakeInstagramClient
 from publish.instagram.real import AccountAuth, RealInstagramClient
+from publish.instagram.video_host import VideoHost, VideoHostError
 from publish.storage.s3_client import StorageError, load_storage_client
 
 
@@ -58,7 +59,19 @@ def build_instagram_client(
             )
         return AccountAuth(ig_user_id=str(ig_user_id), access_token=token)
 
+    host = (
+        VideoHost(config.video_host, config.video_host_dir, config.video_host_url, config.video_host_key_b64)
+        if config.video_host and config.video_host_url and config.video_host_key_b64
+        else None
+    )
+
     async def resolve_video_url(video_ref: str) -> str:
+        if host is not None and video_ref.startswith("s3://"):
+            data = await load_video(video_ref)
+            try:
+                return await host.upload(data)
+            except VideoHostError as exc:
+                raise RuntimeError(str(exc)) from exc
         if factory is None:
             raise RuntimeError("s3:// video_ref requires DB session factory for MinIO config")
         async with factory() as session:
