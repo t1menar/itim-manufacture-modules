@@ -1,56 +1,56 @@
-# Manufacture — module / service status
+# itim-manufacture-modules — status
 
 _Last updated: 2026-11-10 (Europe/Stockholm)._
 
+This repository is now **modules-only**. The Go core, admin-api, admin-panel and the full local
+stack were removed from `main`; that tree is frozen at tag
+[`v1-legacy`](https://github.com/t1menar/itim-manufacture-modules/tree/v1-legacy) (`f88ce1e`).
+The new core is https://github.com/t1menar/manufacture-core (with
+[manufacture-sdk-python](https://github.com/t1menar/manufacture-sdk-python) and
+[manufacture-examples](https://github.com/t1menar/manufacture-examples)).
+
 ## On main
 
-#7–#36 merged (#35 B6 no double posts, #36 B5 idea parking). Head includes admin-api (D24, `#25` / `31fb3ac`), the admin-panel shell (`#26` / `ab82ac0`) and the e2e verification fixes (`#34` / `5ee876d`: publish result body, review upstream, review `no_admin` fail callback, UUIDs in admin events, `video-idea.sh`).
+Domain (video) modules live in `video-modules/`: `module-video`, `module-review`, `module-publish`.
+Shared pieces kept at the top level: `contracts/` (idea/topic/event schemas; module-video drift
+test), `packages/mf-storage/` (S3 helpers for review and publish), `deploy/` (standalone MinIO).
+Module ids, image names and service names are unchanged. Paths under `video-modules/` are not
+being flattened.
 
-## Repository layout
+#7–#37 were merged in the former monorepo, including #35 (B6, no double posts), #36 (B5, idea
+parking in the legacy core) and #37 (move of the Python modules into `video-modules/`).
 
-Domain (video) modules live in `video-modules/`: `video-modules/module-video`, `video-modules/module-review`, `video-modules/module-publish`. `core/`, `admin-api/`, `admin-panel/`, `contracts/`, `packages/`, `deploy/` stay at the top level. Module ids, image names and service names are unchanged.
+The video pipeline on this `main` is not expected to run end-to-end until the modules are ported
+onto the new SDK.
 
-## Accepted decisions
+## Accepted decisions that still apply to the modules
 
 | # | Decision |
 |---|----------|
-| D18–D23 | Republish; metadata from video; admin-api was deferred (D20, **superseded in part by D24**); ideas in module-video; opaque revisions; publish intents in module-publish. |
-| **D24** | **admin-api** and **admin-panel** return to scope. Order: admin-api → panel shell → screens, separate PRs. **No login.** admin-api is localhost-only (`127.0.0.1:PORT` in Compose). Host/Origin allowlist; no CORS `*`. Actor `local:admin` with env `mfa_`. Telegram bot stays review + notify only. |
+| D21 | Ideas and topics live in module-video; core (legacy or new) keeps only an opaque `idea_ref`. Schemas: `contracts/`. See `video-modules/module-video/docs/IDEAS.md`. |
+| D22 | Opaque content revisions (`content_revisions`: blob + sha256) — a legacy-core concern; modules still emit opaque refs. |
+| D23 | Publish intents are owned by module-publish. |
+| B6 | `publish_ledger` in module-publish: one row per (intent, account). `published` → retry returns the stored post; `publishing`/`unknown` → only reconcile, never post again; `failed` → may be posted by the next attempt. `media_publish` is never retried on 5xx/transport errors. Fence right before `media_publish` (`ledger_arm`). |
 
-## Open PRs
-
-| PR | Content | Merge? |
-|----|---------|--------|
-| #26 | Каркас admin-panel | смержен |
-| #28 | Instagram и Telegram в Compose по умолчанию `real` | смержен |
-| #27 | Экран **Productions** (список, детали, cancel/retry/skip) | смержен |
-| #29 | Экран **Ревью и публикации** | смержен |
-| #30 | Экран **Аккаунты и креды**: запись/замена секретов и аккаунтов (только «задан»/«не задан» + updated_at, без значений и длин); POST/PATCH publish accounts | смержен |
-| #31 | Экран **Промпты**: шаги, версии, просмотр/diff, создание, активация, аудит | смержен |
-| #32 | Экран **Журнал**: audit_log с фильтрами actor/action/outcome/from/to/cursor | смержен |
-| (this) | Экран **Идеи и темы**: UI по VIDEO_ADMIN_ROUTES.md, явное состояние «module-video does not support this yet» на 404 | owner — ждать (**не мержить**) |
+Historical admin/core decisions (D18, D20, D24, B5) and the old admin-panel PR list are in the
+docs on `v1-legacy`.
 
 ## Local deploy
 
-- Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api + панель**, register+activate modules, smoke.
-- Панель и API: `http://127.0.0.1:58084/` (только loopback, один origin).
-- Telegram and Instagram are **real** by default in Compose. For local stacks without real sends set `REVIEW_TELEGRAM_MODE=fake` and `PUBLISH_INSTAGRAM_MODE=fake`. Unset bootstrap (tests/CI) stays fake and still uses Fake clients explicitly.
+Standalone MinIO: `docker compose -f deploy/compose.minio.yml up -d` (or
+`./deploy/scripts/mfinfra-minio.sh`). Default ports 59000/59001.
+
+The former `./deploy/up.sh` stack (Postgres, RabbitMQ, core, modules, admin-api + panel,
+register+activate) is on `v1-legacy` only.
 
 ## module-publish: no double posts (B6)
 
 - `publish_ledger` (migration `0005`): one row per (intent, account). `published` → a retry returns the stored post (no API call); `publishing`/`unknown` → only reconcile (container `status_code`, recent media by caption and time), never post again; `failed` (container ERROR/EXPIRED or a definite 4xx) → may be posted by the next attempt.
-- `media_publish` is never retried on 5xx/transport errors: outcome unknown → reconcile → else `status=unknown` (`publish_outcome_unknown`, core sets `needs_attention`).
+- `media_publish` is never retried on 5xx/transport errors: outcome unknown → reconcile → else `status=unknown` (`publish_outcome_unknown`).
 - Fence right before `media_publish` (`ledger_arm`): the run must be live with the same fence, not cancelled, and at least 30 s before the job deadline. A timed-out, cancelled or superseded (higher fence for the same job) run cannot post.
-- core: a retried/taken-over publish job now carries the same open `input.intents` (before it went out without intents and module-publish rejected it with 422).
 
 ## module-video
 
-Код module-video в этом PR **не меняется**. Роуты идей/тем по-прежнему заданы в `admin-api/docs/VIDEO_ADMIN_ROUTES.md`.
-
-Heartbeat `video-claude` иногда `down` в overview: core и admin-api здесь ни при чём (ручной `POST /internal/v1/modules/self/heartbeat` с токеном модуля даёт 200 и поднимает `health=up`; review/publish обновляют `last_seen_at` каждые ~30 с). У video фоновый цикл, судя по `last_seen_at`, не бьётся — после 90 с core честно ставит `down`. Это нужно чинить в module-video (задача не стартует или падает без лога). На стеке также бывает устаревшая регистрация `video-claude-small`.
-
-## core: idea.ready under back-pressure (B5)
-
-- At `scheduler.max_concurrent_productions`, `idea.ready` is no longer rolled back and retried into the DLQ: it is parked in `pending_ideas` (migration `0012`, acked, idempotent on message id and idea_ref) and started by the scheduler loop (every 2 s) when a slot frees, in priority then arrival order. A new idea never overtakes parked ones. The capacity check takes an advisory lock, so the limit cannot be overshot by a race.
-- The consumer no longer sleeps before a requeue: the back-off is a timer and the default prefetch is 16, so one failing message does not hold up the others.
-- module-video is unchanged: a parked idea stays `dispatched` there until core sends `idea.in_production`. Optional later: an `idea.queued` status so the video admin can show "waiting for a slot".
+Known issue (still open): heartbeat of `video-claude` can go `down` if the background loop does
+not refresh `last_seen_at` (after ~90 s the core marks it down). That has to be fixed in
+module-video; do not start that work unless the owner asks.

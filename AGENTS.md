@@ -1,59 +1,84 @@
-# Manufacture — agent context (read this first)
+# itim-manufacture-modules — agent context (read this first)
 
-Monorepo `github.com/t1menar/manufacture` (branch `main`). An automated factory for short English
-tech videos ("iTim" channel): idea → researched script → real recorded terminal/database session →
-rendered 1080×1920 video → Telegram human review → Instagram Reels.
+Repo `github.com/t1menar/itim-manufacture-modules` (branch `main`). This is a **modules-only**
+repository: the video pipeline modules for the iTim channel (idea → researched script → recorded
+sandbox session → rendered 1080×1920 video → Telegram human review → Instagram Reels).
 
-Each folder has a `CONTEXT.md` with the deep context of that module. Read the root file, then only the
-module(s) you touch. `docs/STATUS.md` holds decisions (D18–D24) and merged-PR history.
+The original monorepo (Go core, admin-api, admin-panel and the full local stack) is preserved at
+tag [`v1-legacy`](https://github.com/t1menar/itim-manufacture-modules/tree/v1-legacy). The new
+Manufacture core lives in [`manufacture-core`](https://github.com/t1menar/manufacture-core);
+the Python SDK and examples are in [`manufacture-sdk-python`](https://github.com/t1menar/manufacture-sdk-python)
+and [`manufacture-examples`](https://github.com/t1menar/manufacture-examples).
+
+Each remaining folder has a `CONTEXT.md` with the deep context of that module. Read this file, then
+only the module(s) you touch. `docs/STATUS.md` holds decisions that still apply to the modules.
 
 ## Map
 
 | Folder | Lang | Role |
 |---|---|---|
-| `core/` | Go | Pipeline engine + module registry. Productions → variants → jobs, outbox/inbox over RabbitMQ, fencing, retries, publish intents. Being extracted into a standalone "pipeline router" project (SDK for modules planned). |
 | `video-modules/module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
 | `video-modules/module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
 | `video-modules/module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
-| `admin-api/` | Go | Localhost-only gateway for the panel (no login), proxies core + modules, audit log. |
-| `admin-panel/` | TS/React | Russian-language SPA served by admin-api at `http://127.0.0.1:58084/`. |
-| `contracts/` | JSON Schema | Shared idea/topic/event schemas (vendored into module-video; a test fails on drift). |
+| `contracts/` | JSON Schema | Shared idea/topic/event schemas (vendored into module-video; a test fails on drift). Must stay at the repo root. |
 | `packages/mf-storage/` | Python | Shared S3/MinIO helpers (s3:// parsing, presign) for review and publish. |
-| `deploy/` | shell/compose | One-command local stack (`./deploy/up.sh`), helper scripts. |
-| `create-database-video/` | Python | Original hand-made reference video (the visual/scenario reference for the renderer). Not part of the runtime. |
-| `docs/` | md | `STATUS.md` (decisions, history). Specs formerly kept as Word files were deleted; the code and `CONTEXT.md` files are the source of truth. |
+| `deploy/` | compose | Standalone MinIO for local module tests (`compose.minio.yml`, `scripts/mfinfra-minio.sh`). |
+| `docs/` | md | `STATUS.md` (module decisions), `CONTENT.md` (content strategy), `REVIEW.md` (open findings). |
 
-## End-to-end flow
+Do not flatten `video-modules/`. The previous `core/`, `admin-api/` and `admin-panel/` trees are gone from `main`; recover them from `v1-legacy` or work in the new core repositories instead.
+
+## How the modules fit together
+
+These modules were built to talk to the legacy core over HTTP callbacks
+`POST /internal/v1/jobs/{id}/progress|result|fail` with `Authorization: Bearer mft_…` and a
+required `X-Fence` header; the core talked to modules over AMQP commands and HTTP. Delivery is
+at-least-once with idempotent consumers (inbox tables, transactional outbox).
 
 ```
 video DB idea (queued)
-  → module-video scheduler (VIDEO_IDEAS_*: tick, max_in_flight, interval) writes idea.ready to its outbox
+  → module-video scheduler writes idea.ready to its outbox
   → RabbitMQ exchange manufacture.events (routing key idea.ready)
-  → core: production + variant + first job (parked in pending_ideas when max_concurrent_productions is hit)
+  → core (legacy, or the new manufacture-core once modules are ported): production + job
   → job.requested → queue module.<module-id>.commands  (also HTTP POST /v1/jobs on the module)
   → video steps: analysis → research → script → capture → render → package → result callback
-  → review job: Telegram card (sendVideo) → Approve | Reject(+reason → revise loop, review.max_rounds)
-  → approval creates publish intent generation 1 → publish job → Instagram → permalink
+  → review job: Telegram card (sendVideo) → Approve | Reject(+reason → revise loop)
+  → approval creates a publish intent → publish job → Instagram → permalink
   → notify.requested → Telegram "what was published where"
 ```
 
-Modules talk to core over HTTP callbacks `POST /internal/v1/jobs/{id}/progress|result|fail` with
-`Authorization: Bearer mft_…` and a required `X-Fence` header; core talks to modules over AMQP commands
-and HTTP. Delivery is at-least-once with idempotent consumers (inbox tables, transactional outbox).
+The new core is not compatible with these modules until they are ported onto the SDK. Until then,
+an end-to-end video pipeline on `main` is not expected to run.
+
+`video-modules/module-video/tests/test_core_contract.py` looks for `core/schemas/` next to the
+module and **skips** when that tree is absent. The idea/topic drift test still requires
+`contracts/` at the repository root.
 
 ## Commands
 
 ```bash
-./deploy/up.sh [--verbose]      # whole local stack (needs Docker + Compose v2); status.sh, logs.sh <svc>, down.sh
-# Go is NOT installed on the host. Run Go in Docker:
-docker run --rm -v $PWD:/src -v mf-gomod:/go/pkg/mod -w /src/core golang:1.26-bookworm go test ./...
-# Python modules (uv): cd module-<x> && uv sync && make check   (ruff, mypy, import-linter, pytest)
-# Panel: cd admin-panel && npm ci && npm run lint && npm run typecheck && npm test && npm run build
+# Python modules (uv):
+cd video-modules/module-video && uv sync && make check   # ruff, mypy, import-linter, pytest
+cd video-modules/module-review && uv sync && make check
+cd video-modules/module-publish && uv sync && make check
+
+# Shared S3 helpers:
+cd packages/mf-storage && uv sync && uv run pytest
+
+# Standalone MinIO (API 127.0.0.1:59000, console 59001):
+docker compose -f deploy/compose.minio.yml up -d
+# or: ./deploy/scripts/mfinfra-minio.sh
 ```
 
-Integration tests need Docker (testcontainers) or `MF_TEST_DATABASE_URL` / `MF_TEST_AMQP_URL` for core.
-CI lives in `.github/workflows/<module>.yml`. Local ports: core 58080, video 58081, review 58082,
-publish 58083, admin 58084 (loopback only), PG 56432, AMQP 56672/UI 56673, MinIO 56000/56001.
+Build review/publish images from the repository root (Dockerfiles copy `packages/mf-storage`):
+
+```bash
+docker build -f video-modules/module-review/Dockerfile -t module-review:local .
+docker build -f video-modules/module-publish/Dockerfile -t module-publish:local .
+```
+
+CI lives in `.github/workflows/module-*.yml`, `mf-storage.yml` and `deploy-shell.yml`. Workflows
+are path-filtered. Local module ports from the legacy stack (for reading older docs): video 58081,
+review 58082, publish 58083; MinIO in this repo is 59000/59001.
 
 ## Standing rules (from the owner)
 
@@ -62,6 +87,7 @@ publish 58083, admin 58084 (loopback only), PG 56432, AMQP 56672/UI 56673, MinIO
 - Video content is **English**; fix problems in code, not by adding instructions to prompts. Answer the owner in **Russian**.
 - Downloads of files, outward-facing or irreversible actions (publishing, deleting remote data) need explicit confirmation.
 - Prefer dedicated tools; zsh on macOS: `sed -i ''`, watch `echo ==` expansions.
+- Do not "fix" known-red CI in the modules (`module-video` mypy on `diagram.py`, `module-publish` ruff) unless the owner asks: the owner writes the modules.
 
 ## Cross-cutting gotchas (learned the hard way)
 
@@ -70,14 +96,11 @@ publish 58083, admin 58084 (loopback only), PG 56432, AMQP 56672/UI 56673, MinIO
 3. **Render workers must share `reading_wps`** with the parent context (`_init_worker`), otherwise picture runs ahead of sound. `RenderStep.version` is bumped when output changes.
 4. **Loudness** target −16 LUFS, closed loop around the AAC-encoded file in `mux_final` (AAC loses ≈1 LU and overshoots true peak by up to ≈3 dB; ceiling relaxed accordingly).
 5. **Instagram/Meta**: system-user tokens (`EAA…`) need Graph base `https://graph.facebook.com`, API `v27.0`; IG business account id lives in `platform_accounts.external_id`. `rupload.facebook.com` accepts only ≈1.7 MB per request (no chunking) → default production path is **`url` upload mode via an SFTP video host** (file copied to a public HTTPS folder, cover too as `cover_url`, cron cleans files after 180 min). Caption is cut to 500 chars and ≤8 hashtags (`shorten_caption`).
-6. **publish_ledger** prevents double posts. Switching fake → real requires deleting stale fake ledger rows. `media_publish` is never retried on 5xx; unknown outcome → reconcile → `unknown` (core sets `needs_attention`).
-7. **Core concurrency**: `system_settings.scheduler.max_concurrent_productions` (core DB, owner `core`, `is_current`). Extra `idea.ready` is parked in `pending_ideas`; module-video also caps `max_in_flight` (3) and `min_interval_s`.
-8. **Republish** (`POST /api/v1/publish-intents/{id}/republish` `{reason, base_generation}`) builds a job from the latest content revision, upstream and module settings (`engine/republish.go`). Retried publish jobs must carry the open `intents`.
-9. DB hosts the `core` migrations (goose) and the Python modules' Alembic migrations; each module owns its own database (`core`, `video`, `review`, `publish`, `admin`).
+6. **publish_ledger** prevents double posts. Switching fake → real requires deleting stale fake ledger rows. `media_publish` is never retried on 5xx; unknown outcome → reconcile → `unknown`.
+7. Each module owns its own database (`video`, `review`, `publish`) and Alembic migrations.
 
 ## Where things are not finished
 
-- Core is being separated; module SDK is the owner's current work — avoid large core refactors without asking.
+- These modules still speak the legacy core protocol. Porting them onto the new SDK is future work; do not start it unless the owner asks.
 - `video-modules/module-video/uv.lock` predates the OpenTelemetry deps; `agent/prices.json` has placeholder prices.
-- Core/publish state of the first real test publication (intent gen 15 `unknown`, variant `needs_attention`) was not reconciled (test posts, to be deleted by the owner).
-- Not implemented: `/admin/v1/runs`, `/admin/v1/golden`, janitor for old artifacts in module-video; admin ideas/topics routes (`admin-api/docs/VIDEO_ADMIN_ROUTES.md`).
+- Not implemented in module-video: `/admin/v1/runs`, `/admin/v1/golden`, janitor for old artifacts.

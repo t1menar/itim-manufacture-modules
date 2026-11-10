@@ -1,6 +1,4 @@
-# Keep image builds small and avoid copying a host node_modules into the UI stage.
-admin-panel/node_modules
-admin-panel/dist
+# Keep image builds small.
 deploy/.env
 deploy/.logs
 **/.venv
