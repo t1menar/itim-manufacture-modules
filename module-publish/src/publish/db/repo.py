@@ -11,7 +11,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from publish.db.models import ACTIVE_RUN_STATUSES, PlatformAccount, PublishIntent, Run
+from publish.db.models import ACTIVE_RUN_STATUSES, PlatformAccount, PublishIntent, PublishLedger, Run
 from publish.ids import uuid7
 
 LEASE_TTL_S = 60
@@ -58,6 +58,31 @@ async def create_run(session: AsyncSession, new: NewRun) -> tuple[Run, bool]:
         .returning(Run.id)
     )
     inserted = (await session.execute(stmt)).scalar_one_or_none()
+    if inserted is None:
+        # Same job re-issued by core with a higher fence (take-over): the newer request wins and
+        # the run starts over; a task still executing the old fence is fenced out before publishing.
+        bumped = (
+            await session.execute(
+                update(Run)
+                .where(Run.job_id == new.job_id, Run.fence < new.fence)
+                .values(
+                    fence=new.fence,
+                    attempt=new.attempt,
+                    input=new.input,
+                    deadline=new.deadline,
+                    callback_base_url=new.callback_base_url,
+                    status="accepted",
+                    cancel_requested=False,
+                    lease_owner=None,
+                    lease_until=None,
+                    result=None,
+                    error=None,
+                    finished_at=None,
+                )
+                .returning(Run.id)
+            )
+        ).scalar_one_or_none()
+        inserted = bumped
     run = await get_run_by_job(session, new.job_id)
     if run is None:
         raise RuntimeError(f"run for job {new.job_id} vanished after insert")
@@ -142,11 +167,16 @@ async def store_outcome(
     result: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
     now: dt.datetime | None = None,
+    fence: int | None = None,
 ) -> None:
+    """fence: only store when the run still has this fence (a superseded task must not overwrite)."""
     at = _now(now)
+    cond = [Run.id == run_id]
+    if fence is not None:
+        cond.append(Run.fence == fence)
     await session.execute(
         update(Run)
-        .where(Run.id == run_id)
+        .where(*cond)
         .values(
             status=status,
             result=result,
@@ -222,3 +252,131 @@ async def upsert_local_intent(
 
 async def get_platform_account(session: AsyncSession, account_id: uuid.UUID) -> PlatformAccount | None:
     return await session.get(PlatformAccount, account_id)
+
+
+# --- publish ledger (no double posts) -----------------------------------------------------------
+
+LEDGER_FINAL_NO_REPOST = frozenset({"publishing", "published", "unknown"})
+
+
+async def ledger_lock(session: AsyncSession, intent_key: str, account_id: str) -> PublishLedger | None:
+    result = await session.execute(
+        select(PublishLedger)
+        .where(PublishLedger.intent_key == intent_key, PublishLedger.account_id == account_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one_or_none()
+
+
+async def ledger_claim(
+    session: AsyncSession,
+    *,
+    intent_key: str,
+    account_id: str,
+    run_id: uuid.UUID,
+    fence: int,
+    caption: str | None,
+    now: dt.datetime | None = None,
+) -> None:
+    """Own the intent for this run. Only call when the row is absent, claimed or failed."""
+    at = _now(now)
+    stmt = pg_insert(PublishLedger).values(
+        intent_key=intent_key,
+        account_id=account_id,
+        status="claimed",
+        run_id=run_id,
+        fence=fence,
+        caption=caption,
+        claimed_at=at,
+        updated_at=at,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["intent_key", "account_id"],
+        set_={
+            "status": "claimed",
+            "run_id": run_id,
+            "fence": fence,
+            "caption": caption,
+            "container_id": None,
+            "claimed_at": at,
+            "updated_at": at,
+        },
+        where=PublishLedger.status.in_(("claimed", "failed")),
+    )
+    await session.execute(stmt)
+
+
+async def ledger_arm(
+    session: AsyncSession,
+    *,
+    intent_key: str,
+    account_id: str,
+    run_id: uuid.UUID,
+    fence: int,
+    container_id: str,
+    not_after: dt.datetime,
+    now: dt.datetime | None = None,
+) -> str | None:
+    """Atomically take the right to call media_publish. Returns None when allowed, else the reason.
+
+    Allowed only while the run is live with the same fence, not cancelled, before not_after, and
+    still the owner of the claim. On success the row becomes publishing (never posted again).
+    """
+    at = _now(now)
+    run = (
+        await session.execute(
+            select(Run).where(Run.id == run_id).with_for_update().execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        return "run_missing"
+    if run.fence != fence:
+        return "superseded"
+    if run.cancel_requested or run.status not in ACTIVE_RUN_STATUSES:
+        return "cancelled"
+    if at >= not_after:
+        return "timeout"
+    armed = (
+        await session.execute(
+            update(PublishLedger)
+            .where(
+                PublishLedger.intent_key == intent_key,
+                PublishLedger.account_id == account_id,
+                PublishLedger.run_id == run_id,
+                PublishLedger.fence == fence,
+                PublishLedger.status == "claimed",
+            )
+            .values(status="publishing", container_id=container_id, updated_at=at)
+            .returning(PublishLedger.intent_key)
+        )
+    ).scalar_one_or_none()
+    return None if armed is not None else "claim_lost"
+
+
+async def ledger_set(
+    session: AsyncSession,
+    *,
+    intent_key: str,
+    account_id: str,
+    status: str,
+    external_post_id: str | None = None,
+    url: str | None = None,
+    published_at: dt.datetime | None = None,
+    clear_container: bool = False,
+    now: dt.datetime | None = None,
+) -> None:
+    values: dict[str, Any] = {"status": status, "updated_at": _now(now)}
+    if external_post_id is not None:
+        values["external_post_id"] = external_post_id
+    if url is not None:
+        values["url"] = url
+    if published_at is not None:
+        values["published_at"] = published_at
+    if clear_container:
+        values["container_id"] = None
+    await session.execute(
+        update(PublishLedger)
+        .where(PublishLedger.intent_key == intent_key, PublishLedger.account_id == account_id)
+        .values(**values)
+    )

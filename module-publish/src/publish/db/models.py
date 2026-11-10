@@ -135,3 +135,29 @@ class ModuleSetting(Base):
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+
+
+class PublishLedger(Base):
+    """One publish attempt per (intent, account).
+
+    claimed: a run owns the intent, nothing sent to media_publish yet (safe to take over).
+    publishing: media_publish was (or is being) called for container_id; never call it again.
+    published: done, external_post_id/url are the result to return on any retry.
+    unknown: the outcome could not be reconciled; needs an operator, never re-posted automatically.
+    failed: definitely not published (container ERROR/EXPIRED or a definite rejection); may be retried.
+    """
+
+    __tablename__ = "publish_ledger"
+
+    intent_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    account_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    status: Mapped[str] = mapped_column(Text)
+    run_id: Mapped[uuid.UUID]
+    fence: Mapped[int] = mapped_column(Integer)
+    container_id: Mapped[str | None] = mapped_column(Text)
+    caption: Mapped[str | None] = mapped_column(Text)
+    external_post_id: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[dt.datetime | None]
+    claimed_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=text("now()"))

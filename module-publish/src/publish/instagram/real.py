@@ -9,12 +9,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 
-from publish.instagram.base import PublishResult, UnknownOutcomeError
+from publish.instagram.base import BeforePublish, PublishFencedError, PublishResult, UnknownOutcomeError
 from publish.instagram.errors import ClassifiedError, classify_graph_error
 from publish.observability.logging import get_logger
 
@@ -92,6 +92,7 @@ class RealInstagramClient:
         caption: str,
         cover_ref: str | None = None,
         intent_id: str | None = None,
+        before_publish: BeforePublish | None = None,
     ) -> PublishResult:
         _ = intent_id
         video_bytes: bytes | None = None
@@ -119,7 +120,13 @@ class RealInstagramClient:
             if video_bytes is not None:
                 await self._upload_video(auth, container_id, video_bytes)
             await self._wait_container_finished(auth, container_id)
+            if before_publish is not None:
+                await before_publish(container_id)
             media_id = await self._media_publish(auth, container_id)
+        except PublishFencedError:
+            raise
+        except UnknownOutcomeError as exc:
+            raise UnknownOutcomeError(str(exc), account_id=account_id, external_post_id=container_id) from exc
         except Exception as exc:
             # Ambiguous after create/publish call → unknown (reconcile, never blind resend).
             if isinstance(exc, InstagramAPIError) and not exc.classified.retryable:
@@ -137,32 +144,52 @@ class RealInstagramClient:
             published_at=datetime.now(UTC),
         )
 
-    async def reconcile(self, *, account_id: str, external_post_id: str) -> dict[str, Any] | None:
-        """Find an already-published media by container id or media id (no duplicate publish)."""
+    async def reconcile(
+        self,
+        *,
+        account_id: str,
+        external_post_id: str,
+        caption: str | None = None,
+        since: datetime | None = None,
+    ) -> dict[str, Any] | None:
+        """Find out what happened to a container or media id without publishing anything."""
         auth = await self._resolve(account_id)
-        # Try as media id first.
+        # A media id resolves to the post itself.
         media = await self._get_media(auth, external_post_id)
         if media and media.get("permalink"):
             return {
+                "status": "published",
                 "account_id": account_id,
                 "external_post_id": str(media.get("id") or external_post_id),
                 "url": media["permalink"],
                 "published_at": media.get("timestamp") or datetime.now(UTC).isoformat(),
             }
-        # Container may already be PUBLISHED — check status.
-        status = await self._container_status(auth, external_post_id)
-        if status == "PUBLISHED":
-            # Look up recent media (best-effort; avoid creating a new container).
-            recent = await self._recent_media(auth, limit=5)
-            if recent:
-                m = recent[0]
-                return {
-                    "account_id": account_id,
-                    "external_post_id": str(m.get("id")),
-                    "url": m.get("permalink") or f"https://www.instagram.com/reel/{m.get('id')}/",
-                    "published_at": m.get("timestamp") or datetime.now(UTC).isoformat(),
-                }
-        return None
+        # Otherwise it is a container: its status says whether media_publish went through.
+        try:
+            status = await self._container_status(auth, external_post_id)
+        except InstagramAPIError:
+            return None
+        if status in {"ERROR", "EXPIRED"}:
+            return {"status": "not_published", "container_status": status}
+        if status != "PUBLISHED":
+            return None
+        # Published: match the media among the latest posts by caption and time. Never guess
+        # with the newest post alone, another post could be newer.
+        floor = (since - timedelta(minutes=5)) if since is not None else None
+        for m in await self._recent_media(auth, limit=10):
+            if caption is not None and (m.get("caption") or "").strip() != caption.strip():
+                continue
+            ts = _parse_ts(m.get("timestamp"))
+            if floor is not None and ts is not None and ts < floor:
+                continue
+            return {
+                "status": "published",
+                "account_id": account_id,
+                "external_post_id": str(m.get("id")),
+                "url": m.get("permalink") or f"https://www.instagram.com/reel/{m.get('id')}/",
+                "published_at": m.get("timestamp") or datetime.now(UTC).isoformat(),
+            }
+        return {"status": "published_unverified", "container_id": external_post_id}
 
     async def content_publishing_limit(self, auth: AccountAuth) -> dict[str, Any]:
         data = await self._get(
@@ -266,11 +293,23 @@ class RealInstagramClient:
         return str(code)
 
     async def _media_publish(self, auth: AccountAuth, container_id: str) -> str:
-        data = await self._post(
-            f"{auth.ig_user_id}/media_publish",
-            auth,
-            data={"creation_id": container_id, "access_token": auth.access_token},
-        )
+        # Not idempotent: a 5xx or a lost response may still have published the reel, so this
+        # call is never retried here. The caller reconciles via the container status instead.
+        try:
+            data = await self._request(
+                "POST",
+                f"{auth.ig_user_id}/media_publish",
+                data={"creation_id": container_id, "access_token": auth.access_token},
+                retry_ambiguous=False,
+            )
+        except InstagramAPIError as exc:
+            if exc.classified.code in {"instagram_transport", "instagram_5xx", "instagram_bad_body"}:
+                raise UnknownOutcomeError(
+                    f"media_publish outcome unknown ({exc.classified.code})",
+                    account_id=auth.ig_user_id,
+                    external_post_id=container_id,
+                ) from exc
+            raise
         mid = data.get("id")
         if not mid:
             raise UnknownOutcomeError(
@@ -298,7 +337,7 @@ class RealInstagramClient:
             data = await self._get(
                 f"{auth.ig_user_id}/media",
                 auth,
-                params={"fields": "id,permalink,timestamp", "limit": str(limit)},
+                params={"fields": "id,permalink,timestamp,caption", "limit": str(limit)},
             )
         except InstagramAPIError:
             return []
@@ -323,7 +362,10 @@ class RealInstagramClient:
         *,
         params: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
+        retry_ambiguous: bool = True,
     ) -> dict[str, Any]:
+        """retry_ambiguous=False: a transport error or 5xx is raised at once (the request may have
+        taken effect); only definite rejections such as rate limits are retried."""
         url = self._url(path)
         # Strip token from logs — never include params/data in log events.
         client = self._client or httpx.AsyncClient(timeout=self._timeout)
@@ -338,7 +380,7 @@ class RealInstagramClient:
                         resp = await client.post(url, data=data)
                 except httpx.HTTPError as exc:
                     log.warning("instagram_transport_error", attempt=attempt + 1)
-                    if attempt == 4:
+                    if attempt == 4 or not retry_ambiguous:
                         raise InstagramAPIError(
                             ClassifiedError("instagram_transport", True, str(exc))
                         ) from exc
@@ -358,6 +400,11 @@ class RealInstagramClient:
                     delay = min(delay * 2, 60.0)
                     continue
                 if resp.status_code >= 500:
+                    if not retry_ambiguous:
+                        raise InstagramAPIError(
+                            ClassifiedError("instagram_5xx", True, f"HTTP {resp.status_code}"),
+                            status_code=resp.status_code,
+                        )
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 30.0)
                     continue
@@ -382,6 +429,18 @@ def _json(resp: httpx.Response) -> Any:
     try:
         return resp.json()
     except Exception:
+        return None
+
+
+def _parse_ts(raw: Any) -> datetime | None:
+    if not isinstance(raw, str):
+        return None
+    try:
+        # Graph timestamps look like 2026-11-10T10:00:00+0000.
+        if len(raw) > 5 and raw[-5] in "+-" and raw[-3] != ":":
+            raw = raw[:-2] + ":" + raw[-2:]
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
         return None
 
 

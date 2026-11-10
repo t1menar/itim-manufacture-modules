@@ -205,3 +205,54 @@ func TestPublishFailBlockedMarksUnknown(t *testing.T) {
 		t.Fatal("notify missing on fail")
 	}
 }
+
+// B6: the retry of a publish job carries the same intents, so module-publish can return the
+// post it already made instead of publishing again (and the request is valid at all).
+func TestPublishRetryCarriesSameIntents(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{"output": videoStageOutput("rty"), "artifacts": []any{}})
+	res.Body.Close()
+	var rev uuid.UUID
+	var rf int
+	_ = e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'review'`).Scan(&rev, &rf)
+	res = e.postCallback(srv, "revmod", "result", rev, rf, map[string]any{
+		"output": map[string]any{
+			"decision": "approved", "reviewer": map[string]any{"telegram_user_id": 1},
+			"decided_at": "2026-01-01T00:00:00Z", "round": 1,
+		},
+		"artifacts": []any{},
+	})
+	res.Body.Close()
+	var pubJob uuid.UUID
+	var pf int
+	if err := e.pool.QueryRow(e.ctx, `SELECT id, fence FROM jobs WHERE stage_id = 'publish'`).Scan(&pubJob, &pf); err != nil {
+		t.Fatal(err)
+	}
+	var intentID uuid.UUID
+	if err := e.pool.QueryRow(e.ctx, `SELECT id FROM publish_intents`).Scan(&intentID); err != nil {
+		t.Fatal(err)
+	}
+	res = e.postCallback(srv, "pubmod", "fail", pubJob, pf, map[string]any{"class": "transient", "message": "callback lost"})
+	if res.StatusCode != 200 {
+		t.Fatalf("fail: %d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	var raw []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT request FROM jobs WHERE stage_id = 'publish' AND id <> $1`, pubJob).Scan(&raw); err != nil {
+		t.Fatalf("no retry job: %v", err)
+	}
+	var req struct {
+		Try   int `json:"try"`
+		Input struct {
+			Intents []map[string]any `json:"intents"`
+		} `json:"input"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.Try != 2 || len(req.Input.Intents) != 1 || req.Input.Intents[0]["intent_id"] != intentID.String() {
+		t.Fatalf("retry request: %s", raw)
+	}
+}
