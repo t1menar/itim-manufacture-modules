@@ -54,3 +54,10 @@ def extract_meta(job_input: dict[str, Any]) -> tuple[str, str, str, str]:
         if isinstance(ch0, dict) and ch0.get("language"):
             language = str(ch0["language"])
     return title, description, video_ref, language
+
+
+def extract_video_info(job_input: dict[str, Any]) -> dict[str, Any]:
+    """Width, height and duration of the video from the content revision (sent along with the file)."""
+    upstream = _as_dict(job_input.get("upstream"))
+    video = _as_dict(_as_dict(upstream.get("content_revision")).get("video"))
+    return {k: video[k] for k in ("width", "height", "duration_s") if video.get(k)}

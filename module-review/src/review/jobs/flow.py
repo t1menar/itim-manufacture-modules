@@ -15,7 +15,13 @@ from review.admin.registration import AdminRegistry
 from review.clients.core import CoreClient
 from review.db import repo
 from review.db.models import FINAL
-from review.jobs.cards import approve_reject_keyboard, card_caption, extract_meta, stale_keyboard
+from review.jobs.cards import (
+    approve_reject_keyboard,
+    card_caption,
+    extract_meta,
+    extract_video_info,
+    stale_keyboard,
+)
 from review.observability.logging import get_logger
 from review.storage.s3_client import load_storage_client
 from review.telegram.bot import TelegramBot
@@ -61,6 +67,7 @@ class ReviewFlow:
                 await self._fail_local(s, run, "cancelled_by_admin")
                 return
             title, description, video_ref, language = extract_meta(run.input or {})
+            video_info = extract_video_info(run.input or {})
             version = run.round if run.round > 0 else 1
             caption = card_caption(title=title, description=description, version=version, language=language)
             variant_id = run.variant_id or uuid.uuid4()
@@ -99,6 +106,7 @@ class ReviewFlow:
             chat_id,
             video_ref,
             video_bytes=video_bytes,
+            video_info=video_info,
             caption=caption,
             reply_to_message_id=reply_to,
             allow_sending_without_reply=True,

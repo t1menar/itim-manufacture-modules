@@ -216,6 +216,7 @@ class RealTelegramBot:
         video: str,
         *,
         video_bytes: bytes | None = None,
+        video_info: dict[str, Any] | None = None,
         caption: str | None = None,
         reply_to_message_id: int | None = None,
         allow_sending_without_reply: bool = False,
@@ -226,6 +227,7 @@ class RealTelegramBot:
                 chat_id,
                 video,
                 video_bytes,
+                video_info=video_info,
                 caption=caption,
                 reply_to_message_id=reply_to_message_id,
                 allow_sending_without_reply=allow_sending_without_reply,
@@ -288,6 +290,7 @@ class RealTelegramBot:
         video_ref: str,
         video_bytes: bytes,
         *,
+        video_info: dict[str, Any] | None = None,
         caption: str | None,
         reply_to_message_id: int | None,
         allow_sending_without_reply: bool,
@@ -295,6 +298,12 @@ class RealTelegramBot:
     ) -> dict[str, Any]:
         """Multipart upload of the file itself: no public URL needed (Bot API limit 50 MB)."""
         form: dict[str, Any] = {"chat_id": str(chat_id), "supports_streaming": "true"}
+        # Without the size Telegram shows the clip as a square preview, squeezed.
+        for key in ("width", "height"):
+            if (video_info or {}).get(key):
+                form[key] = str(int(video_info[key]))  # type: ignore[index]
+        if (video_info or {}).get("duration_s"):
+            form["duration"] = str(round(float(video_info["duration_s"])))  # type: ignore[index]
         if caption:
             form["caption"] = caption[:1024]
         if reply_to_message_id is not None:

@@ -171,3 +171,21 @@ async def test_video_bytes_are_uploaded_as_multipart_without_a_url(bot: RealTele
     assert req.headers["content-type"].startswith("multipart/form-data")
     assert payload in req.content and b'name="chat_id"' in req.content
     assert b"s3://" not in req.content  # the private ref never reaches Telegram
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_video_size_and_duration_are_sent_so_telegram_keeps_the_aspect(bot: RealTelegramBot) -> None:
+    route = respx.post(f"{API}/botTEST_TOKEN_NOT_A_SECRET/sendVideo").mock(
+        return_value=httpx.Response(200, json={"ok": True, "result": {"message_id": 9}})
+    )
+    await bot.send_video(
+        42,
+        "s3://manufacture/p/final.mp4",
+        video_bytes=b"x" * 50,
+        video_info={"width": 1080, "height": 1920, "duration_s": 159.6},
+    )
+    body = route.calls.last.request.content
+    for name, value in (("width", b"1080"), ("height", b"1920"), ("duration", b"160")):
+        assert f'name="{name}"'.encode() in body and value in body
+    assert b'name="supports_streaming"' in body
