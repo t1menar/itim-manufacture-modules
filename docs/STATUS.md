@@ -4,7 +4,7 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 ## On main
 
-#7–#26 merged. Head includes admin-api (D24, `#25` / `31fb3ac`) and the admin-panel shell (`#26` / `ab82ac0`).
+#7–#34 merged. Head includes admin-api (D24, `#25` / `31fb3ac`), the admin-panel shell (`#26` / `ab82ac0`) and the e2e verification fixes (`#34` / `5ee876d`: publish result body, review upstream, review `no_admin` fail callback, UUIDs in admin events, `video-idea.sh`).
 
 ## Accepted decisions
 
@@ -31,6 +31,13 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 - Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api + панель**, register+activate modules, smoke.
 - Панель и API: `http://127.0.0.1:58084/` (только loopback, один origin).
 - Telegram and Instagram are **real** by default in Compose. For local stacks without real sends set `REVIEW_TELEGRAM_MODE=fake` and `PUBLISH_INSTAGRAM_MODE=fake`. Unset bootstrap (tests/CI) stays fake and still uses Fake clients explicitly.
+
+## module-publish: no double posts (B6)
+
+- `publish_ledger` (migration `0005`): one row per (intent, account). `published` → a retry returns the stored post (no API call); `publishing`/`unknown` → only reconcile (container `status_code`, recent media by caption and time), never post again; `failed` (container ERROR/EXPIRED or a definite 4xx) → may be posted by the next attempt.
+- `media_publish` is never retried on 5xx/transport errors: outcome unknown → reconcile → else `status=unknown` (`publish_outcome_unknown`, core sets `needs_attention`).
+- Fence right before `media_publish` (`ledger_arm`): the run must be live with the same fence, not cancelled, and at least 30 s before the job deadline. A timed-out, cancelled or superseded (higher fence for the same job) run cannot post.
+- core: a retried/taken-over publish job now carries the same open `input.intents` (before it went out without intents and module-publish rejected it with 422).
 
 ## module-video
 

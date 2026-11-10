@@ -141,13 +141,23 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if err != nil {
 		return err
 	}
+	input := map[string]any{
+		"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
+		"channels": channels, "upstream": upstream,
+	}
+	if s.stage.StageID == "publish" {
+		// A retry or take-over of a publish job carries the same open intents as the first
+		// request, so the module can recognise intents it already published (B6).
+		intents, err := loadOpenPublishIntents(ctx, tx, s)
+		if err != nil {
+			return err
+		}
+		input["intents"] = intents
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
-		"input": map[string]any{
-			"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
-			"channels": channels, "upstream": upstream,
-		},
+		"input":       input,
 		"settings":    settings,
 		"credentials": []string{},
 		"callback":    map[string]any{"base_url": fmt.Sprintf("%s/internal/v1/jobs/%s", e.CallbackBaseURL, jobID)},
@@ -188,6 +198,36 @@ func loadJobUpstream(ctx context.Context, tx pgx.Tx, s jobSpec) (map[string]any,
 	upstream["content_revision"] = body
 	upstream["content_revision_id"] = id.String()
 	return upstream, nil
+}
+
+// loadOpenPublishIntents lists the variant's intents that are not finished yet, in the shape of the
+// first publish request (CreateFirstPublishJob).
+func loadOpenPublishIntents(ctx context.Context, tx pgx.Tx, s jobSpec) ([]map[string]any, error) {
+	out := []map[string]any{}
+	if s.variant == nil {
+		return out, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id, content_revision_id, generation, platform_account_id FROM publish_intents
+		WHERE variant_id = $1 AND status IN ('pending', 'in_progress') ORDER BY generation, created_at, id`, *s.variant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, rev, account uuid.UUID
+		var gen int
+		if err := rows.Scan(&id, &rev, &gen, &account); err != nil {
+			return nil, err
+		}
+		row := map[string]any{"intent_id": id.String(), "content_revision_id": rev.String(), "generation": gen}
+		if account != uuid.Nil {
+			row["platform_account_id"] = account.String()
+		} else {
+			row["platform_account_id"] = nil
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
 }
 
 // loadModuleSettings returns the settings snapshot of the module for the job request: the current
