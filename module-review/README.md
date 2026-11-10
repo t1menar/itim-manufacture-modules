@@ -85,6 +85,18 @@ Behaviour in `real` mode:
 
 **No real calls in CI/tests** — unit tests mock the API base with respx.
 
+## Admin registration in the chat
+
+In `real` mode, when no admin ids are configured (`telegram.admin_ids` / `REVIEW_ADMIN_TELEGRAM_IDS`), the admin registers in the bot's private chat:
+
+1. On the first start module-review generates a **master token** once and keeps it in `module_secrets` (`telegram.master_token`). Read it with `deploy/scripts/review-master-token.sh`; it is never logged.
+2. Anyone who writes to the bot is asked for the master token. The sender of the correct token becomes **the** admin (one at most): the user id and chat are stored in `module_settings` (`telegram.registered_admin`) and survive restarts. Review cards, reject reasons and publish notices go to that chat.
+3. Review jobs that arrive before anybody registered wait; they are sent as soon as the admin registers.
+4. Everyone else is ignored once an admin exists. Wrong tokens are counted: 5 failures lock the user out for 15 minutes. Registration works only in a private chat.
+5. To hand the bot to someone else: `deploy/scripts/review-admin-reset.sh [--new-token]`.
+
+Fixed ids in `telegram.admin_ids` still work and turn registration off.
+
 ## Develop
 
 ```bash

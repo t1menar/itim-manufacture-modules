@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from review import __version__
 from review.admin.allowlist import AdminAllowlist
+from review.admin.registration import AdminRegistry
 from review.api import admin, health, info, jobs
 from review.api.jobs import install_auth_handler
 from review.api.problems import install_problem_handlers
@@ -98,6 +99,10 @@ def create_app(
                 telegram = build_telegram_bot(effective)
                 allowlist = AdminAllowlist(list(overlay.admin_telegram_ids))
                 chat_ids = overlay.reviewer_chat_ids
+                registry: AdminRegistry | None = None
+                if isinstance(telegram, RealTelegramBot):
+                    registry = AdminRegistry(factory, overlay.admin_telegram_ids)
+                    await registry.load()
                 flow = ReviewFlow(
                     factory,
                     telegram,
@@ -105,16 +110,22 @@ def create_app(
                     allowlist,
                     chat_ids,
                     s3_env_fallback=effective.s3_env_fallback,
+                    registry=registry,
                 )
                 worker = Worker(factory, flow)
-                notify_handler = NotifyHandler(factory, telegram, chat_ids)
+                if registry is not None:
+                    registry.on_registered = worker.wake
+                notify_handler = NotifyHandler(factory, telegram, chat_ids, registry)
                 poller = None
                 if isinstance(telegram, RealTelegramBot):
                     poller = TelegramPoller(
                         factory,
                         telegram,
                         flow.handle_update,
-                        allowed_chat_ids=set(chat_ids) if chat_ids else None,
+                        # With chat registration the flow decides who may talk to the bot.
+                        allowed_chat_ids=None
+                        if registry is not None
+                        else (set(chat_ids) if chat_ids else None),
                     )
                 app.state.config = effective
                 app.state.telegram_bot = telegram

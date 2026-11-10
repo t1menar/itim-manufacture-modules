@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from review.admin.allowlist import AdminAllowlist
+from review.admin.registration import AdminRegistry
 from review.clients.core import CoreClient
 from review.db import repo
 from review.db.models import FINAL
@@ -31,6 +32,7 @@ class ReviewFlow:
         allowlist: AdminAllowlist,
         admin_chat_ids: tuple[int, ...],
         s3_env_fallback: dict[str, str] | None = None,
+        registry: AdminRegistry | None = None,
     ) -> None:
         self._factory = factory
         self._bot = bot
@@ -38,6 +40,16 @@ class ReviewFlow:
         self._allowlist = allowlist
         self._admins = admin_chat_ids
         self._s3_env = s3_env_fallback or {}
+        self._registry = registry
+
+    def can_deliver(self) -> bool:
+        """False while chat registration is open and nobody has registered: cards wait for the admin."""
+        return self._registry is None or not self._registry.open
+
+    def _review_chat_id(self) -> int:
+        if self._registry is not None and self._registry.chat_id is not None:
+            return self._registry.chat_id
+        return self._admins[0] if self._admins else 0
 
     async def deliver_card(self, run_id: uuid.UUID) -> None:
         async with self._factory() as s, s.begin():
@@ -58,7 +70,7 @@ class ReviewFlow:
             callback = run.callback_base_url
             fence = run.fence
             job_id_s = str(run.job_id)
-            chat_id = self._admins[0] if self._admins else 0
+            chat_id = self._review_chat_id()
             if video_ref.startswith("s3://"):
                 storage = await load_storage_client(s, env_fallback=self._s3_env)
                 if storage is not None:
@@ -104,7 +116,14 @@ class ReviewFlow:
                 log.warning("progress_failed")
 
     async def handle_update(self, upd: TelegramUpdate) -> None:
-        if not self._allowlist.contains(upd.user_id):
+        is_admin = self._allowlist.contains(upd.user_id) or (
+            self._registry is not None and self._registry.is_admin(upd.user_id)
+        )
+        if not is_admin:
+            if self._registry is not None and not upd.callback_data:
+                result = await self._registry.handle(upd.user_id, upd.chat_id, upd.text)
+                if result.reply:
+                    await self._bot.send_message(upd.chat_id, result.reply)
             return
         if upd.callback_data:
             await self._on_callback(upd)

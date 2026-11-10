@@ -36,7 +36,7 @@ class Worker:
 
     async def run_once(self) -> list[uuid.UUID]:
         free = self.max_parallel - len(self._tasks)
-        if free <= 0:
+        if free <= 0 or not self._flow.can_deliver():
             return []
         async with self._factory() as s, s.begin():
             runs = await repo.claim_runs(s, "review-worker-1", limit=free)

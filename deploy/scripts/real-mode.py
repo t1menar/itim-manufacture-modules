@@ -47,10 +47,12 @@ def main() -> None:
     out = ["BEGIN;"]
     if kind == "review":
         out.append(secret("telegram.bot_token", need("TELEGRAM_BOT_TOKEN"), dry))
-        ids = lambda n: [int(x) for x in need(n).replace(" ", "").split(",")]  # noqa: E731
-        out += [setting("telegram.mode", "real"), setting("telegram.api_base", "https://api.telegram.org"),
-                setting("telegram.admin_ids", {"ids": ids("TELEGRAM_ADMIN_IDS")}),
-                setting("telegram.chat_ids", {"ids": ids("TELEGRAM_CHAT_IDS")})]
+        out += [setting("telegram.mode", "real"), setting("telegram.api_base", "https://api.telegram.org")]
+        # Ids are optional: without them the admin registers in the chat with the master token.
+        for env, key in (("TELEGRAM_ADMIN_IDS", "telegram.admin_ids"), ("TELEGRAM_CHAT_IDS", "telegram.chat_ids")):
+            raw = os.environ.get(env, "").replace(" ", "")
+            if raw:
+                out.append(setting(key, {"ids": [int(x) for x in raw.split(",")]}))
         out += s3(dry)
     elif kind == "publish":
         token, uid = need("INSTAGRAM_ACCESS_TOKEN"), need("INSTAGRAM_USER_ID")

@@ -34,7 +34,8 @@
 Переключение на real делается в базах модулей (DB приоритетнее env), перезапуск не нужен:
 
 ```bash
-./deploy/scripts/review-telegram.sh     # токен бота, admin ids, chat ids (скрытый ввод или TELEGRAM_* в окружении)
+./deploy/scripts/review-telegram.sh     # токен бота (скрытый ввод); admin/chat ids необязательны
+./deploy/scripts/review-master-token.sh # мастер-пароль: его админ отправляет боту в личку, чтобы зарегистрироваться
 ./deploy/scripts/publish-instagram.sh   # INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID -> аккаунт itim
 ```
 

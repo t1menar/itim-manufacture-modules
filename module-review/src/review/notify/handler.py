@@ -67,10 +67,17 @@ class NotifyHandler:
         sessions: async_sessionmaker[Any],
         bot: TelegramBot,
         admin_chat_ids: tuple[int, ...],
+        registry: Any | None = None,
     ) -> None:
         self._sessions = sessions
         self._bot = bot
         self._admins = admin_chat_ids
+        self._registry = registry
+
+    def _default_targets(self) -> list[int]:
+        if self._registry is not None and self._registry.chat_id is not None:
+            return [self._registry.chat_id]
+        return list(self._admins)
 
     async def _send(self, payload: dict[str, Any], text: str) -> int:
         reply_to = None
@@ -91,9 +98,9 @@ class NotifyHandler:
                 except Exception:
                     log.debug("notify_card_lookup_skipped")
         sent = 0
-        targets = [chat_for_reply] if chat_for_reply is not None else list(self._admins)
+        targets = [chat_for_reply] if chat_for_reply is not None else self._default_targets()
         if not targets:
-            targets = list(self._admins)
+            targets = self._default_targets()
         for chat_id in targets:
             if chat_id is None:
                 continue
