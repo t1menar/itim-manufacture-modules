@@ -26,8 +26,8 @@ class VideoHost:
     base_url: str  # e.g. https://ziphy.ru/reels
     key_b64: str = field(repr=False)  # the private key, base64 of the PEM
 
-    async def upload(self, data: bytes) -> str:
-        name = f"{secrets.token_urlsafe(18)}.mp4"
+    async def upload(self, data: bytes, ext: str = ".mp4") -> str:
+        name = f"{secrets.token_urlsafe(18)}{ext}"
         with tempfile.TemporaryDirectory(prefix="vhost-") as tmp:
             d = Path(tmp)
             key = d / "key"

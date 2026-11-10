@@ -99,6 +99,11 @@ def build_instagram_client(
         except StorageError as exc:
             raise RuntimeError(f"video read failed: {exc}") from exc
 
+    async def resolve_cover(cover_ref: str) -> str:
+        if host is None:
+            raise RuntimeError("no video host for the cover")
+        return await host.upload(await load_video(cover_ref), ".jpg")
+
     direct = config.instagram_upload_mode != "url" and factory is not None
     return RealInstagramClient(
         resolve_account=resolve,
@@ -107,4 +112,5 @@ def build_instagram_client(
         video_url_resolver=resolve_video_url if factory is not None else None,
         video_loader=load_video if direct else None,
         upload_base=config.instagram_upload_base,
+        cover_resolver=resolve_cover if host is not None else None,
     )

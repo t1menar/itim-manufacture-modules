@@ -63,11 +63,13 @@ class RealInstagramClient:
         video_url_resolver: Callable[[str], Awaitable[str]] | None = None,
         video_loader: Callable[[str], Awaitable[bytes]] | None = None,
         upload_base: str = DEFAULT_UPLOAD_BASE,
+        cover_resolver: Callable[[str], Awaitable[str]] | None = None,
     ) -> None:
         self._resolve = resolve_account
         self._base = graph_base.rstrip("/")
         self._version = api_version.lstrip("/")
         self._upload_uris: dict[str, str] = {}
+        self._cover_resolver = cover_resolver
         self._timeout = timeout_s
         self._poll_interval = poll_interval_s
         self._poll_max = poll_max_attempts
@@ -96,6 +98,12 @@ class RealInstagramClient:
         before_publish: BeforePublish | None = None,
     ) -> PublishResult:
         _ = intent_id
+        if cover_ref and cover_ref.startswith("s3://") and self._cover_resolver is not None:
+            try:
+                cover_ref = await self._cover_resolver(cover_ref)
+            except Exception as exc:  # a missing cover must not stop the publication
+                log.warning("cover_resolve_failed", error=str(exc)[:200])
+                cover_ref = None
         video_bytes: bytes | None = None
         video_url: str | None = None
         if self._video_loader is not None and video_ref.startswith("s3://"):
