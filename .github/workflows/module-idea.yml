@@ -1,0 +1,44 @@
+name: module-idea
+on:
+  pull_request:
+    paths:
+      - "modules/module-idea/**"
+      - ".github/workflows/module-idea.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/module-idea/**"
+      - ".github/workflows/module-idea.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modules/module-idea
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: idea
+          POSTGRES_PASSWORD: idea
+          POSTGRES_DB: idea
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U idea" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      MIDEA_DATABASE_URL: postgresql+asyncpg://idea:idea@localhost:5432/idea
+      MIDEA_TEST_DATABASE_URL: postgresql+asyncpg://idea:idea@localhost:5432/idea
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --python 3.12
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy (strict)
+        run: uv run mypy
+      - name: migrations up, drift check, down
+        run: uv run alembic upgrade head && uv run alembic check && uv run alembic downgrade base
+      - name: pytest (on Postgres)
+        run: uv run pytest -q
