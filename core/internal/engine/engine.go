@@ -137,12 +137,16 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if err != nil {
 		return err
 	}
+	upstream, err := loadJobUpstream(ctx, tx, s)
+	if err != nil {
+		return err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
 		"input": map[string]any{
 			"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
-			"channels": channels, "upstream": map[string]any{},
+			"channels": channels, "upstream": upstream,
 		},
 		"settings":    settings,
 		"credentials": []string{},
@@ -162,6 +166,28 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 		Envelope: messaging.Envelope{Type: "job.requested", Producer: "core", ProductionID: &prod,
 			Job: &messaging.JobRef{JobID: jobID, Fence: fence}, Payload: payload},
 	})
+}
+
+// loadJobUpstream is the upstream part of the job input: for a variant-scoped job (review after video)
+// the latest content revision of the variant, so the module sees the video and its metadata.
+// Production-scoped jobs (video itself) have no upstream.
+func loadJobUpstream(ctx context.Context, tx pgx.Tx, s jobSpec) (map[string]any, error) {
+	upstream := map[string]any{}
+	if s.variant == nil {
+		return upstream, nil
+	}
+	var id uuid.UUID
+	var body json.RawMessage
+	err := tx.QueryRow(ctx, `SELECT id, body FROM content_revisions WHERE variant_id = $1 ORDER BY revision DESC LIMIT 1`, *s.variant).Scan(&id, &body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return upstream, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	upstream["content_revision"] = body
+	upstream["content_revision_id"] = id.String()
+	return upstream, nil
 }
 
 // loadModuleSettings returns the settings snapshot of the module for the job request: the current
