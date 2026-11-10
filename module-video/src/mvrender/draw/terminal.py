@@ -88,10 +88,10 @@ def terminal_state(
             # A typed command longer than the window soft-wraps like in a real terminal; the break
             # points come from the whole line so the wrap does not jump while it is being typed.
             points = _break_points(prompt + text, geo.term_cols - 2)
-            wrapped = wrap_segments([(prompt, pal.accent), *highlight_cmd(text[:n], pal)], points)
+            wrapped = wrap_segments([(prompt, pal.win_accent), *highlight_cmd(text[:n], pal)], points)
             first = len(rows)
             for k, seg in enumerate(wrapped):
-                rows.append(seg if k == 0 else [("  ", pal.accent), *seg])
+                rows.append(seg if k == 0 else [("  ", pal.win_accent), *seg])
             if p < 1:
                 idx = len(prompt) + n
                 k = sum(1 for b in points if b <= idx)
@@ -110,7 +110,7 @@ def terminal_state(
             cursor = None
     if last_cmd is not None and t >= tt.end - 1e-9 and tt.events:
         prompt = str(last_cmd.get("prompt_after", ""))
-        rows.append([(prompt, pal.accent)])
+        rows.append([(prompt, pal.win_accent)])
         cursor = (len(rows) - 1, len(prompt))
     return rows, cursor
 
@@ -136,4 +136,4 @@ def draw_terminal(
         cw = cv.fonts.advance("term")
         cx = TERM_X + cc * cw
         cy = TERM_Y + (cr - shift) * LINE_H
-        cv.d.rectangle((cx, cy + 3, cx + cw - 3, cy + 34), fill=pal.accent)
+        cv.d.rectangle((cx, cy + 3, cx + cw - 3, cy + 34), fill=pal.win_accent)

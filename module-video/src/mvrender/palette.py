@@ -32,6 +32,10 @@ DEFAULTS: dict[str, str] = {
     "err": "#FF6955",
     "err_cont": "#FF9682",
     "detail": "#FFBE5A",
+    "win_accent": "#FF6B00",  # accent on the dark windows (prompt, cursor, current line)
+    "accent_top": "#FF9646",  # lid of a strong cylinder
+    "flow_light": "#FFAF6E",  # the light half of a flow marker
+    "sql_kw": "#FFAA64",  # SQL keywords in shell output
 }
 
 # Fixed tones that are not themable (traffic lights, plain card edge, breakpoint).
@@ -41,8 +45,6 @@ BREAKPOINT: RGB = (235, 70, 50)
 OUT_FG: RGB = (205, 196, 186)
 CODE_FG: RGB = (226, 218, 208)
 CODE_PUNCT: RGB = (196, 186, 176)
-SQL_KW: RGB = (255, 170, 100)
-FLOW_LIGHT: RGB = (255, 175, 110)
 
 
 def parse_hex(value: str) -> RGB:

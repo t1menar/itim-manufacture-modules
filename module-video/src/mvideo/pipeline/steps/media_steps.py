@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from mvideo.agents.prompts import semver_number
+from mvideo.brand import with_brand
 from mvideo.observability.tracing import span
 from mvideo.pipeline.context import RunContext
 from mvideo.pipeline.errors import StepError
@@ -160,6 +161,7 @@ async def fetch_source_tree(
 
 class RenderStep(Step):
     name = "render"
+    version = "2"  # 2: workers share the reading speed (picture and sound on one timeline); brand palettes
     lo, hi = 45, 90
     uses_agent = False
     settings_keys = ("video", "audio", "text", "timing", "palette", "render", "fonts")
@@ -172,7 +174,7 @@ class RenderStep(Step):
         script = await json_of(ctx, "script", "script.en.json")
         capture = await json_of(ctx, "capture", "capture.json")
         analysis = await json_of(ctx, "analysis", "analysis.json")
-        values = ctx.settings.model_dump(mode="json")
+        values = with_brand(ctx.settings.model_dump(mode="json"), analysis)
         with tempfile.TemporaryDirectory(prefix="mvideo-render-") as tmp:
             tmpd = Path(tmp)
             source = await fetch_source_tree(ctx, script, analysis, tmpd / "src")
@@ -354,7 +356,7 @@ class PackageStep(AgentStep):
         )  # fmt: skip
         metadata = build_metadata(script, rendered, post)
 
-        values = ctx.settings.model_dump(mode="json")
+        values = with_brand(ctx.settings.model_dump(mode="json"), analysis)
         audio = AudioSettings.from_settings(values)
         arts: dict[str, Artifact] = {}
         with tempfile.TemporaryDirectory(prefix="mvideo-package-") as tmp:
