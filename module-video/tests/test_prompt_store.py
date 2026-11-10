@@ -152,3 +152,14 @@ async def test_admin_api_lists_creates_and_activates(
         transport=httpx.ASGITransport(app=create_app(config, engine=engine)), base_url="http://m"
     ) as anon:
         assert (await anon.get("/admin/v1/prompts")).status_code == 401
+
+
+def test_step_hash_ignores_the_idea_identity_but_not_its_content() -> None:
+    ctx = make_ctx(None)  # type: ignore[arg-type]
+    ctx.idea = {"id": 21, "rev": 1, "idea_ref": "idea:21:v1", "title": "T", "description": "D"}
+    step = AnalysisStep()
+    base = input_hash(step, ctx)
+    ctx.idea = {"id": 99, "rev": 3, "idea_ref": "idea:99:v3", "title": "T", "description": "D"}
+    assert input_hash(step, ctx) == base  # a copy or a retry of the same idea reuses finished steps
+    ctx.idea = {**ctx.idea, "description": "D changed"}
+    assert input_hash(step, ctx) != base
