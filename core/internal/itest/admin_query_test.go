@@ -37,8 +37,10 @@ func TestAdminOverviewProductionsAndCancel(t *testing.T) {
 	}
 	var listed struct {
 		Items []struct {
-			ID, Endpoint, Health string `json:"id"`
-			Token                string `json:"token"`
+			ID       string `json:"id"`
+			Endpoint string `json:"endpoint"`
+			Health   string `json:"health"`
+			Token    string `json:"token"`
 		}
 	}
 	_ = json.NewDecoder(res.Body).Decode(&listed)

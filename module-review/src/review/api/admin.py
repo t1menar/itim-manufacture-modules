@@ -52,7 +52,7 @@ async def delete_secret(key: str, request: Request, _: CoreAuth) -> Response:
 @router.get("/runs")
 async def list_runs(request: Request, _: CoreAuth, limit: int = 50) -> Any:
     if limit < 1 or limit > 200:
-        return problem(422, "validation_failed", "limit must be 1–200")
+        return problem(422, "validation_failed", "limit must be 1-200")
     factory = request.app.state.session_factory
     async with factory() as s:
         rows = (await s.execute(select(Run).order_by(Run.created_at.desc()).limit(limit))).scalars().all()
@@ -80,7 +80,18 @@ async def list_pending(request: Request, _: CoreAuth) -> Any:
     factory = request.app.state.session_factory
     async with factory() as s:
         pending = (await s.execute(select(PendingReject))).scalars().all()
-        cards = (await s.execute(select(ReviewCard).where(ReviewCard.stale.is_(False)).order_by(ReviewCard.created_at.desc()).limit(50))).scalars().all()
+        cards = (
+            (
+                await s.execute(
+                    select(ReviewCard)
+                    .where(ReviewCard.stale.is_(False))
+                    .order_by(ReviewCard.created_at.desc())
+                    .limit(50)
+                )
+            )
+            .scalars()
+            .all()
+        )
     return {
         "pending_rejects": [
             {

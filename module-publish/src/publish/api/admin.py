@@ -49,14 +49,22 @@ async def list_accounts(request: Request, _: CoreAuth) -> Any:
     async with factory() as s:
         accounts = await repo.list_enabled_accounts(s)
         # also include disabled for the admin panel
-        all_rows = (await s.execute(select(PlatformAccount).order_by(PlatformAccount.channel_id, PlatformAccount.handle))).scalars().all()
+        all_rows = (
+            await s.execute(
+                select(PlatformAccount).order_by(
+                    PlatformAccount.channel_id, PlatformAccount.handle
+                )
+            )
+        ).scalars().all()
         if all_rows:
             accounts = list(all_rows)
     return {"accounts": _accounts_view(accounts)}
 
 
 @router.put("/accounts/{account_id}/token", status_code=204)
-async def put_account_token(account_id: UUID, body: AccountTokenBody, request: Request, _: CoreAuth) -> Response:
+async def put_account_token(
+    account_id: UUID, body: AccountTokenBody, request: Request, _: CoreAuth
+) -> Response:
     factory = request.app.state.session_factory
     async with factory() as s, s.begin():
         acc = await repo.get_platform_account(s, account_id)
@@ -69,7 +77,7 @@ async def put_account_token(account_id: UUID, body: AccountTokenBody, request: R
 @router.get("/intents")
 async def list_intents(request: Request, _: CoreAuth, limit: int = 50) -> Any:
     if limit < 1 or limit > 200:
-        return problem(422, "validation_failed", "limit must be 1–200")
+        return problem(422, "validation_failed", "limit must be 1-200")
     factory = request.app.state.session_factory
     async with factory() as s:
         rows = (
