@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchOverview } from "../api/client";
 import { formatProblem, ProblemError } from "../api/problem";
 import { ModuleHealthBadge } from "../components/ModuleHealthBadge";
+import { formatDateTime } from "../lib/format";
 
 function countSummary(counts: Record<string, number> | undefined): { total: number; parts: string } {
   const entries = Object.entries(counts ?? {});
@@ -93,7 +94,7 @@ export function OverviewPage() {
                       {m.active ? "да" : "нет"}
                     </Badge>
                   </Table.Td>
-                  <Table.Td>{formatTime(m.last_seen_at)}</Table.Td>
+                  <Table.Td>{formatDateTime(m.last_seen_at)}</Table.Td>
                   <Table.Td>
                     <Text size="sm" ff="monospace">
                       {m.endpoint ?? "—"}
@@ -125,13 +126,3 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint: 
   );
 }
 
-function formatTime(iso: string | undefined): string {
-  if (!iso) {
-    return "нет данных";
-  }
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) {
-    return iso;
-  }
-  return d.toLocaleString("ru-RU", { timeZone: "Europe/Stockholm" });
-}

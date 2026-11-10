@@ -211,7 +211,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ProductionList"];
+                    };
                 };
             };
         };
@@ -241,12 +243,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description production with variants */
+                /** @description production with variants, jobs, events */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Production"];
+                    };
                 };
             };
         };
@@ -281,7 +285,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["Job"];
+                    };
                 };
             };
         };
@@ -359,7 +365,12 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            job_id?: string;
+                        };
+                    };
                 };
             };
         };
@@ -1090,6 +1101,77 @@ export interface components {
         };
         ModuleList: {
             items?: components["schemas"]["Module"][];
+        };
+        ProductionSummary: {
+            /** Format: uuid */
+            id?: string;
+            idea_id?: number;
+            idea_ref?: string;
+            idea_rev?: number;
+            run_no?: number;
+            pipeline_id?: string;
+            status?: string;
+            language?: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            rev?: number;
+        };
+        ProductionList: {
+            items?: components["schemas"]["ProductionSummary"][];
+            next_cursor?: string | null;
+        };
+        Variant: {
+            /** Format: uuid */
+            id?: string;
+            language?: string;
+            status?: string;
+            position?: number;
+            channels?: string[];
+            attention?: unknown;
+            rev?: number;
+        };
+        Job: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            production_id?: string;
+            /** Format: uuid */
+            variant_id?: string;
+            stage_id?: string;
+            module_id?: string;
+            position?: number;
+            attempt?: number;
+            status?: string;
+            mode?: string;
+            fence?: number;
+            cancel_requested?: boolean;
+            error?: unknown;
+            progress?: unknown;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            rev?: number;
+        };
+        Event: {
+            id?: number;
+            variant_id?: unknown;
+            job_id?: unknown;
+            type?: string;
+            actor?: string;
+            payload?: unknown;
+            /** Format: date-time */
+            at?: string;
+        };
+        Production: components["schemas"]["ProductionSummary"] & {
+            pipeline_snapshot?: unknown;
+            variants?: components["schemas"]["Variant"][];
+            jobs?: components["schemas"]["Job"][];
+            events?: components["schemas"]["Event"][];
         };
     };
     responses: never;
