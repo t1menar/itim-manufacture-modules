@@ -278,6 +278,7 @@ services:
       REVIEW_URL: http://module-review:8080
       PUBLISH_URL: http://module-publish:8080
       ADMIN_ACTOR: local:admin
+      ADMIN_UI_DIR: /ui
     ports:
       - "127.0.0.1:${ADMIN_API_PORT:-58084}:8080"
     depends_on:

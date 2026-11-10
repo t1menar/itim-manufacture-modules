@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -142,5 +143,71 @@ func TestLocalhostOriginAllowed(t *testing.T) {
 	rec := h.do(t, "POST", "/api/v1/jobs/01900000-0000-7000-8000-000000000001/cancel", "127.0.0.1:58084", "http://127.0.0.1:58084", `{"reason":"x"}`)
 	if rec.Code != 204 {
 		t.Fatalf("cancel proxy: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOpenAPIJSON(t *testing.T) {
+	h := testServer(t, nil, nil)
+	rec := h.do(t, "GET", "/api/v1/openapi.json", "127.0.0.1", "", "")
+	if rec.Code != 200 {
+		t.Fatalf("openapi: %d %s", rec.Code, rec.Body.String())
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["openapi"] != "3.0.3" {
+		t.Fatalf("openapi field=%v", doc["openapi"])
+	}
+	paths, _ := doc["paths"].(map[string]any)
+	if _, ok := paths["/api/v1/overview"]; !ok {
+		t.Fatal("missing /api/v1/overview in openapi")
+	}
+}
+
+func TestSPAServesIndexAndKeepsAPI404(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/index.html", []byte("<!doctype html><title>panel</title>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir+"/assets", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/assets/app.js", []byte("console.log(1)"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := testServer(t, nil, nil)
+	h.Srv.Cfg.UIDir = dir
+
+	rec := h.do(t, "GET", "/", "127.0.0.1:58084", "", "")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "panel") {
+		t.Fatalf("index: %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "script-src 'self'") {
+		t.Fatalf("csp=%s", rec.Header().Get("Content-Security-Policy"))
+	}
+	rec = h.do(t, "GET", "/ideas", "127.0.0.1:58084", "", "")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "panel") {
+		t.Fatalf("spa fallback: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = h.do(t, "GET", "/assets/app.js", "127.0.0.1:58084", "", "")
+	if rec.Code != 200 || rec.Body.String() != "console.log(1)" {
+		t.Fatalf("asset: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Fatalf("asset cache=%s", rec.Header().Get("Cache-Control"))
+	}
+	rec = h.do(t, "GET", "/api/v1/does-not-exist", "127.0.0.1:58084", "", "")
+	if rec.Code != 404 {
+		t.Fatalf("api 404: %d %s", rec.Code, rec.Body.String())
+	}
+	var p map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if p["code"] != "not_found" {
+		t.Fatalf("problem=%v", p)
+	}
+	rec = h.do(t, "GET", "/", "evil.example", "", "")
+	if rec.Code != 403 {
+		t.Fatalf("ui host check: %d", rec.Code)
 	}
 }
