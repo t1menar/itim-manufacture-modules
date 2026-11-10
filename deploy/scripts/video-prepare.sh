@@ -80,7 +80,7 @@ cheap = os.environ.get("VIDEO_CHEAP_MODEL", "claude-sonnet-5-5")
 models = {step: cheap for step in ("analysis", "research", "capture")} if cheap else {}
 print(json.dumps({"agent": {"image": os.environ["AGENT_IMAGE"]}, "sandbox_images": images,
                   "sources": {"allowed_repos": repos}, "models": models,
-                  "limits": {"max_jobs_per_day": int(os.environ.get("VIDEO_MAX_JOBS_PER_DAY", "10"))},
+                  "limits": {"max_jobs_per_day": int(os.environ.get("VIDEO_MAX_JOBS_PER_DAY", "20"))},
                   # integrated loudness of the final video; -16 is about 20 % lower amplitude than -14
                   "audio": {"lufs": float(os.environ.get("VIDEO_TARGET_LUFS", "-16"))}}))
 PY
