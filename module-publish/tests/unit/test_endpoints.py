@@ -31,6 +31,8 @@ def test_info_contract(client: TestClient) -> None:
     assert body["version"] == __version__
     assert body["admin_endpoints"] == [
         "/admin/v1/accounts",
+        "/admin/v1/intents",
+        "/admin/v1/secrets",
         "/admin/v1/ledger",
         "/admin/v1/dry-run",
     ]
@@ -65,3 +67,9 @@ def test_unknown_is_problem(client: TestClient) -> None:
     resp = client.get("/nope")
     assert resp.status_code == 404
     assert resp.json()["code"] == "not_found"
+
+
+def test_admin_requires_auth(client: TestClient) -> None:
+    assert client.get("/admin/v1/accounts").status_code == 401
+    assert client.get("/admin/v1/intents").status_code == 401
+    assert client.get("/admin/v1/secrets").status_code == 401

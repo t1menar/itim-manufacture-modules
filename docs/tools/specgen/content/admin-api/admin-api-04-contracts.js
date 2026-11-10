@@ -7,9 +7,10 @@ module.exports = {
   meta: {
     title: 'admin-api — Contracts',
     subtitle: 'Public API /api/v1, consumed core and module endpoints, errors, settings schema',
-    doc: 'admin-api-04-contracts', version: '0.2', status: 'Draft', date: '2026-11-08',
+    doc: 'admin-api-04-contracts', version: '0.2', status: 'Draft', date: '2026-11-10',
   },
   blocks: [
+['note', '**D24.** Login, sessions, TOTP, invitations, roles and a public TLS hostname are withdrawn. Access is localhost-only with a Host/Origin allowlist; see admin-api-01 v0.3. Implement the public surface listed there and in `admin-api/api/openapi.yaml`.'],
 ['h1', '1. Conventions'],
 ['table', ['Topic', 'Rule'], [
   ['Base', '`https://<public host>/api/v1`, same origin as the panel. JSON UTF-8. Request bodies require `Content-Type: application/json`.'],

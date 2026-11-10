@@ -16,9 +16,10 @@ module.exports = {
   meta: {
     title: 'admin-api — Prompts',
     subtitle: 'Runtime prompts (none) and build prompts for Claude Code',
-    doc: 'admin-api-06-prompts', version: '0.2', status: 'Draft', date: '2026-11-08',
+    doc: 'admin-api-06-prompts', version: '0.2', status: 'Draft', date: '2026-11-10',
   },
   blocks: [
+['note', '**D24.** Login, sessions, TOTP, invitations, roles and a public TLS hostname are withdrawn. Access is localhost-only with a Host/Origin allowlist; see admin-api-01 v0.3. Implement the public surface listed there and in `admin-api/api/openapi.yaml`.'],
 ['h1', '1. Runtime prompts'],
 ['p', '**None.** admin-api does not call Claude or any other language model at run time. It authenticates people, authorizes and audits requests and forwards them; every decision it makes is deterministic code. Rejection-reason summaries shown under `/review/summaries` are produced by module-review (its prompt is defined in module-review-06); admin-api only relays them.'],
 

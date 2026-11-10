@@ -20,8 +20,9 @@ module.exports = {
   dir: 'admin-panel',
   file: 'admin-panel-06-prompts.docx',
   meta: { title: 'admin-panel — Prompts', subtitle: 'Runtime prompts (none) and build prompts for Claude Code',
-    doc: 'admin-panel-06-prompts', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'admin-panel-06-prompts', version: '0.2', status: 'Draft', date: '2026-11-10' },
   blocks: [
+['note', '**D24 (2026-11-10).** The admin panel returns to scope in later PRs. There is **no login**. The panel talks only to local `admin-api` (`http://127.0.0.1:58084` by default). Chapters below that describe sign-in, 2FA or a public host are superseded.'],
 ['h1', '1. Runtime prompts'],
 ['p', '**None.** admin-panel sends no prompts to Claude or any other model at run time. It only displays prompt and settings versions that module-video records in a production\'s provenance.'],
 ['h1', '2. How to use the build prompts'],

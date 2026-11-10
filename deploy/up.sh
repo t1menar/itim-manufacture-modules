@@ -14,6 +14,7 @@ ADD_HOSTS=(
   --add-host=module-video:172.28.0.21
   --add-host=module-review:172.28.0.22
   --add-host=module-publish:172.28.0.23
+  --add-host=admin-api:172.28.0.24
 )
 source "${DEPLOY_ROOT}/lib/log.sh"
 
@@ -27,7 +28,7 @@ for arg in "$@"; do
       cat <<HINT
 Usage: ./deploy/up.sh [--verbose] [--skip-build]
 
-Поднимает PostgreSQL, RabbitMQ, MinIO, core, module-video/review/publish,
+Поднимает PostgreSQL, RabbitMQ, MinIO, core, module-video/review/publish, admin-api,
 регистрирует модули в core и делает smoke-check.
 
 Лог: deploy/.logs/<timestamp>.log
@@ -42,7 +43,7 @@ HINT
 done
 
 export PATH="${PATH}:/usr/local/bin"
-mf_log_init 12
+mf_log_init 13
 [[ "$VERBOSE" == "1" ]] && mf_log_set_verbose
 mf_banner "Manufacture · локальный стек"
 
@@ -153,7 +154,7 @@ else
 fi
 
 # ---------- 4. build ----------
-mf_step_begin "Сборка образов (core / modules)"
+mf_step_begin "Сборка образов (core / modules / admin-api)"
 if [[ "$SKIP_BUILD" == "1" ]]; then
   mf_step_end skip " --skip-build"
 else
@@ -192,6 +193,11 @@ wait_container_healthy manufacture-postgres-1 60 || { mf_step_end fail "postgres
 wait_container_healthy manufacture-rabbitmq-1 90 || { mf_step_end fail "rabbitmq"; exit 1; }
 wait_container_healthy manufacture-minio-1 90 || { mf_step_end fail "minio"; exit 1; }
 mf_step_end ok "postgres · rabbitmq · minio healthy"
+
+# Existing PG volumes skip init scripts — create admin DB if missing.
+if ! "${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-manufacture}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='admin'" | grep -q 1; then
+  mf_run "${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-manufacture}" -d postgres -c "CREATE DATABASE admin;"
+fi
 
 # ---------- 7. core ----------
 mf_step_begin "Старт core (миграции при serve)"
@@ -287,8 +293,24 @@ mf_run act review-telegram
 mf_run act publish-instagram
 mf_step_end ok "модули active"
 
-# ---------- 12. smoke ----------
-mf_step_begin "Smoke-check: /health + /info + active в core"
+
+# ---------- 12. admin-api ----------
+mf_step_begin "Старт admin-api (localhost-only)"
+# re-source tokens after registration
+set -a
+# shellcheck disable=SC1091
+source "${DEPLOY_ROOT}/.env"
+set +a
+mf_run "${COMPOSE[@]}" up -d --force-recreate admin-api
+if ! wait_http_net "http://admin-api:8080/health" 90; then
+  mf_step_end fail "admin-api /health timeout"
+  "${COMPOSE[@]}" logs --no-color --tail=80 admin-api >>"$MF_LOG_FILE" || true
+  exit 1
+fi
+mf_step_end ok "admin-api на 127.0.0.1:${ADMIN_API_PORT:-58084}"
+
+# ---------- 13. smoke ----------
+mf_step_begin "Smoke-check: /health + /info + active в core + admin-api"
 SMOKE_OK=1
 for url in \
   "http://core:8080/health" \
@@ -297,7 +319,8 @@ for url in \
   "http://module-publish:8080/health" \
   "http://module-video:8080/info" \
   "http://module-review:8080/info" \
-  "http://module-publish:8080/info"
+  "http://module-publish:8080/info" \
+  "http://admin-api:8080/health"
 do
   if ! curl_net "$url"; then
     mf_warn "недоступно: $url"
@@ -315,6 +338,12 @@ for id in video-claude review-telegram publish-instagram; do
     SMOKE_OK=0
   fi
 done
+# admin-api overview (Host must be localhost; call with explicit header from the compose network)
+ov=$(docker run --rm --network manufacture "${ADD_HOSTS[@]}" curlimages/curl:8.5.0 -sS -o /tmp/ov -w '%{http_code}'   -H "Host: 127.0.0.1:58084" "http://admin-api:8080/api/v1/overview" || echo 000)
+if [[ "$ov" != "200" ]]; then
+  mf_warn "admin-api /api/v1/overview HTTP $ov"
+  SMOKE_OK=0
+fi
 if [[ "$SMOKE_OK" != "1" ]]; then
   mf_step_end fail "smoke"
   exit 1
@@ -329,6 +358,7 @@ mf_table \
   "module-video|http://127.0.0.1:${VIDEO_PORT:-58081}" \
   "module-review|http://127.0.0.1:${REVIEW_PORT:-58082}" \
   "module-publish|http://127.0.0.1:${PUBLISH_PORT:-58083}" \
+  "admin-api|http://127.0.0.1:${ADMIN_API_PORT:-58084}" \
   "postgres|127.0.0.1:${POSTGRES_PORT:-55432}" \
   "rabbitmq|amqp://127.0.0.1:${RABBITMQ_PORT:-55672}  mgmt :${RABBITMQ_MGMT_PORT:-55673}" \
   "minio S3|http://127.0.0.1:${MINIO_API_PORT:-59000}" \

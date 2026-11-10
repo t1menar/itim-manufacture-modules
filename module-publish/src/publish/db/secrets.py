@@ -40,3 +40,41 @@ async def get_secrets_map(session: AsyncSession, keys: list[str]) -> dict[str, s
         if val:
             out[row.key] = val
     return out
+
+
+async def list_secret_meta(session: AsyncSession) -> list[dict[str, Any]]:
+    """Metadata only — never the secret value."""
+    result = await session.execute(select(ModuleSecret).order_by(ModuleSecret.key))
+    out: list[dict[str, Any]] = []
+    for row in result.scalars().all():
+        val = row.value or ""
+        out.append(
+            {
+                "key": row.key,
+                "present": bool(val.strip()),
+                "length": len(val),
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+        )
+    return out
+
+
+async def upsert_secret(session: AsyncSession, key: str, value: str) -> bool:
+    """Insert or replace. Returns True if created."""
+    existing = await session.get(ModuleSecret, key)
+    if existing is None:
+        session.add(ModuleSecret(key=key, value=value))
+        await session.flush()
+        return True
+    existing.value = value
+    await session.flush()
+    return False
+
+
+async def delete_secret(session: AsyncSession, key: str) -> bool:
+    row = await session.get(ModuleSecret, key)
+    if row is None:
+        return False
+    await session.delete(row)
+    await session.flush()
+    return True

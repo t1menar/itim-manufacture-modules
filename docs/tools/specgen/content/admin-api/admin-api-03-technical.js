@@ -4,9 +4,10 @@ module.exports = {
   meta: {
     title: 'admin-api — Technical Design',
     subtitle: 'Stack, structure, data model, configuration, deployment, observability, security, testing',
-    doc: 'admin-api-03-technical', version: '0.2', status: 'Draft', date: '2026-11-08',
+    doc: 'admin-api-03-technical', version: '0.2', status: 'Draft', date: '2026-11-10',
   },
   blocks: [
+['note', '**D24.** Login, sessions, TOTP, invitations, roles and a public TLS hostname are withdrawn. Access is localhost-only with a Host/Origin allowlist; see admin-api-01 v0.3. Implement the public surface listed there and in `admin-api/api/openapi.yaml`.'],
 ['h1', '1. Stack'],
 ['table', ['Area', 'Choice', 'Why'], [
   ['Language', 'Go 1.25 (minimum in `go.mod`; verify current stable at implementation time)', 'system decision D2; same toolchain as the core'],

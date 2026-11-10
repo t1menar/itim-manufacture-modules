@@ -65,14 +65,20 @@ type RegisterOpts struct {
 }
 
 type Module struct {
-	ID, Name, StageID, Endpoint string
-	Version                     *string
-	Contract                    *int
-	Enabled, Active             bool
-	Health, TokenPrefix         string
-	LastSeenAt                  *time.Time
-	Token                       string `json:"token,omitempty"` // only on create/rotate
-	Rev                         int
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	StageID        string     `json:"stage_id"`
+	Endpoint       string     `json:"endpoint"`
+	Version        *string    `json:"version,omitempty"`
+	Contract       *int       `json:"contract,omitempty"`
+	Enabled        bool       `json:"enabled"`
+	Active         bool       `json:"active"`
+	Health         string     `json:"health"`
+	TokenPrefix    string     `json:"token_prefix,omitempty"`
+	LastSeenAt     *time.Time `json:"last_seen_at,omitempty"`
+	Token          string     `json:"token,omitempty"` // only on create/rotate
+	AdminEndpoints []string   `json:"admin_endpoints,omitempty"`
+	Rev            int        `json:"rev"`
 }
 
 func (r *Registry) defaults() {
@@ -298,6 +304,59 @@ func (r *Registry) Deactivate(ctx context.Context, moduleID string) error {
 		}
 	}
 	return nil
+}
+
+// List returns registered modules without token material.
+func (r *Registry) List(ctx context.Context) ([]Module, error) {
+	rows, err := r.Pool.Query(ctx, `SELECT id, name, stage_id, endpoint, version, contract, enabled, active,
+		health, last_seen_at, coalesce(token_prefix,''), rev, coalesce(admin_endpoints, '{}')
+		FROM modules ORDER BY stage_id, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Module
+	for rows.Next() {
+		m, err := scanPublicModule(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// Get returns one module without token material.
+func (r *Registry) Get(ctx context.Context, moduleID string) (Module, error) {
+	row := r.Pool.QueryRow(ctx, `SELECT id, name, stage_id, endpoint, version, contract, enabled, active,
+		health, last_seen_at, coalesce(token_prefix,''), rev, coalesce(admin_endpoints, '{}')
+		FROM modules WHERE id = $1`, moduleID)
+	m, err := scanPublicModule(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Module{}, ErrNotFound
+	}
+	return m, err
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanPublicModule(row rowScanner) (Module, error) {
+	var m Module
+	var version *string
+	var contract *int
+	var lastSeen *time.Time
+	var endpoints []string
+	if err := row.Scan(&m.ID, &m.Name, &m.StageID, &m.Endpoint, &version, &contract, &m.Enabled, &m.Active,
+		&m.Health, &lastSeen, &m.TokenPrefix, &m.Rev, &endpoints); err != nil {
+		return Module{}, err
+	}
+	m.Version = version
+	m.Contract = contract
+	m.LastSeenAt = lastSeen
+	m.AdminEndpoints = endpoints
+	return m, nil
 }
 
 func issueToken() (string, error) {

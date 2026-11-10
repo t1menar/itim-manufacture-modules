@@ -6,8 +6,9 @@ module.exports = {
   dir: 'admin-panel',
   file: 'admin-panel-02-requirements.docx',
   meta: { title: 'admin-panel — Requirements', subtitle: 'Functional and non-functional requirements · FR-APNL / NFR-APNL',
-    doc: 'admin-panel-02-requirements', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'admin-panel-02-requirements', version: '0.2', status: 'Draft', date: '2026-11-10' },
   blocks: [
+['note', '**D24 (2026-11-10).** The admin panel returns to scope in later PRs. There is **no login**. The panel talks only to local `admin-api` (`http://127.0.0.1:58084` by default). Chapters below that describe sign-in, 2FA or a public host are superseded.'],
 ['h1', '1. Conventions'],
 ['p', 'Keywords MUST, SHOULD, MAY follow RFC 2119. "Role-gated" means the item is hidden from roles that may not use it and the route renders the "No access" page if opened directly; admin-api still enforces the role. Every screen requirement implies the common states of section 2.2. Acceptance checks name the test layer: **C** component test (Vitest + Testing Library + MSW), **E** Playwright e2e against the mock admin-api, **M** manual check, **B** build/CI check.'],
 ['h1', '2. Functional requirements'],

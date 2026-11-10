@@ -30,6 +30,9 @@ def test_info_contract(client: TestClient) -> None:
     assert body["name"] == "Review (Telegram bot)"
     assert body["version"] == __version__
     assert body["admin_endpoints"] == [
+        "/admin/v1/secrets",
+        "/admin/v1/runs",
+        "/admin/v1/pending",
         "/admin/v1/keys",
         "/admin/v1/reviewers",
         "/admin/v1/summaries",
@@ -64,3 +67,9 @@ def test_unknown_is_problem(client: TestClient) -> None:
     resp = client.get("/nope")
     assert resp.status_code == 404
     assert resp.json()["code"] == "not_found"
+
+
+def test_admin_requires_auth(client: TestClient) -> None:
+    assert client.get("/admin/v1/secrets").status_code == 401
+    assert client.get("/admin/v1/runs").status_code == 401
+    assert client.get("/admin/v1/pending").status_code == 401

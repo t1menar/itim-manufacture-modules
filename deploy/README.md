@@ -53,6 +53,7 @@
 | module-video | http://127.0.0.1:58081 |
 | module-review | http://127.0.0.1:58082 |
 | module-publish | http://127.0.0.1:58083 |
+| admin-api (localhost only) | http://127.0.0.1:58084 |
 | PostgreSQL | 127.0.0.1:56432 |
 | RabbitMQ AMQP / UI | 56672 / 56673 |
 | MinIO S3 / console | 56000 / 56001 |
@@ -109,3 +110,16 @@ deploy/
 - Сеть compose: статические IP `172.28.0.0/16` + `extra_hosts` — стек поднимается даже если embedded DNS Docker (`127.0.0.11`) недоступен.
 - Если контейнеры не видят друг друга по TCP при `dockerd --iptables=false`: `sudo sysctl -w net.bridge.bridge-nf-call-iptables=0 net.bridge.bridge-nf-call-ip6tables=0`.
 - Официальный MinIO с Docker Hub часто недоступен → локальный образ `deploy/Dockerfile.minio`.
+
+
+## admin-api (D24)
+
+Панель ещё не в этом PR. Шлюз: `http://127.0.0.1:58084` (порт опубликован только на loopback). Входа нет. Примеры:
+
+```bash
+curl -sS http://127.0.0.1:58084/health
+curl -sS http://127.0.0.1:58084/api/v1/overview
+curl -sS http://127.0.0.1:58084/api/v1/modules
+```
+
+Секреты модулей: `PUT /api/v1/{video,review,publish}/...` — запись значения разрешена, чтение только маска/наличие.

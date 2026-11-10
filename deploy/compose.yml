@@ -1,5 +1,5 @@
 # Manufacture local stack. Prefer: ./deploy/up.sh
-# Ports (host): PG 56432 · RMQ 56672/15672 · MinIO 56000/56001 · core 58080 · video 58081 · review 58082 · publish 58083
+# Ports (host): PG 56432 · RMQ 56672/15672 · MinIO 56000/56001 · core 58080 · video 58081 · review 58082 · publish 58083 · admin-api 127.0.0.1:58084
 # Static IPs + extra_hosts: работают даже когда embedded DNS Docker (127.0.0.11) недоступен.
 name: manufacture
 
@@ -11,6 +11,7 @@ x-hosts: &service-hosts
   - "module-video:172.28.0.21"
   - "module-review:172.28.0.22"
   - "module-publish:172.28.0.23"
+  - "admin-api:172.28.0.24"
 
 x-module-common: &module-common
   restart: unless-stopped
@@ -256,6 +257,36 @@ services:
     networks:
       manufacture:
         ipv4_address: 172.28.0.23
+
+  admin-api:
+    <<: *module-common
+    image: ${ADMIN_API_IMAGE:-manufacture-admin-api:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.admin-api
+    environment:
+      ADMIN_LISTEN_ADDR: "0.0.0.0:8080"
+      ADMIN_DATABASE_URL: postgres://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/admin?sslmode=disable
+      CORE_URL: http://core:8080
+      CORE_ADMIN_TOKEN: ${CORE_ADMIN_TOKEN:?set CORE_ADMIN_TOKEN}
+      MODULE_CORE_ADMIN_TOKEN: ${CORE_ADMIN_TOKEN}
+      MODULE_TOKEN_VIDEO: ${MODULE_TOKEN_VIDEO:-}
+      MODULE_TOKEN_REVIEW: ${MODULE_TOKEN_REVIEW:-}
+      MODULE_TOKEN_PUBLISH: ${MODULE_TOKEN_PUBLISH:-}
+      VIDEO_URL: http://module-video:8080
+      REVIEW_URL: http://module-review:8080
+      PUBLISH_URL: http://module-publish:8080
+      ADMIN_ACTOR: local:admin
+    ports:
+      - "127.0.0.1:${ADMIN_API_PORT:-58084}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      core:
+        condition: service_started
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.24
 
   # Local registry: job settings name the agent image by digest, and a local image only gets one by a push.
   registry:

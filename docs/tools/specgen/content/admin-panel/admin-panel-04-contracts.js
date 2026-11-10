@@ -7,8 +7,9 @@ module.exports = {
   dir: 'admin-panel',
   file: 'admin-panel-04-contracts.docx',
   meta: { title: 'admin-panel — Contracts', subtitle: 'admin-api endpoints the panel consumes and the data shapes it expects',
-    doc: 'admin-panel-04-contracts', version: '0.2', status: 'Draft', date: '2026-11-08' },
+    doc: 'admin-panel-04-contracts', version: '0.2', status: 'Draft', date: '2026-11-10' },
   blocks: [
+['note', '**D24 (2026-11-10).** The admin panel returns to scope in later PRs. There is **no login**. The panel talks only to local `admin-api` (`http://127.0.0.1:58084` by default). Chapters below that describe sign-in, 2FA or a public host are superseded.'],
 ['h1', '1. Scope'],
 ['p', 'The panel exposes no API. It consumes one interface: admin-api under `/api/v1` on the panel\'s own origin. This document lists every endpoint the panel calls and the shapes it relies on. The authoritative definition is `admin-api/api/openapi.yaml` (OpenAPI 3.0.3) and `docs/admin-api/admin-api-04-contracts`; field names here match that document. The panel has no settings schema of its own and owns no database. ⇑ marks step-up operations (section 2.2).'],
 ['h1', '2. Common conventions'],
