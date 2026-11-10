@@ -159,6 +159,77 @@ paths:
     get:
       summary: Accounts with has_token, never the token
       responses: { "200": { description: list } }
+  /api/v1/publish/accounts/{id}/token:
+    put:
+      summary: Write access token only; never returned on read
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [access_token]
+              properties:
+                access_token: { type: string }
+      responses: { "204": { description: saved } }
+  /api/v1/publish/secrets:
+    get:
+      summary: Presence/length only
+      responses: { "200": { description: list } }
+  /api/v1/publish/secrets/{key}:
+    put:
+      parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string }
+      responses: { "204": { description: saved } }
+    delete:
+      parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+      responses: { "204": { description: deleted } }
+  /api/v1/review/secrets/{key}:
+    put:
+      parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string }
+      responses: { "204": { description: saved } }
+    delete:
+      parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+      responses: { "204": { description: deleted } }
+  /api/v1/video/credentials/{ref}:
+    put:
+      summary: Write credential value only; never returned on read
+      parameters: [{ name: ref, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, value]
+              properties:
+                kind: { type: string }
+                value: { type: string }
+                note: { type: string }
+      responses:
+        "201": { description: created }
+        "204": { description: updated }
+    delete:
+      parameters: [{ name: ref, in: path, required: true, schema: { type: string } }]
+      responses: { "204": { description: deleted } }
   /api/v1/publish/intents:
     get:
       responses: { "200": { description: list } }
