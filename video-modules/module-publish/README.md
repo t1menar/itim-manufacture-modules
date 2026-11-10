@@ -2,7 +2,7 @@
 
 Stage `publish`: Instagram (and later platforms) publisher (Python 3.12). Module id `publish-instagram`.
 
-Specification: `../docs/module-publish/`.
+Specification: `../../docs/module-publish/`.
 
 ## Status
 

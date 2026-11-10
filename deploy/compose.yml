@@ -112,7 +112,7 @@ services:
     <<: *module-common
     image: ${VIDEO_IMAGE:-manufacture-video:local}
     build:
-      context: ../module-video
+      context: ../video-modules/module-video
       dockerfile: Dockerfile
     environment:
       VIDEO_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/video
@@ -170,7 +170,7 @@ services:
     image: ${REVIEW_IMAGE:-manufacture-review:local}
     build:
       context: ..
-      dockerfile: module-review/Dockerfile
+      dockerfile: video-modules/module-review/Dockerfile
     environment:
       REVIEW_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/review
       REVIEW_LISTEN_ADDR: "0.0.0.0:8080"
@@ -217,7 +217,7 @@ services:
     image: ${PUBLISH_IMAGE:-manufacture-publish:local}
     build:
       context: ..
-      dockerfile: module-publish/Dockerfile
+      dockerfile: video-modules/module-publish/Dockerfile
     environment:
       PUBLISH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/publish
       PUBLISH_LISTEN_ADDR: "0.0.0.0:8080"

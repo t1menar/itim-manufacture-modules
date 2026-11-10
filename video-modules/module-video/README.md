@@ -2,7 +2,7 @@
 
 Stage `video` of Manufacture: takes an idea and produces a finished English short video (1080×1920, H.264, with sound effects, cover, caption and metadata) for Instagram. Python 3.12, FastAPI, PostgreSQL, S3 (MinIO), RabbitMQ.
 
-Specification: `../docs/module-video/` (`module-video-01-description` … `-06-prompts`). Ideas backlog and scheduler: [`docs/IDEAS.md`](docs/IDEAS.md).
+Specification: `../../docs/module-video/` (`module-video-01-description` … `-06-prompts`). Ideas backlog and scheduler: [`docs/IDEAS.md`](docs/IDEAS.md).
 
 ## How it works
 
@@ -148,7 +148,7 @@ uv run pytest -m docker   # only the tests that need Docker (postgres:17 and rab
 ```
 
 - Tests use real PostgreSQL (testcontainers), MinIO/moto, and a recording fake core. Docker tests skip when no daemon or image is present.
-- CI: `.github/workflows/module-video.yml` runs ruff, mypy, import-linter, the contract tests and the full suite on every PR that touches `module-video/` or `contracts/`.
+- CI: `.github/workflows/module-video.yml` runs ruff, mypy, import-linter, the contract tests and the full suite on every PR that touches `video-modules/module-video/` or `contracts/`.
 - Layout: `src/mvideo` (service), `src/mvrender` (standalone renderer, imports nothing from `mvideo`), `prompts/` (packaged prompt versions, seeded into the database), `reference/create_database/` (the reference scenario), `agent/` (agent image), `fonts/` (Inter and JetBrains Mono, open fonts only).
 - Approved frames for the render tests are in `tests/approved/`; regenerate them with `UPDATE_APPROVED=1 uv run pytest tests/test_render.py` after an intended visual change.
 

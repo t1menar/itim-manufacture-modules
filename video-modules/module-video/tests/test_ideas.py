@@ -60,7 +60,7 @@ def test_refs_and_message_ids_follow_the_shared_rules() -> None:
 
 
 def test_vendored_schemas_equal_the_shared_contracts() -> None:
-    contracts = Path(__file__).resolve().parents[2] / "contracts"
+    contracts = Path(__file__).resolve().parents[3] / "contracts"
     if not contracts.is_dir():
         pytest.skip("contracts/ is not next to module-video")
     for name, path in (

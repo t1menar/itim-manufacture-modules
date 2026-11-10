@@ -3,7 +3,7 @@
 // Run from module-video/:  node scripts/extract_prompts.js
 const fs = require('fs');
 const path = require('path');
-const SRC = path.join(__dirname, '../../docs/tools/specgen/content/module-video/module-video-06-prompts.js');
+const SRC = path.join(__dirname, '../../../docs/tools/specgen/content/module-video/module-video-06-prompts.js');
 const doc = require(SRC);
 const out = path.join(__dirname, '../prompts');
 const blocks = doc.blocks;

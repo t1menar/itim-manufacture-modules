@@ -20,9 +20,9 @@ Each service folder holds six documents, named `<service>-0N-<name>.docx`:
 | `core/` | pipeline engine and module registry (Go) |
 | `admin-api/` | administrative gateway (Go) |
 | `admin-panel/` | web client (React + TypeScript) |
-| `module-video/` | stage `video`: idea → research → script → capture → rendered English video (Python) |
-| `module-review/` | stage `review`: Telegram review bot (Python) |
-| `module-publish/` | stage `publish`: Instagram Reels and later platforms (Python) |
+| `video-modules/module-video/` | stage `video`: idea → research → script → capture → rendered English video (Python) |
+| `video-modules/module-review/` | stage `review`: Telegram review bot (Python) |
+| `video-modules/module-publish/` | stage `publish`: Instagram Reels and later platforms (Python) |
 
 Each folder has the same name as the service folder at the root of this repository (`github.com/t1menar/manufacture`).
 
@@ -34,7 +34,7 @@ cd tools/specgen && npm install && npm run build
 
 ## Ideas (D21)
 
-Backlog ownership: `module-video/docs/IDEAS.md`. Shared JSON Schemas: `contracts/idea.json`, `contracts/topic.json`.
+Backlog ownership: `video-modules/module-video/docs/IDEAS.md`. Shared JSON Schemas: `contracts/idea.json`, `contracts/topic.json`.
 
 ## Module secrets
 

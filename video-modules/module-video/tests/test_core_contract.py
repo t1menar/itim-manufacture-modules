@@ -11,7 +11,7 @@ from jsonschema import Draft202012Validator
 from mvideo.agents.launcher import ReplayLauncher
 from tests.test_steps import make_ctx
 
-CORE = Path(__file__).resolve().parents[2] / "core" / "schemas"
+CORE = Path(__file__).resolve().parents[3] / "core" / "schemas"
 
 
 def _validator(name: str) -> Draft202012Validator:

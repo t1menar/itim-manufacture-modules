@@ -4,7 +4,11 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 ## On main
 
-#7–#34 merged. Head includes admin-api (D24, `#25` / `31fb3ac`), the admin-panel shell (`#26` / `ab82ac0`) and the e2e verification fixes (`#34` / `5ee876d`: publish result body, review upstream, review `no_admin` fail callback, UUIDs in admin events, `video-idea.sh`).
+#7–#36 merged (#35 B6 no double posts, #36 B5 idea parking). Head includes admin-api (D24, `#25` / `31fb3ac`), the admin-panel shell (`#26` / `ab82ac0`) and the e2e verification fixes (`#34` / `5ee876d`: publish result body, review upstream, review `no_admin` fail callback, UUIDs in admin events, `video-idea.sh`).
+
+## Repository layout
+
+Domain (video) modules live in `video-modules/`: `video-modules/module-video`, `video-modules/module-review`, `video-modules/module-publish`. `core/`, `admin-api/`, `admin-panel/`, `contracts/`, `packages/`, `deploy/` stay at the top level. Module ids, image names and service names are unchanged.
 
 ## Accepted decisions
 

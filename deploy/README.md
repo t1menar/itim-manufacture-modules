@@ -19,7 +19,7 @@
 
 ## Video: реальная генерация
 
-`up.sh` собирает module-video из `module-video/Dockerfile` (ffmpeg, prompts, reference), запускает его с `MVIDEO_PIPELINE=real` и снятой паузой идей. Дальше один раз:
+`up.sh` собирает module-video из `video-modules/module-video/Dockerfile` (ffmpeg, prompts, reference), запускает его с `MVIDEO_PIPELINE=real` и снятой паузой идей. Дальше один раз:
 
 ```bash
 ./deploy/scripts/video-prepare.sh      # registry :5000, образ агента по digest, digest postgres:17, настройки video-claude в core

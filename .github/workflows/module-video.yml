@@ -1,10 +1,10 @@
 name: module-video
 on:
   pull_request:
-    paths: ["module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
+    paths: ["video-modules/module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
   push:
     branches: [main]
-    paths: ["module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
+    paths: ["video-modules/module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
 permissions:
   contents: read
 concurrency:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: module-video
+        working-directory: video-modules/module-video
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
