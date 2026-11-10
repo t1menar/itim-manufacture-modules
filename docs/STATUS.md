@@ -44,3 +44,9 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 Код module-video в этом PR **не меняется**. Роуты идей/тем по-прежнему заданы в `admin-api/docs/VIDEO_ADMIN_ROUTES.md`.
 
 Heartbeat `video-claude` иногда `down` в overview: core и admin-api здесь ни при чём (ручной `POST /internal/v1/modules/self/heartbeat` с токеном модуля даёт 200 и поднимает `health=up`; review/publish обновляют `last_seen_at` каждые ~30 с). У video фоновый цикл, судя по `last_seen_at`, не бьётся — после 90 с core честно ставит `down`. Это нужно чинить в module-video (задача не стартует или падает без лога). На стеке также бывает устаревшая регистрация `video-claude-small`.
+
+## core: idea.ready under back-pressure (B5)
+
+- At `scheduler.max_concurrent_productions`, `idea.ready` is no longer rolled back and retried into the DLQ: it is parked in `pending_ideas` (migration `0012`, acked, idempotent on message id and idea_ref) and started by the scheduler loop (every 2 s) when a slot frees, in priority then arrival order. A new idea never overtakes parked ones. The capacity check takes an advisory lock, so the limit cannot be overshot by a race.
+- The consumer no longer sleeps before a requeue: the back-off is a timer and the default prefetch is 16, so one failing message does not hold up the others.
+- module-video is unchanged: a parked idea stays `dispatched` there until core sends `idea.in_production`. Optional later: an `idea.queued` status so the video admin can show "waiting for a slot".

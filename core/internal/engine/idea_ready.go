@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -49,11 +48,59 @@ func (e *Engine) applyIdeaReady(ctx context.Context, tx pgx.Tx, env messaging.En
 		// prefer the canonical id from the publisher.
 		_ = wantID
 	}
-	language := p.Language
-	if language == "" {
-		language = e.DefaultLanguage
-	}
 
+	if err := lockCapacity(ctx, tx); err != nil {
+		return "", err
+	}
+	var existing uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM productions WHERE idea_ref = $1`, ideaRef).Scan(&existing)
+	if err == nil {
+		return messaging.Conflict, nil // duplicate idea.ready → one production
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+	var parked int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM pending_ideas`).Scan(&parked); err != nil {
+		return "", err
+	}
+	free, err := e.freeSlots(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	if free <= 0 || parked > 0 {
+		// Back-pressure (B5): park the idea durably and ack the message. Ideas already waiting
+		// go first, so a new idea never overtakes a parked one.
+		tag, err := tx.Exec(ctx, `INSERT INTO pending_ideas (idea_ref, idea_id, idea_rev, message_id, payload, priority)
+			VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+			ideaRef, p.IdeaRef.ID, p.IdeaRef.Rev, env.MessageID, env.Payload, p.Priority)
+		if err != nil {
+			return "", err
+		}
+		if tag.RowsAffected() == 0 {
+			return messaging.Conflict, nil // already parked
+		}
+		e.Log.Info("idea parked: at max concurrent productions", "idea_ref", ideaRef, "free_slots", free, "parked_before", parked)
+		if free > 0 {
+			if _, err := e.startParkedInTx(ctx, tx); err != nil {
+				return "", err
+			}
+		}
+		return messaging.Applied, nil
+	}
+	return e.startIdea(ctx, tx, p)
+}
+
+// capacityLockKey serialises "count running productions, then start one" across idea.ready
+// handling and the parked-idea scheduler, so the limit cannot be overshot by a race.
+const capacityLockKey int64 = 0x6d66_6361_7061 // "mfcapa"
+
+func lockCapacity(ctx context.Context, tx pgx.Tx) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, capacityLockKey)
+	return err
+}
+
+// freeSlots is max_concurrent_productions minus the running productions.
+func (e *Engine) freeSlots(ctx context.Context, tx pgx.Tx) (int, error) {
 	maxConc := e.MaxConcurrent
 	if e.Settings != nil {
 		if n, err := e.Settings.MaxConcurrent(ctx); err == nil && n > 0 {
@@ -62,13 +109,91 @@ func (e *Engine) applyIdeaReady(ctx context.Context, tx pgx.Tx, env messaging.En
 	}
 	var running int
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM productions WHERE status = 'running'`).Scan(&running); err != nil {
-		return "", err
+		return 0, err
 	}
-	if running >= maxConc {
-		// Back-pressure: roll back inbox insert (caller requeues).
-		return "", fmt.Errorf("at max concurrent productions (%d)", maxConc)
-	}
+	return maxConc - running, nil
+}
 
+// StartParked starts parked ideas while production slots are free. Called periodically by the
+// scheduler loop; returns the number of productions started.
+func (e *Engine) StartParked(ctx context.Context) (int, error) {
+	e.defaults()
+	var n int
+	err := db.WithTx(ctx, e.Pool, func(tx pgx.Tx) error {
+		if err := lockCapacity(ctx, tx); err != nil {
+			return err
+		}
+		var err error
+		n, err = e.startParkedInTx(ctx, tx)
+		return err
+	})
+	return n, err
+}
+
+// startParkedInTx needs the capacity lock. Each parked idea runs in a savepoint: one that fails
+// to start is kept with a back-off and does not block the others.
+func (e *Engine) startParkedInTx(ctx context.Context, tx pgx.Tx) (int, error) {
+	started := 0
+	for range 64 {
+		free, err := e.freeSlots(ctx, tx)
+		if err != nil {
+			return started, err
+		}
+		if free <= 0 {
+			return started, nil
+		}
+		var ref string
+		var payload []byte
+		err = tx.QueryRow(ctx, `SELECT idea_ref, payload FROM pending_ideas WHERE next_attempt_at <= now()
+			ORDER BY priority DESC, received_at, idea_ref LIMIT 1 FOR UPDATE SKIP LOCKED`).Scan(&ref, &payload)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return started, nil
+		}
+		if err != nil {
+			return started, err
+		}
+		var p ideaReadyPayload
+		outcome := messaging.Invalid
+		var startErr error
+		if json.Unmarshal(payload, &p) == nil {
+			sp, err := tx.Begin(ctx)
+			if err != nil {
+				return started, err
+			}
+			outcome, startErr = e.startIdea(ctx, sp, p)
+			if startErr != nil {
+				_ = sp.Rollback(ctx)
+			} else if err := sp.Commit(ctx); err != nil {
+				return started, err
+			}
+		}
+		if startErr != nil {
+			e.Log.Warn("parked idea failed to start; retry later", "idea_ref", ref, "err", startErr)
+			if _, err := tx.Exec(ctx, `UPDATE pending_ideas SET attempts = attempts + 1, last_error = $2,
+				next_attempt_at = now() + least(attempts + 1, 30) * interval '10 seconds' WHERE idea_ref = $1`,
+				ref, startErr.Error()); err != nil {
+				return started, err
+			}
+			continue
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM pending_ideas WHERE idea_ref = $1`, ref); err != nil {
+			return started, err
+		}
+		if outcome == messaging.Applied {
+			started++
+			e.Log.Info("parked idea started", "idea_ref", ref)
+		}
+	}
+	return started, nil
+}
+
+// startIdea creates the production and its first job (capacity already checked by the caller).
+func (e *Engine) startIdea(ctx context.Context, tx pgx.Tx, p ideaReadyPayload) (string, error) {
+	ideaRef := messaging.FormatIdeaRef(p.IdeaRef.ID, p.IdeaRef.Rev)
+	language := p.Language
+	if language == "" {
+		language = e.DefaultLanguage
+	}
 	var existing uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM productions WHERE idea_ref = $1`, ideaRef).Scan(&existing)
 	if err == nil {

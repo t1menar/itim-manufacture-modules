@@ -43,7 +43,7 @@ type Consumer struct {
 	failures    map[string]int
 	Log         *slog.Logger
 	// RetryDelay grows with the delivery count before a requeue, so a failing message
-	// cannot spin in a hot loop.
+	// cannot spin in a hot loop. The wait is a timer, it does not block other messages.
 	RetryDelay func(deliveryCount int64) time.Duration
 
 	// Test hooks simulating a crash: BeforeCommit returns an error after the effect but before
@@ -59,7 +59,8 @@ func (c *Consumer) defaults() { c.once.Do(c.setDefaults) }
 
 func (c *Consumer) setDefaults() {
 	if c.Prefetch == 0 {
-		c.Prefetch = 1
+		// > 1 so a message waiting for its delayed requeue does not stall the queue.
+		c.Prefetch = 16
 	}
 	if c.Log == nil {
 		c.Log = slog.Default()
@@ -183,9 +184,17 @@ func (c *Consumer) handle(ctx context.Context, d amqp.Delivery) error {
 			c.Log.Error("message failed too often; dead-lettered", "message_id", env.MessageID, "attempts", n, "err", err)
 			return d.Nack(false, false)
 		}
-		time.Sleep(c.RetryDelay(n))
-		c.Log.Warn("message processing failed; requeue", "message_id", env.MessageID, "delivery_count", n, "err", err)
-		return d.Nack(false, true)
+		// Requeue after a back-off without blocking this consumer: other messages keep flowing
+		// (up to Prefetch unacked deliveries) while this one waits. If the channel closes first,
+		// the broker returns the delivery to the queue anyway.
+		delay := c.RetryDelay(n)
+		c.Log.Warn("message processing failed; requeue", "message_id", env.MessageID, "delivery_count", n, "delay", delay, "err", err)
+		time.AfterFunc(delay, func() {
+			if err := d.Nack(false, true); err != nil {
+				c.Log.Warn("delayed requeue failed; broker redelivers on channel close", "message_id", env.MessageID, "err", err)
+			}
+		})
+		return nil
 	}
 	delete(c.failures, env.MessageID.String())
 	if duplicate {
