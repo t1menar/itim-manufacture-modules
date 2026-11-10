@@ -29,7 +29,7 @@ class JobRequest(BaseModel):
     fence: int = Field(default=1, ge=1)
     production_id: uuid.UUID
     stage: str
-    mode: Literal["create", "revise"] = "create"
+    mode: Literal["create", "revise", "republish"] = "create"
     variant: VariantRef | None = None
     input: dict[str, Any]
     settings: SettingsSnapshot = Field(default_factory=SettingsSnapshot)
