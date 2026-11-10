@@ -1,40 +1,33 @@
 # Manufacture — module / service status
 
-_Last updated: 2026-11-09 (Europe/Stockholm)._
+_Last updated: 2026-11-10 (Europe/Stockholm)._
 
 ## On main
 
-#7–#21 merged (real Telegram #20, real Instagram Graph Reels #21).
+#7–#23 merged (Telegram #20, Instagram #21, module DB secrets #22, MinIO/presigned #23).
 
 ## Accepted decisions
 
 | # | Decision |
 |---|----------|
-| D18 | Admin republish with reason |
-| D16 | Prompts in module-video |
-| D19 | Metadata from module-video |
-| **D20** | **Review bot = review cards + publish notifications only.** |
-| **D21** | **Ideas/topics only in module-video; `idea.ready` / reverse statuses; core stores only `idea_ref`.** |
-| **D22** | **Content revisions in core are an opaque blob + sha256.** |
-| **D23** | **Publish intents + platform accounts + IG limits live in module-publish.** |
-| **D24** | **Module-owned secrets in each module DB** (plaintext OK for local). Env = dev fallback only. |
+| D18–D24 | See prior rows; module-owned secrets; MinIO via `mf-storage`. |
 
 ## Open PRs
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #22 | Module DB credentials | owner — wait |
-| #23 | MinIO + `mf-storage` + public presigned GET | owner — wait (**do not merge**); stacked on #22 |
+| (this) | `deploy/` local stack (`up.sh` + animated logs) | owner — wait (**do not merge**) |
 
-## Storage
+## Local deploy
 
-- Default local stack: `deploy/compose.minio.yml` → `http://127.0.0.1:59000` (no domain/TLS infra).
-- `S3_PUBLIC_ENDPOINT` configurable; for live Instagram from a laptop use a temporary **cloudflared/ngrok** tunnel to MinIO and set that host as public endpoint.
-- Keys: module DB `s3.*` (#22); env fallback for local/CI.
-- Wired: publish (IG `video_url`), review (Telegram `sendVideo`).
-- **module-video not modified** — must upload into the same `s3://manufacture/…` layout.
+- Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish, register+activate modules, smoke.
+- Animated logs: `deploy/lib/log.sh` (spinners, `[n/N]`, timers, `.logs/`).
+- Fake TG/IG by default. MinIO default `http://127.0.0.1:56000`; live IG → cloudflared/ngrok tunnel.
 
-## Real integrations
+## module-video
 
-- **Telegram:** #20 + DB secrets (#22).
-- **Instagram:** #21 + DB tokens (#22). Needs reachable HTTPS URL for Graph (tunnel + this MinIO PR).
+Not modified by deploy PR. Needs `DOCKER_HOST` + `VIDEO_AGENT_NETWORK` (created by `up.sh`) for agent containers; ideas paused by default (`VIDEO_IDEAS_PAUSED=1`).
+
+## Live verify (agent box, 2026-11-10)
+
+`up.sh` → healthy + modules active; повторный `up.sh` идемпотентен; `down.sh` OK. Логи: `deploy/.logs/20261110-032400.log`, `…032709.log`. На этой машине: MinIO из GitHub release (Hub blocked), `bridge-nf-call-iptables=0`, static IPs из‑за broken embedded DNS.
