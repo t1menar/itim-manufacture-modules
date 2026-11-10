@@ -67,6 +67,7 @@ class RealInstagramClient:
         self._resolve = resolve_account
         self._base = graph_base.rstrip("/")
         self._version = api_version.lstrip("/")
+        self._upload_uris: dict[str, str] = {}
         self._timeout = timeout_s
         self._poll_interval = poll_interval_s
         self._poll_max = poll_max_attempts
@@ -225,11 +226,15 @@ class RealInstagramClient:
                 ClassifiedError("instagram_no_container", False, "missing container id"),
                 status_code=200,
             )
+        if isinstance(data.get("uri"), str) and data["uri"].startswith("https://"):
+            self._upload_uris[str(cid)] = data["uri"]  # Meta tells where this container's file goes
         return str(cid)
 
     async def _upload_video(self, auth: AccountAuth, container_id: str, data: bytes) -> None:
         """Send the file to the container (Meta resumable upload). Safe to repeat: offset 0 restarts it."""
-        url = f"{self._upload_base}/ig-api-upload/{self._version}/{container_id}"
+        url = self._upload_uris.get(container_id) or (
+            f"{self._upload_base}/ig-api-upload/{self._version}/{container_id}"
+        )
         headers = {
             "Authorization": f"OAuth {auth.access_token}",
             "offset": "0",
