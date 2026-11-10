@@ -11,7 +11,7 @@ MODULE_ID="${VIDEO_MODULE_ID:-video-claude}"
 
 echo "[1/4] agent image"
 if ! docker image inspect video-agent:dev >/dev/null 2>&1; then
-  docker build -t video-agent:dev -f "$ROOT/module-video/agent/Dockerfile" "$ROOT/module-video"
+  docker build -t video-agent:dev -f "$ROOT/video-modules/module-video/agent/Dockerfile" "$ROOT/video-modules/module-video"
 fi
 
 echo "[2/4] local registry and digest"

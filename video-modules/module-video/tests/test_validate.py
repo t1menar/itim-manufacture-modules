@@ -16,7 +16,7 @@ from mvideo.validate.schemas import all_schemas, load_schema
 from mvideo.validate.source import DirSource
 from tests import refdata
 
-REAL_SOURCE = Path(__file__).resolve().parents[2] / "create-database-video" / "pgsrc17"
+REAL_SOURCE = Path(__file__).resolve().parents[3] / "create-database-video" / "pgsrc17"
 
 
 def run(docs: dict[str, Any], cfg: RuleConfig | None = None) -> set[str]:

@@ -920,7 +920,7 @@ wheels = [
 [[package]]
 name = "mf-storage"
 version = "0.1.0"
-source = { editable = "../packages/mf-storage" }
+source = { editable = "../../packages/mf-storage" }
 dependencies = [
     { name = "minio" },
 ]
@@ -990,7 +990,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "jsonschema", specifier = ">=4.23" },
-    { name = "mf-storage", editable = "../packages/mf-storage" },
+    { name = "mf-storage", editable = "../../packages/mf-storage" },
     { name = "prometheus-client", specifier = ">=0.21" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.9" },

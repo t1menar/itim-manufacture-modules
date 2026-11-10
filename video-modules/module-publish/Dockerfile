@@ -1,17 +1,17 @@
 ARG PYTHON_IMAGE=python:3.12-slim
 
-# Build from repository root: docker build -f module-publish/Dockerfile .
+# Build from repository root: docker build -f video-modules/module-publish/Dockerfile .
 FROM ${PYTHON_IMAGE} AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
 WORKDIR /src
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 COPY packages/mf-storage /src/packages/mf-storage
-COPY module-publish/pyproject.toml module-publish/README.md /src/module-publish/
-COPY module-publish/src /src/module-publish/src
-COPY module-publish/schemas /src/module-publish/schemas
-COPY module-publish/migrations /src/module-publish/migrations
-COPY module-publish/alembic.ini /src/module-publish/alembic.ini
-WORKDIR /src/module-publish
+COPY video-modules/module-publish/pyproject.toml video-modules/module-publish/README.md /src/video-modules/module-publish/
+COPY video-modules/module-publish/src /src/video-modules/module-publish/src
+COPY video-modules/module-publish/schemas /src/video-modules/module-publish/schemas
+COPY video-modules/module-publish/migrations /src/video-modules/module-publish/migrations
+COPY video-modules/module-publish/alembic.ini /src/video-modules/module-publish/alembic.ini
+WORKDIR /src/video-modules/module-publish
 RUN if [ -f uv.lock ]; then uv sync --frozen --no-dev --no-editable; \
     else uv lock && uv sync --no-dev --no-editable; fi
 
@@ -20,11 +20,11 @@ FROM ${PYTHON_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client \
  && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10002 --no-create-home --shell /usr/sbin/nologin publish
-COPY --from=build /src/module-publish/.venv /app/.venv
-COPY --from=build /src/module-publish/schemas /app/.venv/lib/python3.12/schemas
-COPY --from=build /src/module-publish/migrations /app/.venv/lib/python3.12/migrations
-COPY --from=build /src/module-publish/alembic.ini /app/.venv/lib/python3.12/alembic.ini
-COPY --from=build /src/module-publish/src /app/src
+COPY --from=build /src/video-modules/module-publish/.venv /app/.venv
+COPY --from=build /src/video-modules/module-publish/schemas /app/.venv/lib/python3.12/schemas
+COPY --from=build /src/video-modules/module-publish/migrations /app/.venv/lib/python3.12/migrations
+COPY --from=build /src/video-modules/module-publish/alembic.ini /app/.venv/lib/python3.12/alembic.ini
+COPY --from=build /src/video-modules/module-publish/src /app/src
 WORKDIR /app
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1
 # uv console_scripts keep the build-path shebang; rewrite for the runtime venv.

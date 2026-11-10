@@ -6,7 +6,7 @@
 
 Ошибки: `application/problem+json` (`code`, `title`, `status`). Секреты в ответах запрещены.
 
-Идеи живут только в БД video (D21): статусы `draft` → `ready` → `queued` → `dispatched` → `in_production` → `done`/`failed` (плюс cancelled/archived). См. `module-video/docs/IDEAS.md`.
+Идеи живут только в БД video (D21): статусы `draft` → `ready` → `queued` → `dispatched` → `in_production` → `done`/`failed` (плюс cancelled/archived). См. `video-modules/module-video/docs/IDEAS.md`.
 
 ## Темы
 

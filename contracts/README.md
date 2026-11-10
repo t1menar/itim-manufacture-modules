@@ -9,4 +9,4 @@ Cross-service shapes not yet folded into `core/schemas/`.
 | `events/idea.ready.json` | Orchestration payload module-video → core |
 | `events/idea.status.json` | Reverse status core → module-video (`in_production` / `done` / `failed`) |
 
-Behaviour: `module-video/docs/IDEAS.md` (D21).
+Behaviour: `video-modules/module-video/docs/IDEAS.md` (D21).
