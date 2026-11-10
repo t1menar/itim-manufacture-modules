@@ -201,6 +201,9 @@ func (e *Engine) completeProduction(ctx context.Context, tx pgx.Tx, prod uuid.UU
 	var ideaRev int
 	if err := tx.QueryRow(ctx, `UPDATE productions SET status = $2, finished_at = now(), rev = rev + 1 WHERE id = $1 AND status = 'running'
 		RETURNING idea_id, idea_rev`, prod, status).Scan(&ideaID, &ideaRev); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // already finished: a republish of a published variant must not fail its callback
+		}
 		return fmt.Errorf("finish production: %w", err)
 	}
 	evt := "done"
