@@ -21,3 +21,7 @@ curl -sS http://127.0.0.1:58084/api/v1/overview
 OpenAPI: `GET /api/v1/openapi.json`, исходник `admin-api/api/openapi.yaml`.
 
 Контракт недостающих роутов video (идеи/темы): [`docs/VIDEO_ADMIN_ROUTES.md`](docs/VIDEO_ADMIN_ROUTES.md).
+
+## Панель
+
+Если задан `ADMIN_UI_DIR` (в образе `/ui`), admin-api раздаёт собранный `admin-panel` с того же origin: `GET /` — SPA, `/api/v1` — API. Host/Origin allowlist применяется и к статике.

@@ -4,7 +4,7 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 ## On main
 
-#7–#24 merged earlier (deploy local stack #24, Telegram, Instagram, credentials, MinIO, heartbeats, uploads, video pipeline). Head includes commits through `d319666`.
+#7–#25 merged. Head includes admin-api (D24, merge `#25` / `31fb3ac`). CI on that merge commit was green (admin-api, core, module-publish, module-review, contracts, deploy-shell).
 
 ## Accepted decisions
 
@@ -17,14 +17,16 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| (this) | `admin-api` + core/publish/review admin query routes; specs D24 | owner — wait (**do not merge**) |
+| (this) | Каркас **admin-panel** (React + TS), same-origin раздача из admin-api, живой экран «Обзор» | owner — ждать (**не мержить**) |
 
 ## Local deploy
 
-- Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api**, register+activate modules, smoke.
-- admin-api: `http://127.0.0.1:58084` (published on loopback only).
+- Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api + панель**, register+activate modules, smoke.
+- Панель и API: `http://127.0.0.1:58084/` (только loopback, один origin).
 - Fake TG/IG by default.
 
 ## module-video
 
-Application code is **not** modified in the admin-api PR. Missing ideas/topics admin routes are specified in `admin-api/docs/VIDEO_ADMIN_ROUTES.md` and proxied by admin-api.
+Код module-video в этом PR **не меняется**. Роуты идей/тем по-прежнему заданы в `admin-api/docs/VIDEO_ADMIN_ROUTES.md`.
+
+Heartbeat `video-claude` иногда `down` в overview: core и admin-api здесь ни при чём (ручной `POST /internal/v1/modules/self/heartbeat` с токеном модуля даёт 200 и поднимает `health=up`; review/publish обновляют `last_seen_at` каждые ~30 с). У video фоновый цикл, судя по `last_seen_at`, не бьётся — после 90 с core честно ставит `down`. Это нужно чинить в module-video (задача не стартует или падает без лога). На стеке также бывает устаревшая регистрация `video-claude-small`.

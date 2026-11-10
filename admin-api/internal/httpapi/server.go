@@ -87,7 +87,11 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	mux.HandleFunc("GET /api/v1/audit", s.listAudit)
-	mux.HandleFunc("/", s.notFound)
+	if s.Cfg.UIDir != "" {
+		mux.Handle("/", s.spa(s.Cfg.UIDir))
+	} else {
+		mux.HandleFunc("/", s.notFound)
+	}
 
 	return s.wrap(mux)
 }
@@ -335,11 +339,13 @@ func expandPath(tmpl string, r *http.Request) string {
 	return out
 }
 
-func (s *Server) openapi(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) openapi(w http.ResponseWriter, r *http.Request) {
+	body, err := OpenAPIJSON()
+	if err != nil {
+		problem.Write(w, http.StatusInternalServerError, "internal", "openapi unavailable", "", requestID(r))
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(openapiJSON)
+	_, _ = w.Write(body)
 }
-
-// openapiJSON is filled by openapi.go.
-var openapiJSON = []byte(`{"openapi":"3.0.3","info":{"title":"admin-api","version":"0.1.0"}}`)

@@ -338,10 +338,21 @@ for id in video-claude review-telegram publish-instagram; do
     SMOKE_OK=0
   fi
 done
-# admin-api overview (Host must be localhost; call with explicit header from the compose network)
-ov=$(docker run --rm --network manufacture "${ADD_HOSTS[@]}" curlimages/curl:8.5.0 -sS -o /tmp/ov -w '%{http_code}'   -H "Host: 127.0.0.1:58084" "http://admin-api:8080/api/v1/overview" || echo 000)
+# admin-api overview + panel shell (Host must be localhost)
+ov=$(docker run --rm --network manufacture "${ADD_HOSTS[@]}" curlimages/curl:8.5.0 -sS -o /tmp/ov -w '%{http_code}' \
+  -H "Host: 127.0.0.1:58084" "http://admin-api:8080/api/v1/overview" || echo 000)
 if [[ "$ov" != "200" ]]; then
   mf_warn "admin-api /api/v1/overview HTTP $ov"
+  SMOKE_OK=0
+fi
+panel=$(docker run --rm --network manufacture "${ADD_HOSTS[@]}" curlimages/curl:8.5.0 -sS -w '%{http_code}' \
+  -H "Host: 127.0.0.1:58084" "http://admin-api:8080/" || echo 000)
+if ! printf '%s' "$panel" | grep -q '<div id="root"'; then
+  mf_warn "admin-panel / не отдал SPA"
+  SMOKE_OK=0
+fi
+if ! printf '%s' "$panel" | grep -q '200$'; then
+  mf_warn "admin-panel / HTTP не 200"
   SMOKE_OK=0
 fi
 if [[ "$SMOKE_OK" != "1" ]]; then
@@ -359,6 +370,7 @@ mf_table \
   "module-review|http://127.0.0.1:${REVIEW_PORT:-58082}" \
   "module-publish|http://127.0.0.1:${PUBLISH_PORT:-58083}" \
   "admin-api|http://127.0.0.1:${ADMIN_API_PORT:-58084}" \
+  "admin-panel|http://127.0.0.1:${ADMIN_API_PORT:-58084}/" \
   "postgres|127.0.0.1:${POSTGRES_PORT:-55432}" \
   "rabbitmq|amqp://127.0.0.1:${RABBITMQ_PORT:-55672}  mgmt :${RABBITMQ_MGMT_PORT:-55673}" \
   "minio S3|http://127.0.0.1:${MINIO_API_PORT:-59000}" \

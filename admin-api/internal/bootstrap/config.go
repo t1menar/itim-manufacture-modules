@@ -20,6 +20,7 @@ type Config struct {
 	AllowedHosts    []string
 	UpstreamTimeout time.Duration
 	Actor           string
+	UIDir           string
 }
 
 func Load(getenv func(string) string) (Config, error) {
@@ -67,6 +68,7 @@ func Load(getenv func(string) string) (Config, error) {
 		AllowedHosts:    hosts,
 		UpstreamTimeout: to,
 		Actor:           get("ADMIN_ACTOR", "local:admin"),
+		UIDir:           get("ADMIN_UI_DIR", ""),
 	}, nil
 }
 

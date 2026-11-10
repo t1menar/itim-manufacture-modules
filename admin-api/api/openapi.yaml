@@ -22,11 +22,21 @@ paths:
   /api/v1/overview:
     get:
       summary: Counters and module health (core)
-      responses: { "200": { description: overview } }
+      responses:
+        "200":
+          description: overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
   /api/v1/modules:
     get:
       summary: Registered modules (no tokens)
-      responses: { "200": { description: list } }
+      responses:
+        "200":
+          description: list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModuleList" }
   /api/v1/modules/{id}:
     get:
       parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
@@ -146,3 +156,57 @@ paths:
   /api/v1/audit:
     get:
       responses: { "200": { description: audit log } }
+components:
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        request_id: { type: string }
+        upstream: { type: string }
+    Module:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        stage_id: { type: string }
+        endpoint: { type: string }
+        version: { type: string }
+        contract: { type: integer }
+        enabled: { type: boolean }
+        active: { type: boolean }
+        health: { type: string, description: "up, down or unknown" }
+        token_prefix: { type: string, description: "Prefix only, never the raw token" }
+        last_seen_at: { type: string, format: date-time }
+        admin_endpoints:
+          type: array
+          items: { type: string }
+        rev: { type: integer }
+    Overview:
+      type: object
+      properties:
+        productions:
+          type: object
+          additionalProperties: { type: integer }
+        jobs:
+          type: object
+          additionalProperties: { type: integer }
+        variants:
+          type: object
+          additionalProperties: { type: integer }
+        outbox_pending: { type: integer }
+        modules:
+          type: array
+          items: { $ref: "#/components/schemas/Module" }
+    ModuleList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Module" }
+

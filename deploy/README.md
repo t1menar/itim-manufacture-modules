@@ -53,7 +53,7 @@
 | module-video | http://127.0.0.1:58081 |
 | module-review | http://127.0.0.1:58082 |
 | module-publish | http://127.0.0.1:58083 |
-| admin-api (localhost only) | http://127.0.0.1:58084 |
+| admin-api + **admin-panel** (localhost only, same origin) | http://127.0.0.1:58084/ |
 | PostgreSQL | 127.0.0.1:56432 |
 | RabbitMQ AMQP / UI | 56672 / 56673 |
 | MinIO S3 / console | 56000 / 56001 |

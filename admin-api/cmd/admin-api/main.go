@@ -79,7 +79,7 @@ func run(ctx context.Context, log *slog.Logger) error {
 	}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	log.Info("admin-api started", "addr", cfg.ListenAddr)
+	log.Info("admin-api started", "addr", cfg.ListenAddr, "ui", cfg.UIDir)
 	select {
 	case <-ctx.Done():
 	case err := <-errc:
