@@ -80,9 +80,19 @@ def ffmpeg_chunk_args(es: EncodeSettings, out: Path) -> list[str]:
     ]  # fmt: skip
 
 
-def _init_worker(resolved: dict[str, Any], fonts_dir: str, settings: dict[str, Any] | None, fps: int) -> None:
+def _init_worker(
+    resolved: dict[str, Any],
+    fonts_dir: str,
+    settings: dict[str, Any] | None,
+    fps: int,
+    reading_wps: float | None,
+) -> None:
+    """Each worker builds the same context as the parent; with another reading speed its scenes
+    would start at other times than the frame count and the sound assume."""
     global _CTX
-    _CTX = make_context(resolved, fonts_dir, settings, fps=fps)
+    _CTX = make_context(
+        resolved, fonts_dir, settings, **({"reading_wps": reading_wps} if reading_wps else {}), fps=fps
+    )
 
 
 def _render_chunk(job: tuple[int, int, int, str, EncodeSettings]) -> str:
@@ -132,7 +142,7 @@ def render_video(
         max_workers=workers,
         mp_context=multiprocessing.get_context("spawn"),
         initializer=_init_worker,
-        initargs=(resolved, str(fonts_dir), settings, es.fps),
+        initargs=(resolved, str(fonts_dir), settings, es.fps, reading_wps),
     ) as pool:
         chunks = list(pool.map(_render_chunk, jobs))
     listing = work / "chunks.txt"

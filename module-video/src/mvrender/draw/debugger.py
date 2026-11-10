@@ -92,8 +92,8 @@ def draw_debugger(
     draw_window_frame(cv, MID, step["path"])
     cv.d.rectangle((x0, y0 + 58, x1, y0 + 94), fill=pal.watch_bg)
     bx = float(x0 + 24)
-    cv.d.ellipse((bx, y0 + 69, bx + 14, y0 + 83), fill=pal.accent)
-    cv.text(bx + 24, y0 + 65, "paused", "crumb", pal.accent)
+    cv.d.ellipse((bx, y0 + 69, bx + 14, y0 + 83), fill=pal.win_accent)
+    cv.text(bx + 24, y0 + 65, "paused", "crumb", pal.win_accent)
     bx += 24 + cv.width("crumb", "paused") + 22
     for i, p in enumerate(step["stack"]):
         last = i == len(step["stack"]) - 1
@@ -126,17 +126,17 @@ def draw_debugger(
             continue
         is_cur = cur_line is not None and n == cur_line
         if is_cur:
-            cv.d.rectangle((x0 + 2, y - 3, x1 - 2, y + CODE_LH - 3), fill=mix(pal.accent, pal.win, 0.22))
-            cv.d.rectangle((x0 + 2, y - 3, x0 + 7, y + CODE_LH - 3), fill=pal.accent)
+            cv.d.rectangle((x0 + 2, y - 3, x1 - 2, y + CODE_LH - 3), fill=mix(pal.win_accent, pal.win, 0.22))
+            cv.d.rectangle((x0 + 2, y - 3, x0 + 7, y + CODE_LH - 3), fill=pal.win_accent)
         if kind == "line" and n is not None:
             num = str(n)
-            col = pal.accent if is_cur else (pal.win_muted if n in seen else pal.win_dim)
+            col = pal.win_accent if is_cur else (pal.win_muted if n in seen else pal.win_dim)
             cv.text(CODE_X0 - 18 - code_w * len(num), y, num, "code", mix(col, pal.win, appear))
             if n == first_line:
                 cv.d.ellipse((gut_x - 4, y + 7, gut_x + 10, y + 21), fill=mix(BREAKPOINT, pal.win, appear))
             if is_cur:
                 cv.d.polygon(
-                    [(gut_x + 14, y + 6), (gut_x + 25, y + 14), (gut_x + 14, y + 22)], fill=pal.accent
+                    [(gut_x + 14, y + 6), (gut_x + 25, y + 14), (gut_x + 14, y + 22)], fill=pal.win_accent
                 )
         cv.segments(
             CODE_X0,
@@ -166,7 +166,7 @@ def draw_debugger(
             cv.d.rounded_rectangle(
                 (x0 + 18, wy - 3, x1 - 18, wy + 28),
                 radius=6,
-                fill=mix(pal.accent, pal.watch_bg, 0.30 * flash),
+                fill=mix(pal.win_accent, pal.watch_bg, 0.30 * flash),
             )
         cv.text(x0 + 30, wy, name, "code", pal.win_muted)
         cv.text(x0 + 30 + cv.width("code", name + " "), wy, "=", "code", pal.win_dim)
@@ -175,7 +175,7 @@ def draw_debugger(
             wy,
             val,
             "code_current",
-            mix(pal.accent, pal.win_fg, 0.4 + 0.6 * flash),
+            mix(pal.win_accent, pal.win_fg, 0.4 + 0.6 * flash),
         )
         wy += 31
 

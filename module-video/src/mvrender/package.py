@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,6 @@ from mvrender.media import (
     count_frames,
     ebur128,
     ffmpeg_or_raise,
-    loudnorm_measure,
     probe,
     run,
 )  # fmt: skip
@@ -61,36 +60,26 @@ def render_sound(
     return cues
 
 
-def _leveled(wav: Path, out: Path, audio: AudioSettings, margin: float = 0.5) -> None:
-    """Bring the sound to the target loudness under the true-peak ceiling.
+def _leveled(wav: Path, out: Path, lufs: float, ceiling: float) -> None:
+    """Bring the sound to `lufs` under a brick-wall limiter with a sample-peak `ceiling` (dBFS).
 
-    Sparse effects cannot reach -14 LUFS by a linear gain (the peaks hit the ceiling first), so
-    the gain is applied before a brick-wall limiter and refined by measuring the result
-    (up to six rounds). `loudnorm` in linear mode refuses gains that clip, which is why it is
-    only used to measure.
-    """
-    # `margin`: headroom for the AAC encoder's overshoot; mux_final raises it when the final file overshoots
-    ceiling = audio.true_peak - margin  # sample-peak ceiling of the limiter, adapted below
-    gain = audio.lufs - float(loudnorm_measure(wav, audio.lufs, audio.true_peak, audio.lra)["input_i"])
-    got = Loudness(0.0, 0.0, 0.0)
+    Sparse effects cannot reach -14 LUFS by a linear gain (the peaks hit the ceiling first), so the
+    gain is applied before a limiter and refined by measuring the result (up to ten rounds). The gain
+    never grows more than 10 dB past the first guess: past that the limiter only distorts. When the
+    ceiling makes the target unreachable the closest attempt stays. (`loudnorm` in linear mode refuses
+    gains that clip, so the first guess comes from a plain ebur128 measurement."""
+    lim = 10 ** (ceiling / 20)
+    gain = lufs - ebur128(wav).integrated
+    top = gain + 10
     for _ in range(10):
-        lim = 10 ** (ceiling / 20)
         af = f"volume={gain:.3f}dB,alimiter=limit={lim:.4f}:attack=5:release=50:level=0"
         p = run(["-y", "-i", str(wav), "-af", af, "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", str(out)])
         if p.returncode != 0:
             raise MediaError(f"leveling failed: {p.stderr[-300:]!r}")
-        got = ebur128(out)
-        err = audio.lufs - got.integrated
-        over = got.true_peak - (audio.true_peak - margin)
-        if abs(err) <= audio.tolerance_lu / 2 and over <= 0.1:
+        err = lufs - ebur128(out).integrated
+        if abs(err) <= 0.05:
             return
-        if over > 0.1:  # inter-sample peaks above the limiter ceiling: lower the ceiling
-            ceiling -= over
-        gain += err * 1.3
-    raise LoudnessError(
-        f"cannot reach {audio.lufs} LUFS under {audio.true_peak} dBTP "
-        f"(got {got.integrated:.1f}, {got.true_peak:.1f})"
-    )
+        gain = min(gain + err * 1.3, top)
 
 
 def mux_final(
@@ -98,16 +87,17 @@ def mux_final(
 ) -> Loudness:
     """Level the sound, mux it with the copied video, and verify the final file with ebur128.
 
-    The AAC encode changes the true peak unpredictably (a sparse sound can come out 2 dB over the
-    limiter ceiling at one headroom and under it at another), and costs about 0.4 LU. So the final
-    file is what is measured: the headroom grows in steps of 0.5 dB, with the loudness aimed 0.2 LU
-    high, until the encoded file meets both targets (up to 14 rounds)."""
+    The AAC encode of a sparse sound is lossy in both ways: it loses up to 1 LU and its true peak
+    lands up to 3 dB above the limiter ceiling, differently on every attempt. So the loop is closed
+    around the encoded file: the loudness aim moves by the measured miss and the ceiling drops by the
+    measured overshoot, until the file meets both targets (up to 10 rounds)."""
     audio = audio or AudioSettings()
     leveled = Path(str(out) + ".leveled.wav")
-    aim = replace(audio, lufs=audio.lufs + 0.2)
+    aim = audio.lufs + 0.2
+    ceiling = audio.true_peak - 0.5
     got = Loudness(0.0, 0.0, 0.0)
-    for step in range(14):
-        _leveled(Path(wav), leveled, aim, 0.5 + 0.5 * step)
+    for _ in range(10):
+        _leveled(Path(wav), leveled, aim, ceiling)
         p = run(["-y", "-i", str(silent), "-i", str(leveled), "-map", "0:v", "-map", "1:a", "-c:v", "copy",
                  "-ar", "48000", "-ac", "2", "-c:a", "aac", "-b:a", f"{audio.bitrate_kbps}k", "-shortest",
                  "-movflags", "+faststart", str(out)])  # fmt: skip
@@ -115,8 +105,17 @@ def mux_final(
         if p.returncode != 0:
             raise MediaError(f"mux failed: {p.stderr[-300:]!r}")
         got = ebur128(out)
-        if abs(got.integrated - audio.lufs) <= audio.tolerance_lu and got.true_peak <= audio.true_peak:
+        miss = audio.lufs - got.integrated
+        over = got.true_peak - audio.true_peak
+        if abs(miss) <= audio.tolerance_lu and over <= 0:
             return got
+        aim += miss * 0.8
+        if over > 0:
+            ceiling -= over + 0.2
+        elif miss > audio.tolerance_lu:
+            ceiling = min(
+                ceiling + 0.4, audio.true_peak - 0.3
+            )  # peak has room, the ceiling is choking the level
     raise LoudnessError(
         f"loudness {got.integrated:.1f} LUFS, true peak {got.true_peak:.1f} dBTP misses the target"
     )

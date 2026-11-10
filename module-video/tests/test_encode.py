@@ -103,3 +103,15 @@ def test_mux_reaches_loudness_target(ctx, tmp_path: Path) -> None:  # type: igno
 def test_render_sound_helper(ctx, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     cues = render_sound(ctx, tmp_path / "a.wav")
     assert cues and (tmp_path / "a.wav").stat().st_size > 1_000_000
+
+
+def test_worker_context_uses_the_parent_reading_speed() -> None:
+    """The picture's scenes must start when the sound and the frame count assume (reading speed 3.0)."""
+    from mvrender import encode
+
+    resolved = resolved_reference()
+    encode._init_worker(resolved, FONTS, None, 30, 3.0)
+    parent = make_context(resolved, FONTS, None, reading_wps=3.0, fps=30)
+    assert encode._CTX is not None
+    assert encode._CTX.timeline.starts == parent.timeline.starts
+    assert encode._CTX.timeline.starts != make_context(resolved, FONTS, None, fps=30).timeline.starts
