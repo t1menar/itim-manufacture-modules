@@ -137,12 +137,16 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if err != nil {
 		return err
 	}
+	upstream, err := variantUpstream(ctx, tx, s.variant)
+	if err != nil {
+		return err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
 		"input": map[string]any{
 			"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
-			"channels": channels, "upstream": map[string]any{},
+			"channels": channels, "upstream": upstream,
 		},
 		"settings":    settings,
 		"credentials": []string{},
@@ -295,4 +299,28 @@ func modeOrCreate(m string) string {
 		return "create"
 	}
 	return m
+}
+
+// variantUpstream gives a variant-scoped job (review, revise) the latest content revision of its
+// variant, in the same shape as the publish job: upstream.content_revision (opaque blob, D22) and
+// upstream.content_revision_id. A job without a variant, or a variant without a revision yet,
+// gets an empty object.
+func variantUpstream(ctx context.Context, tx pgx.Tx, variant *uuid.UUID) (map[string]any, error) {
+	upstream := map[string]any{}
+	if variant == nil {
+		return upstream, nil
+	}
+	var id uuid.UUID
+	var body json.RawMessage
+	err := tx.QueryRow(ctx, `SELECT id, body FROM content_revisions WHERE variant_id = $1 ORDER BY revision DESC LIMIT 1`, *variant).
+		Scan(&id, &body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return upstream, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	upstream["content_revision"] = body
+	upstream["content_revision_id"] = id.String()
+	return upstream, nil
 }

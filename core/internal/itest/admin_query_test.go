@@ -94,12 +94,29 @@ func TestAdminOverviewProductionsAndCancel(t *testing.T) {
 		t.Fatalf("get production: %d %s", res.StatusCode, problemCode(t, res))
 	}
 	var prod struct {
-		Jobs []struct{ ID string }
+		Jobs   []struct{ ID string }
+		Events []struct {
+			JobID json.RawMessage `json:"job_id"`
+		}
 	}
 	_ = json.NewDecoder(res.Body).Decode(&prod)
 	res.Body.Close()
 	if len(prod.Jobs) < 1 {
 		t.Fatal("production has no jobs")
+	}
+	withJob := 0
+	for _, ev := range prod.Events {
+		if len(ev.JobID) == 0 || string(ev.JobID) == "null" {
+			continue
+		}
+		withJob++
+		var s string
+		if err := json.Unmarshal(ev.JobID, &s); err != nil {
+			t.Fatalf("event job_id must be a uuid string, got %s", ev.JobID)
+		}
+	}
+	if withJob == 0 {
+		t.Fatal("expected events with job_id")
 	}
 
 	res = admin(http.MethodGet, "/internal/v1/jobs/"+job.String(), "")
