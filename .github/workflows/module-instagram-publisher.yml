@@ -1,0 +1,44 @@
+name: module-instagram-publisher
+on:
+  pull_request:
+    paths:
+      - "modules/module-instagram-publisher/**"
+      - ".github/workflows/module-instagram-publisher.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/module-instagram-publisher/**"
+      - ".github/workflows/module-instagram-publisher.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modules/module-instagram-publisher
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pub
+          POSTGRES_PASSWORD: pub
+          POSTGRES_DB: pub
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pub" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      MIPUB_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
+      MIPUB_TEST_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --python 3.12
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy (strict)
+        run: uv run mypy
+      - name: migrations up, drift check, down
+        run: uv run alembic upgrade head && uv run alembic check && uv run alembic downgrade base
+      - name: pytest (on Postgres)
+        run: uv run pytest -q

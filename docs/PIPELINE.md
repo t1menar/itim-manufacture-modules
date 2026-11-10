@@ -1,6 +1,6 @@
 # Target pipeline (draft for owner approval)
 
-Status: **module-idea, module-scenario and module-video-generation are implemented behind Protocols; the rest is draft.** Replaces the single `module-video` with five stage modules plus
+Status: **module-idea, module-scenario, module-video-generation and module-instagram-publisher are implemented behind Protocols; the rest is draft.** Replaces the single `module-video` with five stage modules plus
 a review module. Modules are ported onto `manufacture-sdk-python`; the SDK interface is to be checked
 before coding. Existing code to reuse is named per module.
 
