@@ -21,7 +21,7 @@ import (
 type Server struct {
 	Cfg   bootstrap.Config
 	Up    *upstream.Client
-	Audit *audit.Store
+	Audit audit.Sink
 	Log   *slog.Logger
 	Ready func() error
 }
@@ -78,6 +78,8 @@ func (s *Server) Handler() http.Handler {
 
 	s.moduleProxy(mux, "publish", []proxyRoute{
 		{"GET", "/api/v1/publish/accounts", "/admin/v1/accounts", "publish.accounts.read"},
+		{"POST", "/api/v1/publish/accounts", "/admin/v1/accounts", "publish.accounts.write"},
+		{"PATCH", "/api/v1/publish/accounts/{id}", "/admin/v1/accounts/{id}", "publish.accounts.write"},
 		{"PUT", "/api/v1/publish/accounts/{id}/token", "/admin/v1/accounts/{id}/token", "publish.accounts.token"},
 		{"GET", "/api/v1/publish/intents", "/admin/v1/intents", "publish.intents.read"},
 		{"GET", "/api/v1/publish/intents/{id}", "/admin/v1/intents/{id}", "publish.intents.read"},
@@ -220,9 +222,24 @@ func (s *Server) audit(r *http.Request, action, outcome string, status int, code
 	_ = s.Audit.Write(ctx, audit.Row{
 		Actor: s.Cfg.Actor, Action: action, Outcome: outcome,
 		HTTPStatus: status, ProblemCode: code, RequestID: requestID(r),
-		ResourceType: strings.Split(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/")[0],
-		ResourceID:   r.PathValue("id") + r.PathValue("ref") + r.PathValue("key") + r.PathValue("step"),
+		ResourceType: resourceType(r),
+		ResourceID:   resourceID(r),
 	})
+}
+
+func resourceType(r *http.Request) string {
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/"), "/")
+	if len(parts) >= 2 {
+		return parts[1]
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return ""
+}
+
+func resourceID(r *http.Request) string {
+	return r.PathValue("id") + r.PathValue("ref") + r.PathValue("key") + r.PathValue("step")
 }
 
 func (s *Server) auditOrFail(w http.ResponseWriter, r *http.Request, action string) bool {
@@ -231,7 +248,9 @@ func (s *Server) auditOrFail(w http.ResponseWriter, r *http.Request, action stri
 	}
 	if err := s.Audit.Write(r.Context(), audit.Row{
 		Actor: s.Cfg.Actor, Action: action, Outcome: "ok", HTTPStatus: 0, RequestID: requestID(r),
-		ResourceType: "intent",
+		ResourceType: resourceType(r),
+		ResourceID:   resourceID(r),
+		// Details stay empty: secret values must never enter the audit log.
 	}); err != nil {
 		problem.Write(w, http.StatusServiceUnavailable, "audit_unavailable", "cannot record audit", "", requestID(r))
 		return false

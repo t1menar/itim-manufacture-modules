@@ -13,8 +13,11 @@ from review.api.auth import CoreAuth
 from review.api.problems import problem
 from review.db import secrets
 from review.db.models import PendingReject, ReviewCard, Run
+from review.observability.logging import get_logger
 
 router = APIRouter(prefix="/admin/v1", tags=["admin"])
+
+log = get_logger("review.admin")
 
 _KEY = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$")
 
@@ -37,6 +40,8 @@ async def put_secret(key: str, body: SecretBody, request: Request, _: CoreAuth) 
     factory = request.app.state.session_factory
     async with factory() as s, s.begin():
         created = await secrets.upsert_secret(s, key, body.value)
+    actor = request.headers.get("x-actor") or request.headers.get("x-admin-actor") or "admin"
+    log.info("secret_upserted", key=key, actor=actor, created=created)
     return Response(status_code=201 if created else 204)
 
 
@@ -46,6 +51,8 @@ async def delete_secret(key: str, request: Request, _: CoreAuth) -> Response:
     async with factory() as s, s.begin():
         if not await secrets.delete_secret(s, key):
             return problem(404, "not_found", "secret not found")
+    actor = request.headers.get("x-actor") or request.headers.get("x-admin-actor") or "admin"
+    log.info("secret_deleted", key=key, actor=actor)
     return Response(status_code=204)
 
 

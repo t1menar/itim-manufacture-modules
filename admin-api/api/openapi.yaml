@@ -159,6 +159,41 @@ paths:
     get:
       summary: Accounts with has_token, never the token
       responses: { "200": { description: list } }
+    post:
+      summary: Create account; access_token is write-only
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel_id, platform]
+              properties:
+                channel_id: { type: string }
+                platform: { type: string }
+                handle: { type: string }
+                external_id: { type: string }
+                enabled: { type: boolean }
+                access_token: { type: string }
+      responses: { "201": { description: created } }
+  /api/v1/publish/accounts/{id}:
+    patch:
+      summary: Update account fields; access_token is write-only and optional
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel_id: { type: string }
+                platform: { type: string }
+                handle: { type: string }
+                external_id: { type: string }
+                enabled: { type: boolean }
+                access_token: { type: string }
+      responses: { "200": { description: updated } }
   /api/v1/publish/accounts/{id}/token:
     put:
       summary: Write access token only; never returned on read

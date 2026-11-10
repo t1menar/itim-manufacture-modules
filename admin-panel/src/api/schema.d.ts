@@ -939,11 +939,87 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        /** Create account; access_token is write-only */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        channel_id: string;
+                        platform: string;
+                        handle?: string;
+                        external_id?: string;
+                        enabled?: boolean;
+                        access_token?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/publish/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update account fields; access_token is write-only and optional */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        channel_id?: string;
+                        platform?: string;
+                        handle?: string;
+                        external_id?: string;
+                        enabled?: boolean;
+                        access_token?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/api/v1/publish/accounts/{id}/token": {
