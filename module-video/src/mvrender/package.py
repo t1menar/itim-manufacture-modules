@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -98,15 +98,16 @@ def mux_final(
 ) -> Loudness:
     """Level the sound, mux it with the copied video, and verify the final file with ebur128.
 
-    The AAC encoder can overshoot the limiter ceiling by several dB on dense material, so the final
-    file is measured and, when its true peak is above the target, the sound is levelled again with
-    a larger headroom (up to four rounds) before the check fails."""
+    The AAC encode changes the true peak unpredictably (a sparse sound can come out 2 dB over the
+    limiter ceiling at one headroom and under it at another), and costs about 0.4 LU. So the final
+    file is what is measured: the headroom grows in steps of 0.5 dB, with the loudness aimed 0.2 LU
+    high, until the encoded file meets both targets (up to 14 rounds)."""
     audio = audio or AudioSettings()
     leveled = Path(str(out) + ".leveled.wav")
-    margin = 0.5
+    aim = replace(audio, lufs=audio.lufs + 0.2)
     got = Loudness(0.0, 0.0, 0.0)
-    for _ in range(4):
-        _leveled(Path(wav), leveled, audio, margin)
+    for step in range(14):
+        _leveled(Path(wav), leveled, aim, 0.5 + 0.5 * step)
         p = run(["-y", "-i", str(silent), "-i", str(leveled), "-map", "0:v", "-map", "1:a", "-c:v", "copy",
                  "-ar", "48000", "-ac", "2", "-c:a", "aac", "-b:a", f"{audio.bitrate_kbps}k", "-shortest",
                  "-movflags", "+faststart", str(out)])  # fmt: skip
@@ -114,12 +115,8 @@ def mux_final(
         if p.returncode != 0:
             raise MediaError(f"mux failed: {p.stderr[-300:]!r}")
         got = ebur128(out)
-        over = got.true_peak - audio.true_peak
-        if abs(got.integrated - audio.lufs) <= audio.tolerance_lu and over <= 0:
+        if abs(got.integrated - audio.lufs) <= audio.tolerance_lu and got.true_peak <= audio.true_peak:
             return got
-        if over <= 0:  # only the loudness is off: nothing the headroom can fix
-            break
-        margin += over + 0.3
     raise LoudnessError(
         f"loudness {got.integrated:.1f} LUFS, true peak {got.true_peak:.1f} dBTP misses the target"
     )
