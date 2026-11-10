@@ -1,5 +1,5 @@
 import { Button, Group, Modal, Stack, Text, Textarea } from "@mantine/core";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 export function ConfirmAction({
   opened,
@@ -11,6 +11,7 @@ export function ConfirmAction({
   withReason = false,
   reasonLabel = "Причина",
   loading = false,
+  extra,
   onConfirm,
 }: {
   opened: boolean;
@@ -22,6 +23,7 @@ export function ConfirmAction({
   withReason?: boolean;
   reasonLabel?: string;
   loading?: boolean;
+  extra?: ReactNode;
   onConfirm: (reason: string) => void;
 }) {
   const [reason, setReason] = useState("");
@@ -46,6 +48,7 @@ export function ConfirmAction({
             autoComplete="off"
           />
         )}
+        {extra}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={loading}>
             Отмена

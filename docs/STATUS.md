@@ -17,14 +17,14 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| #26 | Каркас admin-panel | смержен |
-| (this) | Экран **Productions** (список, детали, cancel/retry/skip) | owner — ждать (**не мержить**) |
+| #27 | Экран **Productions** (база этой ветки) | owner — ждать (**не мержить**) |
+| (this) | Экран **Ревью и публикации**: очередь, прогоны, интенты, republish с обязательной причиной; режим Instagram real/fake | owner — ждать (**не мержить**) |
 
 ## Local deploy
 
 - Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api + панель**, register+activate modules, smoke.
 - Панель и API: `http://127.0.0.1:58084/` (только loopback, один origin).
-- Fake TG/IG by default.
+- Для живых проверок экранов стартовать стек с `PUBLISH_INSTAGRAM_MODE=fake` (Telegram и так fake). Отдельный PR меняет дефолт Instagram в Compose на `real`.
 
 ## module-video
 

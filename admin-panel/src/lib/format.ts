@@ -20,6 +20,7 @@ export const STATUS_LABELS: Record<string, string> = {
   failed: "ошибка",
   cancelled: "отменено",
   pending: "ожидает",
+  in_progress: "в работе",
   producing: "производится",
   in_review: "на ревью",
   revising: "доработка",

@@ -175,6 +175,7 @@ paths:
               properties:
                 reason: { type: string }
                 base_generation: { type: integer }
+                acknowledge_unknown_risk: { type: boolean }
       responses: { "200": { description: accepted } }
   /api/v1/audit:
     get:
