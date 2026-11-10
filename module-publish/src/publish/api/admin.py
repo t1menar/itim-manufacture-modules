@@ -50,12 +50,14 @@ async def list_accounts(request: Request, _: CoreAuth) -> Any:
         accounts = await repo.list_enabled_accounts(s)
         # also include disabled for the admin panel
         all_rows = (
-            await s.execute(
-                select(PlatformAccount).order_by(
-                    PlatformAccount.channel_id, PlatformAccount.handle
+            (
+                await s.execute(
+                    select(PlatformAccount).order_by(PlatformAccount.channel_id, PlatformAccount.handle)
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if all_rows:
             accounts = list(all_rows)
     return {"accounts": _accounts_view(accounts)}
