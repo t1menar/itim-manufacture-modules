@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates an idea in module-video and puts it in the scheduler queue (draft -> ready -> queued).
+# Creates an idea in module-video and puts it straight into the scheduler queue (status queued).
 #   ./deploy/scripts/video-idea.sh "Title" "Description" "Hook line"  [topic_code]   (default topic: postgres_internals)
 # The scheduler (VIDEO_IDEAS_PAUSED=0) then sends idea.ready to core, which creates the job.
 set -Eeuo pipefail
@@ -16,14 +16,12 @@ print(f"""
 INSERT INTO topics (code, title, description, default_tags, default_platforms)
 VALUES ({q(e['TOPIC'])}, {q(e['TOPIC'])}, {q(e['TOPIC'])}, ARRAY['postgresql','databases'], ARRAY['instagram'])
 ON CONFLICT (code) DO NOTHING;
-WITH i AS (
-  INSERT INTO ideas (topic_id, title, description, hook, language, priority, status, author)
-  VALUES ((SELECT id FROM topics WHERE code = {q(e['TOPIC'])}), {q(e['TITLE'])}, {q(e['DESC'])}, {q(e['HOOK'])},
-          'en', 10, 'draft', 'deploy')
-  RETURNING id)
-UPDATE ideas SET status = 'ready', ready_at = now() WHERE id = (SELECT id FROM i);
-UPDATE ideas SET status = 'queued', queued_at = now()
- WHERE id = (SELECT max(id) FROM ideas WHERE author = 'deploy') AND status = 'ready'
+-- One statement: a data-modifying CTE cannot see its own INSERT, so a follow-up UPDATE of the
+-- new row would match nothing and leave the idea in draft. Author must match ^(tg|db|user):.+$
+-- (idea schema), otherwise the scheduler fails the idea with idea_invalid.
+INSERT INTO ideas (topic_id, title, description, hook, language, priority, status, author, ready_at, queued_at)
+VALUES ((SELECT id FROM topics WHERE code = {q(e['TOPIC'])}), {q(e['TITLE'])}, {q(e['DESC'])}, {q(e['HOOK'])},
+        'en', 10, 'queued', 'db:deploy', now(), now())
 RETURNING 'queued idea ' || id;
 """)
 PY

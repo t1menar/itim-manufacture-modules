@@ -76,13 +76,14 @@ async def run_publish_intents(
 
 
 def result_callback_body(output: dict[str, Any], *, finished_at: datetime | None = None) -> dict[str, Any]:
-    """Core POST .../result body for a successful fake publish."""
-    at = finished_at or datetime.now(UTC)
-    return {
-        "output": output,
-        "artifacts": [],
-        "finished_at": at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
+    """Core POST .../result body (core/schemas/result.json: output, artifacts, metrics only).
+
+    Core decodes the body with unknown fields disallowed, so no extra keys here (a top-level
+    `finished_at` made every publish result fail with 422). `finished_at` is kept in the
+    signature for callers; core records the finish time itself.
+    """
+    _ = finished_at
+    return {"output": output, "artifacts": []}
 
 
 def parse_intent_ids(job_request: dict[str, Any]) -> list[UUID]:

@@ -433,6 +433,49 @@ func TestVideoResultCreatesContentRevision(t *testing.T) {
 	}
 }
 
+// The review job must carry what it reviews: the variant's latest content revision (same shape
+// as the publish job's upstream), otherwise the review card has no video or caption.
+func TestReviewJobCarriesContentRevision(t *testing.T) {
+	e := setup(t)
+	job, fence := e.startedJob()
+	srv := e.api()
+	res := e.postCallback(srv, "vidmod", "result", job, fence, map[string]any{
+		"output": videoStageOutput("rev"), "artifacts": []any{},
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("%d %s", res.StatusCode, problemCode(t, res))
+	}
+	res.Body.Close()
+	var raw []byte
+	if err := e.pool.QueryRow(e.ctx, `SELECT request FROM jobs WHERE stage_id = 'review'`).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var req struct {
+		Input struct {
+			Upstream struct {
+				ContentRevision   map[string]any `json:"content_revision"`
+				ContentRevisionID string         `json:"content_revision_id"`
+			} `json:"upstream"`
+		} `json:"input"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		t.Fatal(err)
+	}
+	var revID string
+	if err := e.pool.QueryRow(e.ctx, `SELECT id::text FROM content_revisions`).Scan(&revID); err != nil {
+		t.Fatal(err)
+	}
+	up := req.Input.Upstream
+	if up.ContentRevisionID != revID {
+		t.Fatalf("content_revision_id=%q, want %q", up.ContentRevisionID, revID)
+	}
+	meta, _ := up.ContentRevision["metadata"].(map[string]any)
+	video, _ := up.ContentRevision["video"].(map[string]any)
+	if meta == nil || meta["title"] != "t-rev" || video == nil || video["ref"] == nil {
+		t.Fatalf("review upstream lacks the revision body: %#v", up.ContentRevision)
+	}
+}
+
 func TestVideoResultWithoutMetadataRejected(t *testing.T) {
 	e := setup(t)
 	job, fence := e.startedJob()

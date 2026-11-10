@@ -26,3 +26,11 @@ async def test_fake_runner_builds_published_output() -> None:
     body = result_callback_body(output)
     assert body["output"] is output
     assert body["artifacts"] == []
+
+
+def test_result_body_has_only_core_result_fields() -> None:
+    # core decodes POST .../result with unknown fields disallowed (core/schemas/result.json).
+    import datetime as dt
+
+    body = result_callback_body({"publications": []}, finished_at=dt.datetime.now(dt.UTC))
+    assert set(body) <= {"output", "artifacts", "metrics"}

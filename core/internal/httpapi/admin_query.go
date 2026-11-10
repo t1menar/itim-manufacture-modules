@@ -247,7 +247,8 @@ func (s *Server) getProduction(w http.ResponseWriter, r *http.Request) {
 	jobs := []map[string]any{}
 	for jrows.Next() {
 		var jid uuid.UUID
-		var variant, module any
+		var variant *uuid.UUID
+		var module any
 		var stage, status, mode string
 		var pos, attempt, fence, rev int
 		var cancel bool
@@ -275,7 +276,8 @@ func (s *Server) getProduction(w http.ResponseWriter, r *http.Request) {
 	for erows.Next() {
 		var eid int64
 		var typ, actor string
-		var variantID, jobID, payload, at any
+		var variantID, jobID *uuid.UUID // pgx scans uuid into `any` as [16]byte → JSON number arrays
+		var payload, at any
 		if err := erows.Scan(&eid, &variantID, &jobID, &typ, &actor, &payload, &at); err != nil {
 			erows.Close()
 			problem(w, http.StatusInternalServerError, "internal", "get production failed")
@@ -306,7 +308,8 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 		chain_id, try, max_attempts, mode, status, fence, timeout_s, cancel_requested, request, output, error, progress,
 		created_at, updated_at, finished_at, rev FROM jobs WHERE id = $1`, id)
 	var jid, prod, chain uuid.UUID
-	var variant, module, request, output, errBody, progress, created, updated, finished any
+	var variant *uuid.UUID
+	var module, request, output, errBody, progress, created, updated, finished any
 	var stage, mode, status string
 	var pos, attempt, tryN, maxA, fence, timeout, rev int
 	var cancel bool
