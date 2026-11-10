@@ -28,8 +28,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U pub" --health-interval 2s --health-timeout 5s --health-retries 30
     env:
-      MIPUB_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
-      MIPUB_TEST_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
+      MIPUB_DATABASE_URL: postgresql+asyncpg://pub:pub@localhost:5432/pub
+      MIPUB_TEST_DATABASE_URL: postgresql+asyncpg://pub:pub@localhost:5432/pub
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

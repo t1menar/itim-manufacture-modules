@@ -30,8 +30,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U video" --health-interval 2s --health-timeout 5s --health-retries 30
     env:
-      MVGEN_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
-      MVGEN_TEST_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
+      MVGEN_DATABASE_URL: postgresql+asyncpg://video:video@localhost:5432/video
+      MVGEN_TEST_DATABASE_URL: postgresql+asyncpg://video:video@localhost:5432/video
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
