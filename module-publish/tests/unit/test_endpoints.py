@@ -27,7 +27,8 @@ def test_info_contract(client: TestClient) -> None:
     body = resp.json()
     assert body["contract"] == 1
     assert body["stages"] == ["publish"]
-    assert body["name"] == "Publish (Instagram Graph API / fake)"
+    assert body["name"] == "Publish (Instagram Graph API, fake)"
+    assert body["instagram_mode"] == "fake"
     assert body["version"] == __version__
     assert body["admin_endpoints"] == [
         "/admin/v1/accounts",
