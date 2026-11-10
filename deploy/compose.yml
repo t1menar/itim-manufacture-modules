@@ -119,7 +119,7 @@ services:
       MODULE_CORE_URL: http://core:8080
       MODULE_CORE_TOKEN: ${MODULE_TOKEN_VIDEO:-mft_pending_video}
       MODULE_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
-      S3_ENDPOINT: minio:9000
+      S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-manufacture}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       S3_BUCKET: ${S3_BUCKET:-manufacture}
