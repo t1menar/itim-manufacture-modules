@@ -110,8 +110,12 @@ def mux_final(
         if abs(miss) <= audio.tolerance_lu and over <= 0:
             return got
         aim += miss * 0.8
-        if over > -0.3:
-            ceiling -= over + 0.3
+        if over > 0:
+            ceiling -= over + 0.2
+        elif miss > audio.tolerance_lu:
+            ceiling = min(
+                ceiling + 0.4, audio.true_peak - 0.3
+            )  # peak has room, the ceiling is choking the level
     raise LoudnessError(
         f"loudness {got.integrated:.1f} LUFS, true peak {got.true_peak:.1f} dBTP misses the target"
     )
