@@ -263,7 +263,14 @@ class RealInstagramClient:
                     delay *= 2
                     continue
                 if resp.status_code >= 400 or (isinstance(body, dict) and body.get("success") is False):
-                    log.warning("instagram_upload_error", status=resp.status_code, body=str(body)[:400])
+                    log.warning(
+                        "instagram_upload_error",
+                        status=resp.status_code,
+                        body=str(body)[:400],
+                        url_host=url.split("/")[2],
+                        size=len(data),
+                        magic=data[4:8].hex(),
+                    )
                     classified = classify_graph_error(
                         status_code=resp.status_code, body=body if isinstance(body, dict) else None
                     )
