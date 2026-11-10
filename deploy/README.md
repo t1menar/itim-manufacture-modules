@@ -29,6 +29,17 @@
 
 Шедулер module-video отдаёт `idea.ready` в core, core создаёт задание, готовый ролик попадает в MinIO (бакет `manufacture`). Образ агента `video-agent:dev` собирается из `module-video/agent/Dockerfile`, если его нет.
 
+## Реальные Telegram и Instagram
+
+Переключение на real делается в базах модулей (DB приоритетнее env), перезапуск не нужен:
+
+```bash
+./deploy/scripts/review-telegram.sh     # токен бота, admin ids, chat ids (скрытый ввод или TELEGRAM_* в окружении)
+./deploy/scripts/publish-instagram.sh   # INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID -> аккаунт itim
+```
+
+`--dry-run` печатает SQL с замаскированными секретами. И Telegram (большие файлы), и Instagram (всегда) берут видео по публичной HTTPS-ссылке MinIO, поэтому нужен туннель на `:56000`; его хост пропишите в `deploy/.env` (`S3_PUBLIC_ENDPOINT=<host>`, `S3_PUBLIC_SECURE=1`) до запуска скриптов.
+
 ## Порты (по умолчанию)
 
 | Сервис | URL |
