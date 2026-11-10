@@ -1,0 +1,267 @@
+# Manufacture local stack. Prefer: ./deploy/up.sh
+# Ports (host): PG 56432 · RMQ 56672/15672 · MinIO 56000/56001 · core 58080 · video 58081 · review 58082 · publish 58083
+# Static IPs + extra_hosts: работают даже когда embedded DNS Docker (127.0.0.11) недоступен.
+name: manufacture
+
+x-hosts: &service-hosts
+  - "postgres:172.28.0.10"
+  - "rabbitmq:172.28.0.11"
+  - "minio:172.28.0.12"
+  - "core:172.28.0.20"
+  - "module-video:172.28.0.21"
+  - "module-review:172.28.0.22"
+  - "module-publish:172.28.0.23"
+
+x-module-common: &module-common
+  restart: unless-stopped
+  extra_hosts: *service-hosts
+  networks:
+    manufacture: {}
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-manufacture}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_PORT:-56432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/01-create-dbs.sql:/docker-entrypoint-initdb.d/01-create-dbs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-manufacture}"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    extra_hosts: *service-hosts
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.10
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "${RABBITMQ_PORT:-56672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-56673}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    extra_hosts: *service-hosts
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.11
+
+  # Built locally (Hub/Quay MinIO often blocked). Same ports as compose.minio.yml.
+  minio:
+    image: ${MINIO_IMAGE:-manufacture-minio:local}
+    build:
+      context: .
+      dockerfile: Dockerfile.minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-manufacture}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-manufacture}
+    ports:
+      - "${MINIO_API_PORT:-56000}:9000"
+      - "${MINIO_CONSOLE_PORT:-56001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    extra_hosts: *service-hosts
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.12
+
+  core:
+    <<: *module-common
+    image: ${CORE_IMAGE:-manufacture-core:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.core
+    environment:
+      CORE_DATABASE_URL: postgres://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/core?sslmode=disable
+      CORE_LISTEN_ADDR: ":8080"
+      CORE_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+      CORE_MASTER_KEY: ${CORE_MASTER_KEY:?set CORE_MASTER_KEY}
+      CORE_ADMIN_TOKEN: ${CORE_ADMIN_TOKEN:?set CORE_ADMIN_TOKEN}
+    ports:
+      - "${CORE_PORT:-58080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    # Distroless image has no curl/wget — up.sh waits via compose-network curl
+    healthcheck:
+      disable: true
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.20
+
+  module-video:
+    <<: *module-common
+    image: ${VIDEO_IMAGE:-manufacture-video:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.video
+    environment:
+      VIDEO_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/video
+      VIDEO_LISTEN_ADDR: "0.0.0.0:8080"
+      MODULE_CORE_URL: http://core:8080
+      MODULE_CORE_TOKEN: ${MODULE_TOKEN_VIDEO:-mft_pending_video}
+      MODULE_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-manufacture}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-manufacture}
+      S3_SECURE: "0"
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-127.0.0.1:56000}
+      S3_PUBLIC_SECURE: ${S3_PUBLIC_SECURE:-0}
+      DOCKER_HOST: unix:///var/run/docker.sock
+      VIDEO_AGENT_NETWORK: ${VIDEO_AGENT_NETWORK:-manufacture_agents}
+      VIDEO_IDEAS_PAUSED: ${VIDEO_IDEAS_PAUSED:-1}
+    ports:
+      - "${VIDEO_PORT:-58081}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      core:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.21
+
+  module-review:
+    <<: *module-common
+    image: ${REVIEW_IMAGE:-manufacture-review:local}
+    build:
+      context: ..
+      dockerfile: module-review/Dockerfile
+    environment:
+      REVIEW_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/review
+      REVIEW_LISTEN_ADDR: "0.0.0.0:8080"
+      MODULE_CORE_URL: http://core:8080
+      MODULE_CORE_TOKEN: ${MODULE_TOKEN_REVIEW:-mft_pending_review}
+      REVIEW_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+      REVIEW_TELEGRAM_MODE: ${REVIEW_TELEGRAM_MODE:-fake}
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-manufacture}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-manufacture}
+      S3_SECURE: "0"
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-127.0.0.1:56000}
+      S3_PUBLIC_SECURE: ${S3_PUBLIC_SECURE:-0}
+    ports:
+      - "${REVIEW_PORT:-58082}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      core:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.22
+
+  module-publish:
+    <<: *module-common
+    image: ${PUBLISH_IMAGE:-manufacture-publish:local}
+    build:
+      context: ..
+      dockerfile: module-publish/Dockerfile
+    environment:
+      PUBLISH_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-manufacture}:${POSTGRES_PASSWORD}@postgres:5432/publish
+      PUBLISH_LISTEN_ADDR: "0.0.0.0:8080"
+      MODULE_CORE_URL: http://core:8080
+      MODULE_CORE_TOKEN: ${MODULE_TOKEN_PUBLISH:-mft_pending_publish}
+      PUBLISH_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+      PUBLISH_INSTAGRAM_MODE: ${PUBLISH_INSTAGRAM_MODE:-fake}
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-manufacture}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-manufacture}
+      S3_SECURE: "0"
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-127.0.0.1:56000}
+      S3_PUBLIC_SECURE: ${S3_PUBLIC_SECURE:-0}
+    ports:
+      - "${PUBLISH_PORT:-58083}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      core:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks:
+      manufacture:
+        ipv4_address: 172.28.0.23
+
+networks:
+  manufacture:
+    name: manufacture
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+  # Agent sandbox network (module-video DOCKER_HOST); created by up.sh if missing.
+
+volumes:
+  pg_data:
+  minio_data:
