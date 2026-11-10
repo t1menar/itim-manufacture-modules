@@ -27,7 +27,7 @@
 ./deploy/scripts/video-idea.sh "Title" "Description" "Hook line"   # идея -> очередь шедулера
 ```
 
-Шедулер module-video отдаёт `idea.ready` в core, core создаёт задание, готовый ролик попадает в MinIO (бакет `manufacture`). Образ агента `video-agent:dev` собирается из `module-video/agent/Dockerfile`, если его нет.
+Шедулер module-video отдаёт `idea.ready` в core, core создаёт задание, готовый ролик попадает в MinIO (бакет `manufacture`). Образ агента `video-agent:dev` собирается из `video-modules/module-video/agent/Dockerfile`, если его нет.
 
 ## Реальные Telegram и Instagram
 

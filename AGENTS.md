@@ -12,9 +12,9 @@ module(s) you touch. `docs/STATUS.md` holds decisions (D18–D24) and merged-PR 
 | Folder | Lang | Role |
 |---|---|---|
 | `core/` | Go | Pipeline engine + module registry. Productions → variants → jobs, outbox/inbox over RabbitMQ, fencing, retries, publish intents. Being extracted into a standalone "pipeline router" project (SDK for modules planned). |
-| `module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
-| `module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
-| `module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
+| `video-modules/module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
+| `video-modules/module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
+| `video-modules/module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
 | `admin-api/` | Go | Localhost-only gateway for the panel (no login), proxies core + modules, audit log. |
 | `admin-panel/` | TS/React | Russian-language SPA served by admin-api at `http://127.0.0.1:58084/`. |
 | `contracts/` | JSON Schema | Shared idea/topic/event schemas (vendored into module-video; a test fails on drift). |
@@ -78,6 +78,6 @@ publish 58083, admin 58084 (loopback only), PG 56432, AMQP 56672/UI 56673, MinIO
 ## Where things are not finished
 
 - Core is being separated; module SDK is the owner's current work — avoid large core refactors without asking.
-- `module-video/uv.lock` predates the OpenTelemetry deps; `agent/prices.json` has placeholder prices.
+- `video-modules/module-video/uv.lock` predates the OpenTelemetry deps; `agent/prices.json` has placeholder prices.
 - Core/publish state of the first real test publication (intent gen 15 `unknown`, variant `needs_attention`) was not reconciled (test posts, to be deleted by the owner).
 - Not implemented: `/admin/v1/runs`, `/admin/v1/golden`, janitor for old artifacts in module-video; admin ideas/topics routes (`admin-api/docs/VIDEO_ADMIN_ROUTES.md`).
