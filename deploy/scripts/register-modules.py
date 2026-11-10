@@ -69,7 +69,7 @@ def register_one(module_id: str, name: str, stage: str, endpoint: str, info_url:
     manifest = {k: info[k] for k in allowed if k in info}
     body = {
         "id": module_id,
-        "name": name,
+        "name": str(info.get("name") or name),
         "stage": stage,
         "endpoint": endpoint,
         "enabled": True,
@@ -124,7 +124,7 @@ def main() -> None:
     )
     register_one(
         "publish-instagram",
-        "Publish (Instagram Graph API / fake)",
+        "Publish (Instagram Graph API)",
         "publish",
         "http://module-publish:8080",
         "http://module-publish:8080/info",

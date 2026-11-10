@@ -64,7 +64,7 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 
 | Env | Notes |
 |-----|-------|
-| `PUBLISH_INSTAGRAM_MODE` | `fake` or `real` |
+| `PUBLISH_INSTAGRAM_MODE` | `fake` or `real`. Compose default is `real`; unset bootstrap (tests/CI) stays `fake`. |
 | `PUBLISH_INSTAGRAM_ACCESS_TOKEN` | Fallback if account + default secret empty |
 | `PUBLISH_INSTAGRAM_IG_USER_ID` | Fallback if `platform_accounts.external_id` empty |
 | `PUBLISH_INSTAGRAM_GRAPH_BASE` | Default `https://graph.instagram.com` |
