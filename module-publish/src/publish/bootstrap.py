@@ -31,7 +31,7 @@ OPTIONAL_VARS = (
     "PUBLISH_INSTAGRAM_ACCESS_TOKEN",  # env fallback; prefer platform_accounts.access_token
     "PUBLISH_INSTAGRAM_IG_USER_ID",  # optional default IG user id when account.external_id empty
     "PUBLISH_INSTAGRAM_GRAPH_BASE",  # default https://graph.instagram.com
-    "PUBLISH_INSTAGRAM_API_VERSION",  # default v22.0
+    "PUBLISH_INSTAGRAM_API_VERSION",  # default v27.0
     "PUBLISH_INSTAGRAM_UPLOAD_MODE",  # direct (file from MinIO, default) | url (public presigned link)
     "PUBLISH_INSTAGRAM_UPLOAD_BASE",  # default https://rupload.facebook.com
     "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -57,7 +57,7 @@ class BootstrapConfig:
     instagram_access_token: str | None = field(default=None, repr=False)
     instagram_ig_user_id: str | None = None
     instagram_graph_base: str = "https://graph.instagram.com"
-    instagram_api_version: str = "v22.0"
+    instagram_api_version: str = "v27.0"
     instagram_upload_mode: str = "direct"
     instagram_upload_base: str = "https://rupload.facebook.com"
 
@@ -121,7 +121,7 @@ class BootstrapConfig:
             instagram_graph_base=(source.get("PUBLISH_INSTAGRAM_GRAPH_BASE") or "https://graph.instagram.com")
             .strip()
             .rstrip("/"),
-            instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v22.0").strip() or "v22.0",
+            instagram_api_version=(source.get("PUBLISH_INSTAGRAM_API_VERSION") or "v27.0").strip() or "v27.0",
             instagram_upload_mode=(source.get("PUBLISH_INSTAGRAM_UPLOAD_MODE") or "direct").strip().lower()
             or "direct",
             instagram_upload_base=(

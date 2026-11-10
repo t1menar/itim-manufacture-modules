@@ -23,8 +23,8 @@ log = get_logger(__name__)
 # Official content publishing docs (Meta): Reels via media_type=REELS + public video_url,
 # poll container status_code until FINISHED, then media_publish. Rolling publish quota via
 # content_publishing_limit (do not hardcode; read quota_total). Graph version configurable;
-# default v22.0 matches Meta IG User Media reference examples.
-DEFAULT_API_VERSION = "v22.0"
+# default v27.0 (the version the current Meta docs and a working manual upload used).
+DEFAULT_API_VERSION = "v27.0"
 DEFAULT_GRAPH_BASE = "https://graph.instagram.com"
 DEFAULT_UPLOAD_BASE = "https://rupload.facebook.com"  # resumable upload host (Meta docs)
 
