@@ -1,0 +1,48 @@
+name: module-scenario
+on:
+  pull_request:
+    paths:
+      - "modules/module-scenario/**"
+      - "packages/mvrender/**"
+      - ".github/workflows/module-scenario.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/module-scenario/**"
+      - "packages/mvrender/**"
+      - ".github/workflows/module-scenario.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modules/module-scenario
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: scenario
+          POSTGRES_PASSWORD: scenario
+          POSTGRES_DB: scenario
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U scenario" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      MSCENARIO_DATABASE_URL: postgresql+asyncpg://scenario:scenario@localhost:5432/scenario
+      MSCENARIO_TEST_DATABASE_URL: postgresql+asyncpg://scenario:scenario@localhost:5432/scenario
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --python 3.12
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy (strict)
+        run: uv run mypy
+      - name: migrations up, drift check, down
+        run: uv run alembic upgrade head && uv run alembic check && uv run alembic downgrade base
+      - name: git is needed by the source checkout tests
+        run: git --version
+      - name: pytest (on Postgres)
+        run: uv run pytest -q

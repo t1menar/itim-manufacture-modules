@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture.local/schemas/research/delta-1.json",
+  "description": "What the research agent writes: only NEW facts plus the ids of cached facts it reused.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "feasibility"],
+  "properties": {
+    "format": {"const": "manufacture.research.delta/1"},
+    "feasibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "reason"],
+      "properties": {
+        "decision": {"enum": ["go", "blocked"]},
+        "reason": {"type": "string", "maxLength": 400},
+        "missing": {"type": "array", "items": {"type": "string"}},
+        "suggestion": {"type": "string", "maxLength": 300}
+      }
+    },
+    "viewer_questions": {
+      "type": "array", "maxItems": 12,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["question", "source"],
+        "properties": {"question": {"type": "string"}, "source": {"type": "string", "format": "uri"}}
+      }
+    },
+    "misconceptions": {
+      "type": "array", "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["claim", "truth", "facts"],
+        "properties": {
+          "claim": {"type": "string"}, "truth": {"type": "string"},
+          "facts": {"type": "array", "items": {"$ref": "#/$defs/factId"}}
+        }
+      }
+    },
+    "call_path": {
+      "type": "array", "maxItems": 20,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["function", "file", "line_start", "line_end", "role"],
+        "properties": {
+          "function": {"type": "string"}, "file": {"type": "string"},
+          "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1},
+          "role": {"type": "string", "maxLength": 200},
+          "key_lines": {
+            "type": "array", "maxItems": 4,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["n", "expect", "why"],
+              "properties": {"n": {"type": "integer", "minimum": 1}, "expect": {"type": "string"}, "why": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "facts": {"type": "array", "maxItems": 40, "items": {"$ref": "#/$defs/fact"}},
+    "reused_facts": {"type": "array", "items": {"$ref": "#/$defs/factId"}, "uniqueItems": true},
+    "terms": {
+      "type": "array", "maxItems": 30,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["term", "explain", "must_explain"],
+        "properties": {
+          "term": {"type": "string"}, "explain": {"type": "string", "maxLength": 140},
+          "must_explain": {"type": "boolean"}, "aliases": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "capture_needs": {
+      "type": "array", "maxItems": 30,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["name", "meaning", "how"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,47}$"},
+          "meaning": {"type": "string"}, "how": {"type": "string"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "factId": {"type": "string", "pattern": "^f[0-9]{1,3}$"},
+    "fact": {
+      "type": "object", "additionalProperties": false, "required": ["id", "text", "cite"],
+      "properties": {
+        "id": {"$ref": "#/$defs/factId"},
+        "text": {"type": "string", "maxLength": 300},
+        "cite": {
+          "oneOf": [
+            {
+              "type": "object", "additionalProperties": false, "required": ["file", "line", "quote"],
+              "properties": {
+                "file": {"type": "string"}, "line": {"type": "integer", "minimum": 1},
+                "quote": {"type": "string", "minLength": 4}
+              }
+            },
+            {
+              "type": "object", "additionalProperties": false, "required": ["url", "quote"],
+              "properties": {"url": {"type": "string", "format": "uri"}, "quote": {"type": "string", "minLength": 4, "maxLength": 300}}
+            }
+          ]
+        }
+      }
+    }
+  }
+}

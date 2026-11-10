@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manufacture.local/schemas/research/research-2.json",
+  "description": "The research document handed to module-scenario.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "idea_ref", "system", "commit", "facts", "terms", "capture_needs", "viewer_questions", "misconceptions", "call_path", "knowledge"],
+  "properties": {
+    "format": {"const": "manufacture.research/2"},
+    "idea_ref": {"type": "string", "pattern": "^idea:[0-9]+:v[0-9]+$"},
+    "system": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false, "required": ["repo", "ref"],
+          "properties": {"repo": {"type": "string"}, "ref": {"type": "string"}, "name": {"type": "string"}, "version": {"type": "string"}}
+        }
+      ]
+    },
+    "commit": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{40}$"}]},
+    "viewer_questions": {"type": "array", "maxItems": 12},
+    "misconceptions": {"type": "array", "maxItems": 8},
+    "call_path": {"type": "array", "maxItems": 20},
+    "facts": {
+      "type": "array", "minItems": 3, "maxItems": 60,
+      "items": {
+        "type": "object", "required": ["id", "text", "cite", "origin"],
+        "properties": {"id": {"type": "string", "pattern": "^f[0-9]{1,3}$"}, "origin": {"enum": ["cache", "new"]}}
+      }
+    },
+    "terms": {"type": "array", "maxItems": 30},
+    "capture_needs": {"type": "array", "maxItems": 30},
+    "knowledge": {
+      "type": "object", "additionalProperties": false, "required": ["cache_hits", "new_facts"],
+      "properties": {"cache_hits": {"type": "integer", "minimum": 0}, "new_facts": {"type": "integer", "minimum": 0}}
+    }
+  }
+}
