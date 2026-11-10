@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -52,8 +53,22 @@ def create_app(
     if start_amqp and config.amqp_url:
         consumer = AmqpConsumer(config.amqp_url, config.amqp_queue, factory, job_service=job_service)
 
+    async def _heartbeat_loop() -> None:
+        # The core marks a module down after 90 s without a heartbeat and stops dispatching to it.
+        while True:
+            try:
+                resp = await core.heartbeat()
+                if resp.status_code >= 300:
+                    log.warning("heartbeat_failed", status=resp.status_code)
+            except Exception:
+                log.warning("heartbeat_failed", reason="transport")
+            await asyncio.sleep(30.0)
+
+    heartbeat_task: asyncio.Task[None] | None = None
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        nonlocal heartbeat_task
         if migrate_on_start:
             from publish.db.migrate import upgrade_head
 
@@ -62,9 +77,15 @@ def create_app(
             worker.start()
         if consumer is not None:
             await consumer.start()
+        if start_worker and heartbeat_task is None:
+            heartbeat_task = asyncio.create_task(_heartbeat_loop(), name="core-heartbeat")
         try:
             yield
         finally:
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                await asyncio.gather(heartbeat_task, return_exceptions=True)
+                heartbeat_task = None
             if consumer is not None:
                 await consumer.stop()
             if start_worker:

@@ -23,6 +23,7 @@ from mvideo.db import prompts_repo
 from mvideo.db.engine import db_health_check, session_factory
 from mvideo.db.migrate import upgrade
 from mvideo.db.repo import LEASE_TTL_S
+from mvideo.heartbeat import Heartbeat
 from mvideo.ideas.relay import AmqpPublisher
 from mvideo.ideas.runtime import IdeaRuntime
 from mvideo.ideas.scheduler import SchedulerParams
@@ -84,6 +85,9 @@ def create_app(
         worker = Worker(factory=factory, runner=runner, poll_s=worker_poll_s, lease_ttl_s=LEASE_TTL_S)
         service = JobService(factory, worker, runner)
 
+    # Only a service with a database and a worker is a live module; bare test apps stay quiet.
+    heartbeat = Heartbeat(config.core_url, config.core_token) if worker is not None else None
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if engine is not None and migrate_on_start:
@@ -94,9 +98,13 @@ def create_app(
             worker.start()
         if idea_runtime is not None:
             idea_runtime.start()
+        if heartbeat is not None:
+            heartbeat.start()
         try:
             yield
         finally:
+            if heartbeat is not None:
+                await heartbeat.stop()
             if idea_runtime is not None:
                 await idea_runtime.stop()
             if worker is not None:
