@@ -5,6 +5,7 @@ import { StubPage } from "./components/StubPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ProductionDetailPage } from "./pages/ProductionDetailPage";
 import { ProductionsPage } from "./pages/ProductionsPage";
+import { ReviewPublishPage } from "./pages/ReviewPublishPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -39,7 +40,7 @@ const productionDetailRoute = createRoute({
 const reviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/review",
-  component: () => <StubPage title="Ревью и публикации" hint="Интенты, повторная публикация с обязательной причиной." />,
+  component: ReviewPublishPage,
 });
 
 const accountsRoute = createRoute({

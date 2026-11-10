@@ -1002,6 +1002,7 @@ export interface paths {
                     "application/json": {
                         reason: string;
                         base_generation?: number;
+                        acknowledge_unknown_risk?: boolean;
                     };
                 };
             };

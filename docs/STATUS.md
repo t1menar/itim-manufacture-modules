@@ -19,7 +19,8 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 |----|---------|--------|
 | #26 | Каркас admin-panel | смержен |
 | #28 | Instagram и Telegram в Compose по умолчанию `real` | смержен |
-| (this) | Экран **Productions** (список, детали, cancel/retry/skip) | owner — ждать (**не мержить**) |
+| #27 | Экран **Productions** (список, детали, cancel/retry/skip) | смержен |
+| (this) | Экран **Ревью и публикации**: очередь, прогоны, интенты, republish с обязательной причиной; режим Instagram real/fake | owner — ждать (**не мержить**) |
 
 ## Local deploy
 
