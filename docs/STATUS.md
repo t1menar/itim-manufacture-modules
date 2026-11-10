@@ -4,7 +4,7 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 ## On main
 
-#7–#25 merged. Head includes admin-api (D24, merge `#25` / `31fb3ac`). CI on that merge commit was green (admin-api, core, module-publish, module-review, contracts, deploy-shell).
+#7–#26 merged. Head includes admin-api (D24, `#25` / `31fb3ac`) and the admin-panel shell (`#26` / `ab82ac0`).
 
 ## Accepted decisions
 
@@ -17,13 +17,13 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 
 | PR | Content | Merge? |
 |----|---------|--------|
-| (this) | Каркас **admin-panel** (React + TS), same-origin раздача из admin-api, живой экран «Обзор» | owner — ждать (**не мержить**) |
+| (this) | Instagram publish в Compose по умолчанию `real`; Telegram остаётся `fake` | owner — ждать (**не мержить**) |
 
 ## Local deploy
 
 - Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api + панель**, register+activate modules, smoke.
 - Панель и API: `http://127.0.0.1:58084/` (только loopback, один origin).
-- Fake TG/IG by default.
+- Telegram: fake by default. Instagram: **real** by default in Compose (`PUBLISH_INSTAGRAM_MODE`); for local stacks without real posts set `PUBLISH_INSTAGRAM_MODE=fake`. Unset bootstrap (tests/CI) stays fake and still uses `FakeInstagramClient` explicitly.
 
 ## module-video
 

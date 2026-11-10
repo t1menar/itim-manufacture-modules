@@ -377,7 +377,8 @@ mf_table \
   "minio console|http://127.0.0.1:${MINIO_CONSOLE_PORT:-59001}"
 
 printf '\n'
-mf_info "Креды модулей: SQL INSERT в БД review/publish (см. README модулей). Telegram/Instagram = fake."
+mf_info "Креды модулей: SQL INSERT в БД review/publish (см. README модулей). Telegram по умолчанию fake."
+mf_warn "PUBLISH_INSTAGRAM_MODE по умолчанию real: Instagram публикует по-настоящему. Нужны access token и platform_accounts в БД publish. Для локальной отладки без реальных постов задайте PUBLISH_INSTAGRAM_MODE=fake в deploy/.env."
 mf_info "Видео в Telegram и Instagram загружается файлом из MinIO: туннель не нужен. Настройки video: ./deploy/scripts/video-prepare.sh"
 mf_info "Остановка: ./deploy/down.sh"
 mf_summary_footer
