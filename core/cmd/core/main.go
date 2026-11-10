@@ -140,6 +140,12 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 			} else if n > 0 {
 				log.Info("timed out jobs", "count", n)
 			}
+			// B5: ideas parked at the production limit start as soon as a slot frees up.
+			if n, err := eng.StartParked(loops); err != nil && loops.Err() == nil {
+				log.Warn("parked ideas", "err", err)
+			} else if n > 0 {
+				log.Info("parked ideas started", "count", n)
+			}
 			if n, err := eng.DispatchOrphans(loops, 16); err != nil && loops.Err() == nil {
 				log.Warn("orphan job dispatcher", "err", err)
 			} else if n > 0 {

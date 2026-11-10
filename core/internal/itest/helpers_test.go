@@ -159,10 +159,12 @@ func (e *env) count(sql string, args ...any) int {
 }
 
 // applyIdeaReady applies one idea.ready (D21). Duplicate message_id is a no-op.
-func (e *env) applyIdeaReady(id int64, rev int) error {
+func (e *env) applyIdeaReady(id int64, rev int) error { return e.applyIdeaReadyPrio(id, rev, 0) }
+
+func (e *env) applyIdeaReadyPrio(id int64, rev int, priority int) error {
 	payload, _ := json.Marshal(map[string]any{
 		"idea_ref": map[string]any{"id": id, "rev": rev},
-		"language": "en", "pipeline_id": nil, "priority": 0,
+		"language": "en", "pipeline_id": nil, "priority": priority,
 	})
 	msgID := messaging.IdeaReadyMessageID(id, rev)
 	env := messaging.Envelope{
