@@ -73,7 +73,11 @@
 
 ## Креды (Telegram / Instagram / MinIO keys)
 
-По умолчанию **fake**-режимы (`REVIEW_TELEGRAM_MODE=fake`, `PUBLISH_INSTAGRAM_MODE=fake`) — реальных отправок нет.
+В Compose по умолчанию и Telegram, и Instagram в **real**: `REVIEW_TELEGRAM_MODE=${REVIEW_TELEGRAM_MODE:-real}`, `PUBLISH_INSTAGRAM_MODE=${PUBLISH_INSTAGRAM_MODE:-real}`.
+
+Для Telegram нужны `telegram.bot_token` (и для видео — `s3.access_key` / `s3.secret_key`) в БД review. Для Instagram — access token и `platform_accounts` в БД publish (или `instagram.default_access_token`). `up.sh` после миграций предупреждает о недостающих ключах, не печатая значения и не падая из‑за этого.
+
+Для локальной отладки без реальных отправок задайте `REVIEW_TELEGRAM_MODE=fake` и/или `PUBLISH_INSTAGRAM_MODE=fake` в `deploy/.env` (уже существующий `.env` с `fake` сохранит этот режим, пока строку не поменять). Тесты и CI по-прежнему используют `FakeTelegramBot` / `FakeInstagramClient` явно; bootstrap без переменной остаётся `fake`.
 
 Для real-режимов вставьте секреты в БД модулей (SQL-шаблоны в README `module-review` / `module-publish`): `module_secrets`, `platform_accounts.access_token`. Шифрование для local не требуется.
 
