@@ -1,14 +1,9 @@
 # core API contract files
 
 `openapi.yaml` and `../schemas/` are machine-readable extracts of
-`docs/core/core-04-contracts.docx` (source: `docs/tools/specgen/content/core/core-04-contracts.js`).
-core-04 is authoritative; when they differ, fix this folder.
+the core contracts. The Word specs were removed; these files and the Go code are authoritative.
 
-Check them with:
-
-```bash
-cd docs/tools/contractcheck && npm ci && npm test
-```
+Check them with: `cd core/tools/contractcheck && npm ci && npm test`.
 
 ## Coverage of openapi.yaml (initial, intentionally incomplete)
 

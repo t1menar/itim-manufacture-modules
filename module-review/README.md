@@ -2,7 +2,7 @@
 
 Stage `review`: Telegram review bot (Python 3.12). Module id `review-telegram`.
 
-Specification: `../docs/module-review/` (`module-review-01-description.docx` … `module-review-06-prompts.docx`).
+Agent-oriented overview: [`CONTEXT.md`](CONTEXT.md).
 
 ## Status
 

@@ -1,10 +1,10 @@
 name: contracts
 on:
   pull_request:
-    paths: ['core/api/**', 'core/schemas/**', 'docs/tools/**', 'docs/core/**', 'docs/Manufacture-Overview.docx', '.github/workflows/contracts.yml']
+    paths: ['core/api/**', 'core/schemas/**', 'core/tools/**', '.github/workflows/contracts.yml']
   push:
     branches: [main]
-    paths: ['core/api/**', 'core/schemas/**', 'docs/tools/**', 'docs/core/**', 'docs/Manufacture-Overview.docx', '.github/workflows/contracts.yml']
+    paths: ['core/api/**', 'core/schemas/**', 'core/tools/**', '.github/workflows/contracts.yml']
 permissions:
   contents: read
 jobs:
@@ -16,8 +16,5 @@ jobs:
         with:
           node-version: '22'
       - name: Contract schemas, examples and OpenAPI
-        working-directory: docs/tools/contractcheck
+        working-directory: core/tools/contractcheck
         run: npm ci && npm test
-      - name: Spec sources build
-        working-directory: docs/tools/specgen
-        run: npm ci && npm run build

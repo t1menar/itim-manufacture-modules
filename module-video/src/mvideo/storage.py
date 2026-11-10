@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -30,6 +31,17 @@ class Artifact:
 
     def as_dict(self) -> dict[str, Any]:
         return {"ref": self.ref, "sha256": self.sha256, "size": self.size, "kind": self.kind}
+
+
+def _hash_file(path: Path) -> tuple[str, int]:
+    """sha256 and size of a file, read in 1 MiB chunks (run in a thread: it blocks)."""
+    h = hashlib.sha256()
+    size = 0
+    with path.open("rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+            size += len(chunk)
+    return h.hexdigest(), size
 
 
 def object_key(production_id: str, attempt: int, step: str, name: str) -> str:
@@ -107,13 +119,7 @@ class Storage:
         self, key: str, path: Path, *, kind: str, content_type: str = "application/octet-stream"
     ) -> Artifact:
         """Streamed (multipart for large files) upload with the sha256 computed on the way."""
-        h = hashlib.sha256()
-        size = 0
-        with path.open("rb") as f:
-            while chunk := f.read(1 << 20):
-                h.update(chunk)
-                size += len(chunk)
-        digest = h.hexdigest()
+        digest, size = await asyncio.to_thread(_hash_file, path)
         try:
             with span("s3.upload", key=key, size=size):
                 async with self._client() as s3:

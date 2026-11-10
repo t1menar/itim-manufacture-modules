@@ -1,41 +1,11 @@
-# Manufacture — specifications
+# Docs
 
-Specifications for the Manufacture system (iTim channel). All specs are Word documents built from sources in `tools/specgen/` (see `tools/specgen/AUTHORING.md`).
+Agent and maintainer context lives next to the code:
 
-`Manufacture-Overview.docx` — abstract, processes, architecture, decisions, open questions.
+- [`../AGENTS.md`](../AGENTS.md) — start here: map, flow, commands, rules, gotchas.
+- `<module>/CONTEXT.md` — per-module deep context (`core`, `module-video`, `module-review`, `module-publish`, `admin-api`, `admin-panel`, `deploy`, `contracts`).
+- [`STATUS.md`](STATUS.md) — accepted decisions (D18–D24), history of merged work.
+- [`REVIEW.md`](REVIEW.md) — code review findings and open items.
+- `module-video/docs/IDEAS.md` — ideas backlog model (D21); `admin-api/docs/VIDEO_ADMIN_ROUTES.md` — video admin routes contract.
 
-Each service folder holds six documents, named `<service>-0N-<name>.docx`:
-
-| # | Document | Content |
-|---|---|---|
-| 01 | description | purpose, responsibilities, place in the system, glossary, scope |
-| 02 | requirements | functional and non-functional requirements with acceptance checks |
-| 03 | technical | stack, structure, data model, configuration, deployment, observability, security, testing |
-| 04 | contracts | APIs exposed and consumed, schemas, errors, settings schema |
-| 05 | process | internal flows, state machines, retries, recovery |
-| 06 | prompts | runtime prompts for Claude and build prompts for Claude Code |
-
-| Folder | Service |
-|---|---|
-| `core/` | pipeline engine and module registry (Go) |
-| `admin-api/` | administrative gateway (Go) |
-| `admin-panel/` | web client (React + TypeScript) |
-| `module-video/` | stage `video`: idea → research → script → capture → rendered English video (Python) |
-| `module-review/` | stage `review`: Telegram review bot (Python) |
-| `module-publish/` | stage `publish`: Instagram Reels and later platforms (Python) |
-
-Each folder has the same name as the service folder at the root of this repository (`github.com/t1menar/manufacture`).
-
-Rebuild everything:
-
-```bash
-cd tools/specgen && npm install && npm run build
-```
-
-## Ideas (D21)
-
-Backlog ownership: `module-video/docs/IDEAS.md`. Shared JSON Schemas: `contracts/idea.json`, `contracts/topic.json`.
-
-## Module secrets
-
-Secrets for Telegram/Instagram/MinIO live in each module DB (`module_secrets`, `platform_accounts.access_token`). See module READMEs for SQL INSERT templates. Status: `docs/STATUS.md`.
+The former Word specifications (`*.docx`, built by `tools/specgen`) were deleted; wire contracts are in `core/schemas/`, `contracts/` and `admin-api/api/openapi.yaml`.

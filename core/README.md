@@ -2,8 +2,7 @@
 
 Pipeline engine and module registry (Go).
 
-Specification: `../docs/core/` (`core-01-description.docx` ... `core-06-prompts.docx`; this slice implements parts of core-03, core-04 §15–17 and core-05).
-This is the **foundation slice**; see "Not implemented yet" below.
+Agent-oriented overview: [`CONTEXT.md`](CONTEXT.md). Wire contracts: `schemas/`, `api/openapi.yaml`.
 
 ## Run
 
