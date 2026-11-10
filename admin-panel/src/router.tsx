@@ -6,6 +6,7 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { ProductionDetailPage } from "./pages/ProductionDetailPage";
 import { ProductionsPage } from "./pages/ProductionsPage";
 import { ReviewPublishPage } from "./pages/ReviewPublishPage";
+import { AccountsPage } from "./pages/AccountsPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -46,7 +47,7 @@ const reviewRoute = createRoute({
 const accountsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts",
-  component: () => <StubPage title="Аккаунты и креды" hint="Запись секрета разрешена, чтение — только маска и наличие." />,
+  component: AccountsPage,
 });
 
 const promptsRoute = createRoute({

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/t1menar/manufacture/admin-api/internal/audit"
 	"github.com/t1menar/manufacture/admin-api/internal/bootstrap"
 	"github.com/t1menar/manufacture/admin-api/internal/upstream"
 )
@@ -209,5 +210,104 @@ func TestSPAServesIndexAndKeepsAPI404(t *testing.T) {
 	rec = h.do(t, "GET", "/", "evil.example", "", "")
 	if rec.Code != 403 {
 		t.Fatalf("ui host check: %d", rec.Code)
+	}
+}
+
+func TestSecretWriteAuditOmitsValue(t *testing.T) {
+	const dummy = "dummy-telegram-bot-token-not-real"
+	review := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/admin/v1/secrets/telegram.bot_token" {
+			t.Errorf("upstream %s %s", r.Method, r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), dummy) {
+			t.Errorf("upstream should receive the write body")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(review.Close)
+	mem := &audit.Memory{}
+	cfg := bootstrap.Config{
+		AllowedHosts:    []string{"localhost", "127.0.0.1"},
+		Actor:           "local:admin",
+		UpstreamTimeout: 2 * time.Second,
+	}
+	up := upstream.New("", "mfa_test_admin_token_xxxxxxxx", "local:admin", 2*time.Second)
+	up.SetModule("review", review.URL, "mft_review_test")
+	h := &httpapiServer{Srv: &Server{Cfg: cfg, Up: up, Audit: mem}}
+	rec := h.do(t, "PUT", "/api/v1/review/secrets/telegram.bot_token", "127.0.0.1", "", `{"value":"`+dummy+`"}`)
+	if rec.Code != 204 {
+		t.Fatalf("put secret: %d %s", rec.Code, rec.Body.String())
+	}
+	raw, _ := json.Marshal(mem.Rows())
+	if strings.Contains(string(raw), dummy) {
+		t.Fatalf("secret value leaked into audit: %s", raw)
+	}
+	found := false
+	for _, row := range mem.Rows() {
+		if row.Action == "review.secrets.write" && row.Actor == "local:admin" && row.ResourceID == "telegram.bot_token" && row.ResourceType == "secrets" {
+			if len(row.Details) != 0 {
+				t.Fatalf("audit details should be empty, got %#v", row.Details)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing key+actor audit row: %s", raw)
+	}
+}
+
+func TestCreateAccountAuditOmitsToken(t *testing.T) {
+	const dummy = "dummy-ig-token-not-a-real-secret"
+	publish := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/admin/v1/accounts" {
+			t.Errorf("upstream %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"0193a000-0000-7000-8000-000000000099","channel_id":"itim","platform":"instagram","has_token":true}`))
+	}))
+	t.Cleanup(publish.Close)
+	mem := &audit.Memory{}
+	cfg := bootstrap.Config{
+		AllowedHosts:    []string{"localhost", "127.0.0.1"},
+		Actor:           "local:admin",
+		UpstreamTimeout: 2 * time.Second,
+	}
+	up := upstream.New("", "mfa_test_admin_token_xxxxxxxx", "local:admin", 2*time.Second)
+	up.SetModule("publish", publish.URL, "mft_publish_test")
+	h := &httpapiServer{Srv: &Server{Cfg: cfg, Up: up, Audit: mem}}
+	body := `{"channel_id":"itim","platform":"instagram","access_token":"` + dummy + `"}`
+	rec := h.do(t, "POST", "/api/v1/publish/accounts", "127.0.0.1", "", body)
+	if rec.Code != 201 {
+		t.Fatalf("create account: %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), dummy) {
+		t.Fatal("token leaked in HTTP response")
+	}
+	raw, _ := json.Marshal(mem.Rows())
+	if strings.Contains(string(raw), dummy) {
+		t.Fatalf("token leaked into audit: %s", raw)
+	}
+}
+
+func TestOpenAPIIncludesAccountWritePaths(t *testing.T) {
+	h := testServer(t, nil, nil)
+	rec := h.do(t, "GET", "/api/v1/openapi.json", "127.0.0.1", "", "")
+	if rec.Code != 200 {
+		t.Fatalf("openapi: %d", rec.Code)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	paths, _ := doc["paths"].(map[string]any)
+	acc, _ := paths["/api/v1/publish/accounts"].(map[string]any)
+	if _, ok := acc["post"]; !ok {
+		t.Fatal("missing POST /api/v1/publish/accounts")
+	}
+	patch, _ := paths["/api/v1/publish/accounts/{id}"].(map[string]any)
+	if _, ok := patch["patch"]; !ok {
+		t.Fatal("missing PATCH /api/v1/publish/accounts/{id}")
 	}
 }

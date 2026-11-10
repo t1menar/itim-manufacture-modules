@@ -19,6 +19,8 @@ Specification: `../docs/module-publish/`.
 
 Migration `0004_module_secrets` adds `module_secrets` / `module_settings` and column `platform_accounts.access_token`.
 
+Admin API can create/patch accounts (`POST/PATCH /admin/v1/accounts`) and upsert secrets. List/detail views return `has_token` and `updated_at`, never `access_token` or secret values. `instagram.default_access_token`, S3 keys, and account `access_token` / `external_id` are read per publish operation — **no module restart** is required after a change from the admin panel.
+
 **Priority:** DB wins; env is a **dev/test fallback**. Core credentials vault / `credential_ref` is **not** used for these secrets.
 
 `GET /admin/v1/accounts` never returns `access_token`.

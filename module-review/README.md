@@ -31,6 +31,9 @@ Migration `0004_module_secrets` adds:
 
 **Priority:** DB row wins; env is a **dev/test fallback** only.
 
+Admin API (`PUT /admin/v1/secrets/{key}`, also via the admin panel) writes the same `module_secrets` rows. List endpoints return only `key`, `present` and `updated_at` — never the value. After changing `telegram.bot_token`, **restart module-review** so the bot/poller reloads the token. S3 keys are read per operation and do not need a restart.
+
+
 ### SQL templates (fill placeholders yourself — do not commit real values)
 
 ```sql
