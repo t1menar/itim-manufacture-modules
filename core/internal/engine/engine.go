@@ -133,6 +133,10 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if err != nil {
 		return err
 	}
+	settings, err := loadModuleSettings(ctx, tx, moduleID)
+	if err != nil {
+		return err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": s.try, "fence": fence, "production_id": s.production,
 		"stage": s.stage.StageID, "mode": modeOrCreate(s.mode), "round": s.round, "variant": variant,
@@ -140,7 +144,7 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 			"idea_ref": map[string]any{"id": s.ideaID, "rev": s.ideaRev},
 			"channels": channels, "upstream": map[string]any{},
 		},
-		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
+		"settings":    settings,
 		"credentials": []string{},
 		"callback":    map[string]any{"base_url": fmt.Sprintf("%s/internal/v1/jobs/%s", e.CallbackBaseURL, jobID)},
 		"deadline":    time.Now().UTC().Add(time.Duration(s.stage.TimeoutS) * time.Second).Format(time.RFC3339),
@@ -158,6 +162,21 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 		Envelope: messaging.Envelope{Type: "job.requested", Producer: "core", ProductionID: &prod,
 			Job: &messaging.JobRef{JobID: jobID, Fence: fence}, Payload: payload},
 	})
+}
+
+// loadModuleSettings returns the settings snapshot of the module for the job request: the current
+// module_settings version and its values (version 1 and empty values when the module has none saved).
+func loadModuleSettings(ctx context.Context, tx pgx.Tx, moduleID string) (map[string]any, error) {
+	var version int
+	var values []byte
+	err := tx.QueryRow(ctx, `SELECT version, values FROM module_settings WHERE module_id = $1 AND is_current`, moduleID).Scan(&version, &values)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return map[string]any{"version": 1, "values": map[string]any{}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"version": version, "values": json.RawMessage(values)}, nil
 }
 
 // loadJobChannels builds the job-request channels array from the variant (or the
@@ -231,6 +250,44 @@ func (e *Engine) Takeover(ctx context.Context, jobID uuid.UUID, moduleID string)
 		return e.enqueueRequest(ctx, tx, jobID, fence, moduleID, s, attempt)
 	})
 	return fence, err
+}
+
+// DispatchOrphans hands queued jobs that were created while their stage had no active module (so they
+// carry no module and no request) to the module that is active and up now.
+func (e *Engine) DispatchOrphans(ctx context.Context, limit int) (int, error) {
+	rows, err := e.Pool.Query(ctx, `SELECT j.id, m.id FROM jobs j
+		JOIN modules m ON m.stage_id = j.stage_id AND m.active AND m.enabled AND m.health = 'up'
+		WHERE j.status = 'queued' AND j.module_id IS NULL
+		ORDER BY j.created_at LIMIT $1`, limit)
+	if err != nil {
+		return 0, err
+	}
+	type pair struct {
+		job    uuid.UUID
+		module string
+	}
+	var todo []pair
+	for rows.Next() {
+		var p pair
+		if err := rows.Scan(&p.job, &p.module); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		todo = append(todo, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, p := range todo {
+		if _, err := e.Takeover(ctx, p.job, p.module); err != nil {
+			e.Log.Warn("dispatch orphan job failed", "job_id", p.job, "module", p.module, "err", err)
+			continue
+		}
+		n++
+	}
+	return n, nil
 }
 
 func modeOrCreate(m string) string {

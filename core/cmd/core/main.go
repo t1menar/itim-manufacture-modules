@@ -140,6 +140,11 @@ func run(ctx context.Context, cmd string, log *slog.Logger) error {
 			} else if n > 0 {
 				log.Info("timed out jobs", "count", n)
 			}
+			if n, err := eng.DispatchOrphans(loops, 16); err != nil && loops.Err() == nil {
+				log.Warn("orphan job dispatcher", "err", err)
+			} else if n > 0 {
+				log.Info("dispatched queued jobs", "count", n)
+			}
 			if n, err := reg.MarkOffline(loops, 90*time.Second); err != nil && loops.Err() == nil {
 				log.Warn("module offline sweeper", "err", err)
 			} else if n > 0 {

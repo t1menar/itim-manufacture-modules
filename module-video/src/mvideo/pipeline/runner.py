@@ -208,6 +208,7 @@ class Runner:
             production_id=str(run.production_id),
             base_url=(run.callback_base_url or "").rstrip("/"),
             traceparent=run.traceparent,
+            fence=run.fence,
         )
         if run.cancel_requested or run.status == "cancelling":
             raise RunCancelled

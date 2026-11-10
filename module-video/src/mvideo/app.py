@@ -16,6 +16,7 @@ from mvideo.agents.prompts import PROMPTS_ROOT, PromptStore
 from mvideo.api import admin_credentials, admin_prompts, health, info, jobs, mcp_sandbox
 from mvideo.api.health import AuthStatus, Check
 from mvideo.api.problems import install_problem_handlers
+from mvideo.commands import CommandConsumer
 from mvideo.config import BootstrapConfig
 from mvideo.core_client import CoreGateway
 from mvideo.credential_gateway import LocalCredentialGateway
@@ -87,6 +88,17 @@ def create_app(
 
     # Only a service with a database and a worker is a live module; bare test apps stay quiet.
     heartbeat = Heartbeat(config.core_url, config.core_token) if worker is not None else None
+    commands = (
+        CommandConsumer(
+            config.amqp_url,
+            config.module_id,
+            service,
+            prefix=config.amqp_prefix,
+            core_token=config.core_token,
+        )
+        if service is not None and config.amqp_url
+        else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -100,9 +112,13 @@ def create_app(
             idea_runtime.start()
         if heartbeat is not None:
             heartbeat.start()
+        if commands is not None:
+            commands.start()
         try:
             yield
         finally:
+            if commands is not None:
+                await commands.stop()
             if heartbeat is not None:
                 await heartbeat.stop()
             if idea_runtime is not None:

@@ -75,6 +75,7 @@ class Run(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
     job_id: Mapped[uuid.UUID]
     attempt: Mapped[int] = mapped_column(Integer)
+    fence: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     production_id: Mapped[uuid.UUID]
     mode: Mapped[str] = mapped_column(Text)
     language: Mapped[str] = mapped_column(Text, default="en")

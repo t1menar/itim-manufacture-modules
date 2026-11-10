@@ -58,6 +58,7 @@ class JobService:
                 NewRun(
                     job_id=req.job_id,
                     attempt=req.attempt,
+                    fence=req.fence,
                     production_id=req.production_id,
                     mode=req.mode,
                     variant_id=uuid.UUID(str(req.variant["id"])) if req.variant else None,

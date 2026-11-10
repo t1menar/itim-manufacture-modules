@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,41 @@ from publish.intake import validate_job
 from publish.observability.logging import get_logger
 
 log = get_logger(__name__)
+
+
+DELIVERY_LIMIT = 5
+_QUEUE_NAME = re.compile(r"^(?P<prefix>.*)module\.(?P<module>.+)\.commands$")
+
+
+async def declare_command_queue(channel: Any, queue_name: str) -> Any:
+    """Declare the module queue like the core does (quorum, dead-letter queue, bindings).
+
+    `module.<id>.commands` is bound to `manufacture.commands` by `*.*.<id>`, `notify.<id>` and `cancel.<id>`,
+    so the core's job commands are routable whichever of the two starts first.
+    """
+    match = _QUEUE_NAME.match(queue_name)
+    if match is None:  # a custom queue name outside the core topology: declare it plainly
+        return await channel.declare_queue(queue_name, durable=True)
+    prefix, module_id = match["prefix"], match["module"]
+    commands, events, dlx = (f"{prefix}manufacture.{n}" for n in ("commands", "events", "dlx"))
+    ex = {}
+    for name in (commands, events, dlx):
+        ex[name] = await channel.declare_exchange(name, aio_pika.ExchangeType.TOPIC, durable=True)
+    dlq = await channel.declare_queue(f"{queue_name}.dlq", durable=True, arguments={"x-queue-type": "quorum"})
+    await dlq.bind(ex[dlx], routing_key=queue_name)
+    queue = await channel.declare_queue(
+        queue_name,
+        durable=True,
+        arguments={
+            "x-queue-type": "quorum",
+            "x-delivery-limit": DELIVERY_LIMIT,
+            "x-dead-letter-exchange": dlx,
+            "x-dead-letter-routing-key": queue_name,
+        },
+    )
+    for key in (f"*.*.{module_id}", f"notify.{module_id}", f"cancel.{module_id}"):
+        await queue.bind(ex[commands], routing_key=key)
+    return queue
 
 
 class AmqpConsumer:
@@ -53,7 +89,7 @@ class AmqpConsumer:
             self._conn = await aio_pika.connect_robust(self._url)
             channel = await self._conn.channel()
             await channel.set_qos(prefetch_count=8)
-            queue = await channel.declare_queue(self._queue, durable=True)
+            queue = await declare_command_queue(channel, self._queue)
             self.ready = "ok"
             log.info("amqp_consumer_started", queue=self._queue)
             async with queue.iterator() as it:

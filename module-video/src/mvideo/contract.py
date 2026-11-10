@@ -132,6 +132,7 @@ class JobRequest(BaseModel):
 
     job_id: uuid.UUID
     attempt: Annotated[int, Field(ge=1)]
+    fence: Annotated[int, Field(ge=1)] = 1
     production_id: uuid.UUID
     stage: str
     mode: Literal["create", "revise"]

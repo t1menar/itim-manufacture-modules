@@ -55,6 +55,7 @@ class JobCall:
     production_id: str
     base_url: str
     traceparent: str | None = None
+    fence: int = 1
 
 
 class CoreGateway(Protocol):
@@ -96,6 +97,7 @@ class CoreClient:
             "Authorization": f"Bearer {self._token}",
             "X-Production-Id": call.production_id,
             "X-Job-Id": call.job_id,
+            "X-Fence": str(call.fence),
         }
         if call.traceparent:
             headers["traceparent"] = call.traceparent

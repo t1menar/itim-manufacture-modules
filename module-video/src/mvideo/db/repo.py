@@ -42,6 +42,7 @@ class NewRun:
     callback_base_url: str | None = None
     credential_refs: list[str] | None = None
     traceparent: str | None = None
+    fence: int = 1
 
 
 async def create_run(session: AsyncSession, new: NewRun) -> tuple[Run, bool]:
@@ -66,6 +67,7 @@ async def create_run(session: AsyncSession, new: NewRun) -> tuple[Run, bool]:
             callback_base_url=new.callback_base_url,
             credential_refs=new.credential_refs,
             traceparent=new.traceparent,
+            fence=new.fence,
         )
         .on_conflict_do_nothing(index_elements=["job_id"])
         .returning(Run.id)
@@ -74,6 +76,10 @@ async def create_run(session: AsyncSession, new: NewRun) -> tuple[Run, bool]:
     run = await get_run_by_job(session, new.job_id)
     if run is None:  # inserted now or present from before: cannot be missing
         raise RuntimeError(f"run for job {new.job_id} vanished after insert")
+    if (
+        inserted is None and new.fence > run.fence
+    ):  # the core took the job over: callbacks carry the new fence
+        run.fence = new.fence
     return run, inserted is not None
 
 

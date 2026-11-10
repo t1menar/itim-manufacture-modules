@@ -27,6 +27,7 @@ OPTIONAL_VARS = (
     "OTEL_EXPORTER_OTLP_ENDPOINT",
     "MODULE_AMQP_URL",  # without it the idea scheduler, relay and status consumer stay off
     "MODULE_AMQP_PREFIX",
+    "MODULE_ID",  # id in the core registry: names the command queue (default video-claude)
     "VIDEO_IDEAS_TICK_S",
     "VIDEO_IDEAS_MAX_DISPATCH",
     "VIDEO_IDEAS_MAX_IN_FLIGHT",
@@ -67,6 +68,7 @@ class BootstrapConfig:
     otlp_endpoint: str | None = None
     amqp_url: str | None = field(default=None, repr=False)
     amqp_prefix: str = ""
+    module_id: str = "video-claude"
     ideas_tick_s: float = 5.0
     ideas_max_dispatch: int = 5
     ideas_max_in_flight: int = 3
@@ -109,6 +111,7 @@ class BootstrapConfig:
             otlp_endpoint=(source.get("OTEL_EXPORTER_OTLP_ENDPOINT") or "").strip() or None,
             amqp_url=(source.get("MODULE_AMQP_URL") or "").strip() or None,
             amqp_prefix=(source.get("MODULE_AMQP_PREFIX") or "").strip(),
+            module_id=(source.get("MODULE_ID") or "").strip() or "video-claude",
             ideas_tick_s=_number(source, "VIDEO_IDEAS_TICK_S", 5.0, float),
             ideas_max_dispatch=_number(source, "VIDEO_IDEAS_MAX_DISPATCH", 5, int),
             ideas_max_in_flight=_number(source, "VIDEO_IDEAS_MAX_IN_FLIGHT", 3, int),
