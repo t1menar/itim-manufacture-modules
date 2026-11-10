@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,18 +187,63 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	problem.Write(w, http.StatusNotFound, "not_found", "not found", r.URL.Path, requestID(r))
 }
 
+func parseTimeParam(raw string) (*time.Time, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339Nano, raw)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 func (s *Server) listAudit(w http.ResponseWriter, r *http.Request) {
 	if s.Audit == nil {
 		problem.Write(w, http.StatusServiceUnavailable, "audit_unavailable", "audit store is not configured", "", requestID(r))
 		return
 	}
-	limit := 50
-	items, err := s.Audit.List(r.Context(), limit)
+	q := r.URL.Query()
+	outcome := q.Get("outcome")
+	if outcome != "" && outcome != "ok" && outcome != "denied" && outcome != "error" {
+		problem.Write(w, http.StatusUnprocessableEntity, "validation_failed", "outcome must be ok, denied or error", "", requestID(r))
+		return
+	}
+	from, err := parseTimeParam(q.Get("from"))
+	if err != nil {
+		problem.Write(w, http.StatusUnprocessableEntity, "validation_failed", "from must be RFC3339", "", requestID(r))
+		return
+	}
+	to, err := parseTimeParam(q.Get("to"))
+	if err != nil {
+		problem.Write(w, http.StatusUnprocessableEntity, "validation_failed", "to must be RFC3339", "", requestID(r))
+		return
+	}
+	var cursor int64
+	if raw := q.Get("cursor"); raw != "" {
+		cursor, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || cursor < 1 {
+			problem.Write(w, http.StatusUnprocessableEntity, "validation_failed", "cursor must be a positive id", "", requestID(r))
+			return
+		}
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	page, err := s.Audit.List(r.Context(), audit.Filter{
+		Actor: q.Get("actor"), Action: q.Get("action"), Outcome: outcome,
+		From: from, To: to, Cursor: cursor, Limit: limit,
+	})
 	if err != nil {
 		problem.Write(w, http.StatusServiceUnavailable, "audit_unavailable", "audit query failed", "", requestID(r))
 		return
 	}
-	writeJSON(w, 200, map[string]any{"items": items})
+	body := map[string]any{"items": page.Items}
+	if page.NextCursor != "" {
+		body["next_cursor"] = page.NextCursor
+	}
+	writeJSON(w, 200, body)
 	s.audit(r, "audit.read", "ok", 200, "")
 }
 

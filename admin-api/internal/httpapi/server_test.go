@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -310,4 +311,61 @@ func TestOpenAPIIncludesAccountWritePaths(t *testing.T) {
 	if _, ok := patch["patch"]; !ok {
 		t.Fatal("missing PATCH /api/v1/publish/accounts/{id}")
 	}
+}
+
+func TestAuditListFilters(t *testing.T) {
+	mem := &audit.Memory{}
+	t1 := time.Date(2026, 11, 10, 8, 0, 0, 0, time.UTC)
+	_ = mem.Write(context.Background(), audit.Row{Actor: "local:admin", Action: "audit.read", Outcome: "ok", At: t1})
+	_ = mem.Write(context.Background(), audit.Row{Actor: "local:admin", Action: "review.secrets.write", Outcome: "ok", ResourceID: "telegram.bot_token", At: t1.Add(time.Hour), Details: map[string]any{"value": "dummy-telegram-bot-token-not-real"}})
+	_ = mem.Write(context.Background(), audit.Row{Actor: "other", Action: "ideas.read", Outcome: "error", At: t1.Add(2 * time.Hour)})
+	cfg := bootstrap.Config{
+		AllowedHosts:    []string{"localhost", "127.0.0.1"},
+		Actor:           "local:admin",
+		UpstreamTimeout: 2 * time.Second,
+	}
+	h := &httpapiServer{Srv: &Server{Cfg: cfg, Audit: mem}}
+
+	rec := h.do(t, "GET", "/api/v1/audit?actor=local:admin&action=review.secrets.write&outcome=ok&limit=10", "127.0.0.1", "", "")
+	if rec.Code != 200 {
+		t.Fatalf("filtered list: %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "dummy-") {
+		t.Fatal("secret leaked in audit HTTP response")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := body["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %#v", body)
+	}
+
+	rec = h.do(t, "GET", "/api/v1/audit?limit=2", "127.0.0.1", "", "")
+	if rec.Code != 200 {
+		t.Fatalf("paged list: %d %s", rec.Code, rec.Body.String())
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if body["next_cursor"] == nil || body["next_cursor"] == "" {
+		t.Fatalf("expected next_cursor, got %#v", body)
+	}
+	rec = h.do(t, "GET", "/api/v1/audit?limit=2&cursor="+urlQuery(body["next_cursor"]), "127.0.0.1", "", "")
+	if rec.Code != 200 {
+		t.Fatalf("page 2: %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = h.do(t, "GET", "/api/v1/audit?outcome=nope", "127.0.0.1", "", "")
+	if rec.Code != 422 {
+		t.Fatalf("want 422 invalid outcome, got %d %s", rec.Code, rec.Body.String())
+	}
+	rec = h.do(t, "GET", "/api/v1/audit?from=yesterday", "127.0.0.1", "", "")
+	if rec.Code != 422 {
+		t.Fatalf("want 422 invalid from, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func urlQuery(v any) string {
+	s, _ := v.(string)
+	return s
 }
