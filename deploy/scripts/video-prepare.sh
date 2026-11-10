@@ -75,8 +75,11 @@ repos = [{"name": "postgres", "url": "https://github.com/postgres/postgres",
           "refs": ["REL_17_STABLE", "REL_16_STABLE", "master"]}]
 if "kafka44" in images:
     repos.append({"name": "kafka", "url": "https://github.com/apache/kafka", "refs": ["4.4.0", "4.4", "trunk"]})
+# Cheaper model for the steps that mostly read and run commands; the script step keeps the default.
+cheap = os.environ.get("VIDEO_CHEAP_MODEL", "claude-sonnet-5-5")
+models = {step: cheap for step in ("analysis", "research", "capture")} if cheap else {}
 print(json.dumps({"agent": {"image": os.environ["AGENT_IMAGE"]}, "sandbox_images": images,
-                  "sources": {"allowed_repos": repos}}))
+                  "sources": {"allowed_repos": repos}, "models": models}))
 PY
 )
 "${COMPOSE[@]}" exec -T postgres psql -U "$PGU" -d core -v ON_ERROR_STOP=1 -v mid="$MODULE_ID" -v vals="$VALUES" <<'SQL'
