@@ -69,7 +69,7 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 
 | Env | Notes |
 |-----|-------|
-| `REVIEW_TELEGRAM_MODE` | `fake` or `real` (overridden by `module_settings.telegram.mode` when set) |
+| `REVIEW_TELEGRAM_MODE` | `fake` or `real` (overridden by `module_settings.telegram.mode` when set). Compose default is `real`; unset bootstrap (tests/CI) stays `fake`. |
 | `REVIEW_TELEGRAM_BOT_TOKEN` | Fallback if `module_secrets.telegram.bot_token` empty |
 | `REVIEW_TELEGRAM_API_BASE` | Fallback API host |
 | `REVIEW_ADMIN_TELEGRAM_IDS` | Comma-separated; fallback for `telegram.admin_ids` |
