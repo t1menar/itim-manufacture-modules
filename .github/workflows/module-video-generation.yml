@@ -1,0 +1,48 @@
+name: module-video-generation
+on:
+  pull_request:
+    paths:
+      - "modules/module-video-generation/**"
+      - "packages/mvrender/**"
+      - ".github/workflows/module-video-generation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/module-video-generation/**"
+      - "packages/mvrender/**"
+      - ".github/workflows/module-video-generation.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modules/module-video-generation
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: video
+          POSTGRES_PASSWORD: video
+          POSTGRES_DB: video
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U video" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      MVGEN_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
+      MVGEN_TEST_DATABASE_URL: postgresql+asyncpg://video:scenario@localhost:5432/scenario
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync --python 3.12
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy (strict)
+        run: uv run mypy
+      - name: migrations up, drift check, down
+        run: uv run alembic upgrade head && uv run alembic check && uv run alembic downgrade base
+      - name: pytest (on Postgres)
+        run: uv run pytest -q

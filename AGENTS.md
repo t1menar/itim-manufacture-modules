@@ -19,10 +19,11 @@ only the module(s) you touch. `docs/STATUS.md` holds decisions that still apply 
 |---|---|---|
 | `modules/module-idea/` | Python | New pipeline, stage `idea`: idea backlog, playlists, rubrics, scheduling, cost and outcomes. See `docs/PIPELINE.md`. |
 | `modules/module-scenario/` | Python | New pipeline, stage `scenario`: research (verified facts, knowledge cache) and the scenario in one module. See `docs/PIPELINE.md`. |
+| `modules/module-video-generation/` | Python | New pipeline, stage `video`: capture (planner + sandbox runner behind Protocols), deterministic render/package on `mvrender`; palette, limits and design notes come from the idea. |
 | `modules/module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
 | `modules/module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
 | `modules/module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
-| `packages/mvrender/` | Python | Standalone renderer and timing library for `manufacture.scenario/1`; used by module-scenario (validation) and, later, module-video-generation. |
+| `packages/mvrender/` | Python | Standalone renderer and timing library for `manufacture.scenario/1`; used by module-scenario (validation) and module-video-generation. |
 | `packages/mf-storage/` | Python | Shared S3/MinIO helpers (s3:// parsing, presign) for review and publish. |
 | `deploy/` | compose | Standalone MinIO for local module tests (`compose.minio.yml`, `scripts/mfinfra-minio.sh`). |
 | `docs/` | md | `STATUS.md` (module decisions), `CONTENT.md` (content strategy), `REVIEW.md` (open findings). |
