@@ -23,7 +23,8 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 | #29 | Экран **Ревью и публикации** | смержен |
 | #30 | Экран **Аккаунты и креды**: запись/замена секретов и аккаунтов (только «задан»/«не задан» + updated_at, без значений и длин); POST/PATCH publish accounts | смержен |
 | #31 | Экран **Промпты**: шаги, версии, просмотр/diff, создание, активация, аудит | смержен |
-| (this) | Экран **Журнал**: audit_log с фильтрами actor/action/outcome/from/to/cursor | owner — ждать (**не мержить**) |
+| #32 | Экран **Журнал**: audit_log с фильтрами actor/action/outcome/from/to/cursor | смержен |
+| (this) | Экран **Идеи и темы**: UI по VIDEO_ADMIN_ROUTES.md, явное состояние «module-video does not support this yet» на 404 | owner — ждать (**не мержить**) |
 
 ## Local deploy
 

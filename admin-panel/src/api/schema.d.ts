@@ -431,7 +431,12 @@ export interface paths {
         /** List ideas (module-video; see docs/VIDEO_ADMIN_ROUTES.md) */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    status?: string;
+                    topic_id?: string;
+                    limit?: number;
+                    cursor?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -440,6 +445,18 @@ export interface paths {
             responses: {
                 /** @description list */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items?: Record<string, never>[];
+                            next_cursor?: string;
+                        };
+                    };
+                };
+                /** @description not implemented by module-video */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -462,7 +479,20 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        topic_id: unknown;
+                        title: string;
+                        description?: string;
+                        hook?: string;
+                        language?: string;
+                        priority?: number;
+                        tags?: string[];
+                        author?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description created */
                 201: {
@@ -539,7 +569,20 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        topic_id?: unknown;
+                        title?: string;
+                        description?: string;
+                        hook?: string;
+                        language?: string;
+                        priority?: number;
+                        tags?: string[];
+                        author?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description updated */
                 200: {
@@ -643,6 +686,24 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
+                    content: {
+                        "application/json": {
+                            items?: Record<string, never>[];
+                        };
+                    };
+                };
+                /** @description not implemented by module-video */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description upstream_unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
                     content?: never;
                 };
             };
@@ -655,7 +716,18 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": {
+                        code: string;
+                        title: string;
+                        description?: string;
+                        default_tags?: string[];
+                        default_platforms?: string[];
+                        active?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description created */
                 201: {
@@ -732,7 +804,18 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        code?: string;
+                        title?: string;
+                        description?: string;
+                        default_tags?: string[];
+                        default_platforms?: string[];
+                        active?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description updated */
                 200: {
