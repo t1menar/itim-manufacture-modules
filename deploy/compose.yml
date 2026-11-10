@@ -177,7 +177,7 @@ services:
       MODULE_CORE_URL: http://core:8080
       MODULE_CORE_TOKEN: ${MODULE_TOKEN_REVIEW:-mft_pending_review}
       REVIEW_AMQP_URL: amqp://guest:guest@rabbitmq:5672/
-      REVIEW_TELEGRAM_MODE: ${REVIEW_TELEGRAM_MODE:-fake}
+      REVIEW_TELEGRAM_MODE: ${REVIEW_TELEGRAM_MODE:-real}
       S3_ENDPOINT: minio:9000
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-manufacture}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
