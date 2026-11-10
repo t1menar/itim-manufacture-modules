@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from mvrender.draw.highlight_c import Segments
-from mvrender.palette import OUT_FG, SQL_KW, Palette
+from mvrender.palette import OUT_FG, Palette
 
 # Keyword and tool tables: these are vocabulary of the terminal look, not content of any video.
 SQL_KEYWORDS = frozenset(
@@ -54,7 +54,7 @@ def highlight_cmd(text: str, pal: Palette) -> Segments:
             if tok.endswith('"') and len(tok) > 1:
                 segs.append(('"', pal.c_str))
         elif tok.upper() in SQL_KEYWORDS and tok.isupper():
-            segs.append((tok, SQL_KW))
+            segs.append((tok, pal.sql_kw))
         elif tok.startswith("$"):
             segs.append((tok, pal.c_type))
         elif tok in TOOLS:

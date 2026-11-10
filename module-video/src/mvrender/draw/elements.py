@@ -9,7 +9,7 @@ from mvrender.draw.canvas import Canvas, parse_markup
 from mvrender.draw.captions import ramp, wrap_words
 from mvrender.draw.highlight_c import highlight_c
 from mvrender.layout import Rect
-from mvrender.palette import CARD_EDGE, FLOW_LIGHT, WHITE, mix
+from mvrender.palette import CARD_EDGE, WHITE, mix
 
 
 def folder(
@@ -64,7 +64,7 @@ def cylinder(cv: Canvas, cx: float, top: float, name: str, sub: str, a: float, s
         cv.d.line((sx, top + eh / 2, sx, top + h - eh / 2), fill=edge, width=3)
     cv.d.ellipse(
         (cx - w / 2, top, cx + w / 2, top + eh),
-        fill=mix((255, 150, 70) if strong else WHITE, WHITE, a),
+        fill=mix(pal.accent_top if strong else WHITE, WHITE, a),
         outline=edge,
         width=3,
     )
@@ -193,7 +193,7 @@ def flow_blocks(cv: Canvas, xa: float, xb: float, cy: float, starts: list[float]
             x = xa + (xb - xa) * e
             y = cy + ((b % 3) - 1) * 26 * math.sin(q * math.pi)
             cv.d.rounded_rectangle(
-                (x - 12, y - 15, x + 12, y + 15), radius=4, fill=pal.accent if q > 0.5 else FLOW_LIGHT
+                (x - 12, y - 15, x + 12, y + 15), radius=4, fill=pal.accent if q > 0.5 else pal.flow_light
             )
     return done
 

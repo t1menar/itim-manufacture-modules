@@ -219,6 +219,9 @@ DEFAULT_PALETTE: dict[str, str] = {
     "err": "#FF6955",
     "err_cont": "#FF9682",
     "detail": "#FFBE5A",
+    "accent_top": "#FF9646",
+    "flow_light": "#FFAF6E",
+    "sql_kw": "#FFAA64",
 }
 
 
