@@ -137,7 +137,7 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 	if err != nil {
 		return err
 	}
-	upstream, err := variantUpstream(ctx, tx, s.variant)
+	upstream, err := loadJobUpstream(ctx, tx, s)
 	if err != nil {
 		return err
 	}
@@ -166,6 +166,28 @@ func (e *Engine) enqueueRequest(ctx context.Context, tx pgx.Tx, jobID uuid.UUID,
 		Envelope: messaging.Envelope{Type: "job.requested", Producer: "core", ProductionID: &prod,
 			Job: &messaging.JobRef{JobID: jobID, Fence: fence}, Payload: payload},
 	})
+}
+
+// loadJobUpstream is the upstream part of the job input: for a variant-scoped job (review after video)
+// the latest content revision of the variant, so the module sees the video and its metadata.
+// Production-scoped jobs (video itself) have no upstream.
+func loadJobUpstream(ctx context.Context, tx pgx.Tx, s jobSpec) (map[string]any, error) {
+	upstream := map[string]any{}
+	if s.variant == nil {
+		return upstream, nil
+	}
+	var id uuid.UUID
+	var body json.RawMessage
+	err := tx.QueryRow(ctx, `SELECT id, body FROM content_revisions WHERE variant_id = $1 ORDER BY revision DESC LIMIT 1`, *s.variant).Scan(&id, &body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return upstream, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	upstream["content_revision"] = body
+	upstream["content_revision_id"] = id.String()
+	return upstream, nil
 }
 
 // loadModuleSettings returns the settings snapshot of the module for the job request: the current
@@ -299,28 +321,4 @@ func modeOrCreate(m string) string {
 		return "create"
 	}
 	return m
-}
-
-// variantUpstream gives a variant-scoped job (review, revise) the latest content revision of its
-// variant, in the same shape as the publish job: upstream.content_revision (opaque blob, D22) and
-// upstream.content_revision_id. A job without a variant, or a variant without a revision yet,
-// gets an empty object.
-func variantUpstream(ctx context.Context, tx pgx.Tx, variant *uuid.UUID) (map[string]any, error) {
-	upstream := map[string]any{}
-	if variant == nil {
-		return upstream, nil
-	}
-	var id uuid.UUID
-	var body json.RawMessage
-	err := tx.QueryRow(ctx, `SELECT id, body FROM content_revisions WHERE variant_id = $1 ORDER BY revision DESC LIMIT 1`, *variant).
-		Scan(&id, &body)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return upstream, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	upstream["content_revision"] = body
-	upstream["content_revision_id"] = id.String()
-	return upstream, nil
 }

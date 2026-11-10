@@ -73,6 +73,9 @@ def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
+IDEA_IDENTITY = ("id", "rev", "idea_ref")  # left out of the step cache key
+
+
 def input_hash(spec: Step, ctx: RunContext) -> str:
     """sha256 over step name, version, model, the settings it depends on, the job input and the
     sha256 of every file produced by earlier steps (05 section 8)."""
@@ -83,8 +86,12 @@ def input_hash(spec: Step, ctx: RunContext) -> str:
         "version": spec.version,
         "model": ctx.settings.models.get(spec.name, ctx.settings.model),  # type: ignore[call-overload]
         "settings": {k: dumped[k] for k in spec.settings_keys},
-        "input": ctx.input.model_dump(mode="json", exclude={"upstream"}),
-        "idea": hashlib.sha256(json.dumps(ctx.idea, sort_keys=True).encode()).hexdigest(),
+        # Who asks (idea id and rev) does not change what a step produces: only the idea's content does,
+        # so a copy or a retry of the same idea reuses the steps that already succeeded.
+        "input": ctx.input.model_dump(mode="json", exclude={"upstream", "idea_ref"}),
+        "idea": hashlib.sha256(
+            json.dumps({k: v for k, v in ctx.idea.items() if k not in IDEA_IDENTITY}, sort_keys=True).encode()
+        ).hexdigest(),
         "upstream": upstream,
         # an edited or re-activated prompt must not hit the step cache
         "prompts": sorted(

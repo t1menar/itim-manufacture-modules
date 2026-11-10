@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 from mvrender import timing as tm
@@ -129,7 +130,26 @@ def draw_diagram(
             text = (
                 f"{e['value']['text']} {e.get('text', '')}".strip() if e.get("value") else e.get("text", "")
             )
-            cv.centered(cx, cy - 150, text, "card_body", mix(pal.ink, WHITE, a))
+            colour = mix(pal.ink, WHITE, a)
+            # Counters sit side by side: a text wider than its slot shrinks, then wraps by words.
+            gaps = [abs(q - p) for p, q in itertools.pairwise(xs)]
+            edge = 2 * min(cx - rect[0], rect[2] - cx)  # a slot near the panel edge has less room
+            avail = min([edge, *gaps]) - 16
+            size = cv.fonts.get("card_body").size
+            lines = [text]
+            if avail:
+                while size > 22 and cv.width("card_body", text, size) > avail:
+                    size -= 2
+                if cv.width("card_body", text, size) > avail:
+                    lines = [""]
+                    for word in text.split():
+                        trial = f"{lines[-1]} {word}".strip()
+                        if lines[-1] and cv.width("card_body", trial, size) > avail:
+                            lines.append(word)
+                        else:
+                            lines[-1] = trial
+            for k, line in enumerate(lines):
+                cv.centered(cx, cy - 150 + k * (size * 1.3), line, "card_body", colour, size=size)
         elif kind == "equals":
             mid = (xs[0] + xs[min(1, len(xs) - 1)]) / 2
             cv.centered(mid, cy - 70, "=", "big", mix(pal.accent, WHITE, a))

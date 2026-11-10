@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +61,7 @@ def render_sound(
     return cues
 
 
-def _leveled(wav: Path, out: Path, audio: AudioSettings) -> None:
+def _leveled(wav: Path, out: Path, audio: AudioSettings, margin: float = 0.5) -> None:
     """Bring the sound to the target loudness under the true-peak ceiling.
 
     Sparse effects cannot reach -14 LUFS by a linear gain (the peaks hit the ceiling first), so
@@ -69,7 +69,7 @@ def _leveled(wav: Path, out: Path, audio: AudioSettings) -> None:
     (up to six rounds). `loudnorm` in linear mode refuses gains that clip, which is why it is
     only used to measure.
     """
-    margin = 0.5  # headroom for the AAC encoder's overshoot
+    # `margin`: headroom for the AAC encoder's overshoot; mux_final raises it when the final file overshoots
     ceiling = audio.true_peak - margin  # sample-peak ceiling of the limiter, adapted below
     gain = audio.lufs - float(loudnorm_measure(wav, audio.lufs, audio.true_peak, audio.lra)["input_i"])
     got = Loudness(0.0, 0.0, 0.0)
@@ -96,22 +96,30 @@ def _leveled(wav: Path, out: Path, audio: AudioSettings) -> None:
 def mux_final(
     silent: str | Path, wav: str | Path, out: str | Path, audio: AudioSettings | None = None
 ) -> Loudness:
-    """Level the sound, mux it with the copied video, and verify the final file with ebur128."""
+    """Level the sound, mux it with the copied video, and verify the final file with ebur128.
+
+    The AAC encode changes the true peak unpredictably (a sparse sound can come out 2 dB over the
+    limiter ceiling at one headroom and under it at another), and costs about 0.4 LU. So the final
+    file is what is measured: the headroom grows in steps of 0.5 dB, with the loudness aimed 0.2 LU
+    high, until the encoded file meets both targets (up to 14 rounds)."""
     audio = audio or AudioSettings()
     leveled = Path(str(out) + ".leveled.wav")
-    _leveled(Path(wav), leveled, audio)
-    p = run(["-y", "-i", str(silent), "-i", str(leveled), "-map", "0:v", "-map", "1:a", "-c:v", "copy",
-             "-ar", "48000", "-ac", "2", "-c:a", "aac", "-b:a", f"{audio.bitrate_kbps}k", "-shortest",
-             "-movflags", "+faststart", str(out)])  # fmt: skip
-    leveled.unlink(missing_ok=True)
-    if p.returncode != 0:
-        raise MediaError(f"mux failed: {p.stderr[-300:]!r}")
-    got = ebur128(out)
-    if abs(got.integrated - audio.lufs) > audio.tolerance_lu or got.true_peak > audio.true_peak:
-        raise LoudnessError(
-            f"loudness {got.integrated:.1f} LUFS, true peak {got.true_peak:.1f} dBTP misses the target"
-        )
-    return got
+    aim = replace(audio, lufs=audio.lufs + 0.2)
+    got = Loudness(0.0, 0.0, 0.0)
+    for step in range(14):
+        _leveled(Path(wav), leveled, aim, 0.5 + 0.5 * step)
+        p = run(["-y", "-i", str(silent), "-i", str(leveled), "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+                 "-ar", "48000", "-ac", "2", "-c:a", "aac", "-b:a", f"{audio.bitrate_kbps}k", "-shortest",
+                 "-movflags", "+faststart", str(out)])  # fmt: skip
+        leveled.unlink(missing_ok=True)
+        if p.returncode != 0:
+            raise MediaError(f"mux failed: {p.stderr[-300:]!r}")
+        got = ebur128(out)
+        if abs(got.integrated - audio.lufs) <= audio.tolerance_lu and got.true_peak <= audio.true_peak:
+            return got
+    raise LoudnessError(
+        f"loudness {got.integrated:.1f} LUFS, true peak {got.true_peak:.1f} dBTP misses the target"
+    )
 
 
 def extract_cover(ctx: RenderContext, t: float, out: str | Path, quality: int = 92) -> None:

@@ -22,6 +22,7 @@ class TelegramBot(Protocol):
         video: str,
         *,
         video_bytes: bytes | None = None,
+        video_info: dict[str, Any] | None = None,
         caption: str | None = None,
         reply_to_message_id: int | None = None,
         allow_sending_without_reply: bool = False,
