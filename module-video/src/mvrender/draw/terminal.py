@@ -20,8 +20,11 @@ def draw_window_frame(cv: Canvas, rect: tuple[int, int, int, int], title: str) -
     cv.d.line((x0, y0 + 56, x1, y0 + 56), fill=pal.win_line, width=2)
     for i, c in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]):
         cv.d.ellipse((x0 + 24 + i * 34, y0 + 18, x0 + 44 + i * 34, y0 + 38), fill=c)
+    # The title sits right of the three window dots; a long path keeps its tail ("...") to fit the bar.
+    room = (x1 - 24) - (x0 + 130)
+    title = cv.fit_tail("window_title", title, room)
     tw = cv.width("window_title", title)
-    cv.text((x0 + x1) / 2 - tw / 2 + 40, y0 + 15, title, "window_title", pal.win_muted)
+    cv.text(max(x0 + 130, (x0 + x1) / 2 - tw / 2 + 40), y0 + 15, title, "window_title", pal.win_muted)
 
 
 def _break_points(line: str, cols: int) -> list[int]:

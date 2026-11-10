@@ -146,7 +146,8 @@ def code_card(
     pal = cv.pal
     x0, y0, x1, _ = rect
     bx0, by0, bx1 = x0 + 30, y0 + 28, x1 - 30
-    cv.text(bx0, by0, file_path, "crumb", mix(pal.muted, WHITE, a))
+    room = (bx1 - cv.width("crumb", ref_name)) - bx0 - 24  # the ref name sits on the same row
+    cv.text(bx0, by0, cv.fit_tail("crumb", file_path, room), "crumb", mix(pal.muted, WHITE, a))
     cv.text(bx1 - cv.width("crumb", ref_name), by0, ref_name, "crumb", mix(pal.accent_text, WHITE, a))
     lines = [(r["n"], r["text"].expandtabs(4)) for r in rows]
     ind = min((len(t) - len(t.lstrip()) for _, t in lines if t.strip()), default=0)

@@ -244,3 +244,30 @@ def test_long_typed_command_soft_wraps_and_stays_in_the_safe_zone():
     assert len(texts) == len(points) + 1 > 1
     # a prefix is cut at the same places, so the wrap does not move while the command is typed
     assert wrap_segments([(line[:50], (0, 0, 0))], points)[0][0][0] == texts[0]
+
+
+def test_long_window_title_is_trimmed_to_fit_the_bar(ctx: RenderContext) -> None:
+    from mvrender.draw.canvas import Canvas
+    from mvrender.draw.terminal import draw_window_frame
+    from mvrender.layout import MID
+
+    path = "clients/src/main/java/org/apache/kafka/clients/producer/KafkaProducer.java"
+    img = Image.new("RGB", (1080, 1920))
+    cv = Canvas(img, ctx.fonts, ctx.pal, scene="s4-produce", safe=ctx.safe, strict=True)
+    draw_window_frame(cv, MID, path)  # strict canvas: a title outside the safe zone would raise
+    shown = next(r.text for r in cv.records if r.role == "window_title")
+    assert shown.startswith("...") and shown.endswith("KafkaProducer.java")
+
+
+def test_code_card_path_shares_the_row_with_the_ref_name(ctx: RenderContext) -> None:
+    from mvrender.draw.canvas import Canvas
+    from mvrender.draw.elements import code_card
+
+    path = "storage/src/main/java/org/apache/kafka/storage/internals/checkpoint/OffsetCheckpointFile.java"
+    img = Image.new("RGB", (1080, 1920))
+    cv = Canvas(img, ctx.fonts, ctx.pal, scene="s8-checkpoint", safe=ctx.safe, strict=True)
+    rows = [{"n": 79, "text": "public String toString() {"}, {"n": 80, "text": "}"}]
+    ref = "OffsetCheckpointFile.java"
+    code_card(cv, (60, 300, 1020, 700), path, rows, 79, "one line per partition", ref, 1.0)
+    crumbs = [r.text for r in cv.records if r.role == "crumb" and r.text != ref]
+    assert crumbs[0].startswith("...") and crumbs[0].endswith(ref)

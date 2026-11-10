@@ -43,6 +43,13 @@ class Canvas:
     def width(self, role: str, text: str, size: int | None = None) -> float:
         return self.fonts.width(role, text, size)
 
+    def fit_tail(self, role: str, text: str, room: float) -> str:
+        """`text` shortened from the left ("...") to at most `room` px wide; a path keeps its tail."""
+        while len(text) > 8 and self.width(role, text) > room:
+            keep = text[3:] if text.startswith("...") else text
+            text = "..." + keep[max(1, len(keep) // 12) :]
+        return text
+
     def text(self, x: float, y: float, s: str, role: str, fill: RGB, *, size: int | None = None) -> float:
         """Draw `s`; returns its width. Missing glyphs and safe-zone breaches raise."""
         if not s:
