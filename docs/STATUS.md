@@ -18,13 +18,14 @@ _Last updated: 2026-11-10 (Europe/Stockholm)._
 | PR | Content | Merge? |
 |----|---------|--------|
 | #26 | Каркас admin-panel | смержен |
+| #28 | Instagram и Telegram в Compose по умолчанию `real` | смержен |
 | (this) | Экран **Productions** (список, детали, cancel/retry/skip) | owner — ждать (**не мержить**) |
 
 ## Local deploy
 
 - Entry: `./deploy/up.sh` — PG / RabbitMQ / MinIO / core / video / review / publish / **admin-api + панель**, register+activate modules, smoke.
 - Панель и API: `http://127.0.0.1:58084/` (только loopback, один origin).
-- Fake TG/IG by default.
+- Telegram and Instagram are **real** by default in Compose. For local stacks without real sends set `REVIEW_TELEGRAM_MODE=fake` and `PUBLISH_INSTAGRAM_MODE=fake`. Unset bootstrap (tests/CI) stays fake and still uses Fake clients explicitly.
 
 ## module-video
 

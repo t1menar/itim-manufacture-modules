@@ -27,7 +27,8 @@ def test_info_contract(client: TestClient) -> None:
     body = resp.json()
     assert body["contract"] == 1
     assert body["stages"] == ["review"]
-    assert body["name"] == "Review (Telegram bot)"
+    assert body["name"] == "Review (Telegram bot, fake)"
+    assert body["telegram_mode"] == "fake"
     assert body["version"] == __version__
     assert body["admin_endpoints"] == [
         "/admin/v1/secrets",
