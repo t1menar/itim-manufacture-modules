@@ -140,6 +140,10 @@ class SandboxImage(BaseModel):
     env: dict[str, str] | None = None
     tmpfs: dict[str, str] | None = None
     cap_add: list[str] | None = None
+    hostname: str | None = Field(
+        default=None,
+        description="container hostname; `localhost` for servers that resolve their own name (no network)",
+    )
     exec_user: str | None = Field(
         default=None,
         description="user of the session processes (docker exec --user); default: the image user",

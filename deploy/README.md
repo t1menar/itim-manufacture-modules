@@ -41,6 +41,10 @@
 
 `--dry-run` печатает SQL с замаскированными секретами. Туннель и публичный адрес MinIO не нужны: файл ролика читается из локального MinIO и загружается напрямую в Telegram (multipart, до 50 МБ; больше — ссылка) и в Instagram (resumable upload через `rupload.facebook.com`). Режим по ссылке остаётся запасным: `PUBLISH_INSTAGRAM_UPLOAD_MODE=url`. Готовые ролики всегда остаются в MinIO (бакет `manufacture`) как история.
 
+### Окружения песочницы
+
+`video-prepare.sh` описывает окружения, в которых video показывает команды: `postgres17` и, если образ есть локально, `kafka44` (официальный `apache/kafka:4.4.0`, один узел KRaft, без сети; `docker pull apache/kafka:4.4.0`, затем повторить `video-prepare.sh`). Идеи берутся только под эти окружения; темы-плейлисты задаются полем `topics.code` в базе `video` (`postgres_internals`, `kafka_internals`).
+
 ## Порты (по умолчанию)
 
 | Сервис | URL |

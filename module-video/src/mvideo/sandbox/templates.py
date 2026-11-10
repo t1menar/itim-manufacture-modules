@@ -53,6 +53,8 @@ def container_spec(
         "environment": dict(image.env or {}),
         "labels": {LABEL_MODULE: "video", "manufacture.purpose": purpose, "manufacture.run": run_id},
     }
+    if image.hostname:
+        spec["hostname"] = image.hostname
     assert not set(spec) & set(FORBIDDEN_KEYS)  # noqa: S101
     return spec
 

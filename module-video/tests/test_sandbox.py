@@ -64,6 +64,15 @@ def test_template_has_no_binds_privileges_or_host_network() -> None:
     assert "volumes" not in spec and not spec.get("privileged")
 
 
+def test_template_sets_the_hostname_only_when_declared() -> None:
+    s = VideoSettings.model_validate(settings_values())
+    image = s.sandbox_images[PG_IMAGE_KEY]
+    assert "hostname" not in templates.container_spec(image, s.sandbox)
+    named = image.model_copy(update={"hostname": "localhost"})
+    spec = templates.container_spec(named, s.sandbox)
+    assert spec["hostname"] == "localhost" and spec["network_mode"] == "none"
+
+
 def test_template_requires_a_digest() -> None:
     s = pg_settings(f"postgres:17@{DIGEST}")
     unpinned = s.sandbox_images[PG_IMAGE_KEY].model_copy(update={"image": "postgres:17"})  # no validation

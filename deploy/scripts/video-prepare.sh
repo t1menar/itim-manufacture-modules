@@ -26,20 +26,52 @@ echo "[3/4] sandbox image digest (postgres:17)"
 docker image inspect postgres:17 >/dev/null 2>&1 || docker pull postgres:17 >/dev/null
 PG_DIGEST=$(docker image inspect postgres:17 --format '{{index .RepoDigests 0}}' | sed 's/.*@//')
 PG_IMAGE="postgres:17@${PG_DIGEST}"
+# Optional second environment: a real Kafka broker (apache/kafka:4.4.0, KRaft, one node). Only when the image is local.
+KAFKA_IMAGE=""
+if docker image inspect apache/kafka:4.4.0 >/dev/null 2>&1; then
+  KAFKA_IMAGE="apache/kafka@$(docker image inspect apache/kafka:4.4.0 --format '{{index .RepoDigests 0}}' | sed 's/.*@//')"
+fi
 
 echo "[4/4] module settings in core"
-VALUES=$(AGENT_IMAGE="$AGENT_IMAGE" PG_IMAGE="$PG_IMAGE" python3 - <<'PY'
+VALUES=$(AGENT_IMAGE="$AGENT_IMAGE" PG_IMAGE="$PG_IMAGE" KAFKA_IMAGE="$KAFKA_IMAGE" python3 - <<'PY'
 import json, os
-print(json.dumps({
-    "agent": {"image": os.environ["AGENT_IMAGE"]},
-    "sandbox_images": {"postgres17": {
-        "image": os.environ["PG_IMAGE"],
-        "ready_cmd": "pg_isready -U postgres",
-        "version_cmd": "psql -U postgres -tAc 'SELECT version()'",
-        "version_expect": "PostgreSQL 17.",
-        "sessions": {"psql": {"kind": "psql", "start": "psql -X -U postgres -d {database}"}},
-    }},
-}))
+images = {"postgres17": {
+    "image": os.environ["PG_IMAGE"],
+    "ready_cmd": "pg_isready -U postgres",
+    "version_cmd": "psql -U postgres -tAc 'SELECT version()'",
+    "version_expect": "PostgreSQL 17.",
+    "sessions": {"psql": {"kind": "psql", "start": "psql -X -U postgres -d {database}"}},
+}}
+if os.environ.get("KAFKA_IMAGE"):
+    kb = "/opt/kafka/bin"
+    images["kafka44"] = {
+        "image": os.environ["KAFKA_IMAGE"],
+        "description": "Apache Kafka 4.4.0, one KRaft node (broker and controller), PLAINTEXT on localhost:9092; "
+        "CLI tools in /opt/kafka/bin; partition logs in /var/lib/kafka/data (memory-backed)",
+        "hostname": "localhost",
+        "env": {
+            "KAFKA_HEAP_OPTS": "-Xmx512m -Xms512m", "KAFKA_NODE_ID": "1", "KAFKA_PROCESS_ROLES": "broker,controller",
+            "KAFKA_LISTENERS": "PLAINTEXT://localhost:9092,CONTROLLER://localhost:9093",
+            "KAFKA_ADVERTISED_LISTENERS": "PLAINTEXT://localhost:9092",
+            "KAFKA_CONTROLLER_LISTENER_NAMES": "CONTROLLER",
+            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+            "KAFKA_CONTROLLER_QUORUM_VOTERS": "1@localhost:9093",
+            "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": "1", "KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
+            "KAFKA_TRANSACTION_STATE_LOG_MIN_ISR": "1", "KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS": "0",
+            "KAFKA_LOG_DIRS": "/var/lib/kafka/data", "KAFKA_NUM_PARTITIONS": "1",
+        },
+        "tmpfs": {
+            "/tmp": "size=256m,mode=1777",
+            "/var/lib/kafka/data": "size=512m,uid=1000,gid=1000",
+            "/opt/kafka/logs": "size=64m,uid=1000,gid=1000",
+            "/opt/kafka/config": "size=8m,uid=1000,gid=1000",
+        },
+        "ready_cmd": f"{kb}/kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        "version_cmd": f"{kb}/kafka-topics.sh --version",
+        "version_expect": "4.4.0",
+        "sessions": {"sh": {"kind": "sh", "start": "bash"}},
+    }
+print(json.dumps({"agent": {"image": os.environ["AGENT_IMAGE"]}, "sandbox_images": images}))
 PY
 )
 "${COMPOSE[@]}" exec -T postgres psql -U "$PGU" -d core -v ON_ERROR_STOP=1 -v mid="$MODULE_ID" -v vals="$VALUES" <<'SQL'
@@ -50,4 +82,4 @@ SELECT :'mid', COALESCE(MAX(version), 0) + 1, :'vals'::jsonb, true, 'video-prepa
 FROM module_settings WHERE module_id = :'mid';
 COMMIT;
 SQL
-echo "ok: agent.image=$AGENT_IMAGE sandbox=$PG_IMAGE"
+echo "ok: agent.image=$AGENT_IMAGE sandbox=$PG_IMAGE kafka=${KAFKA_IMAGE:-none}"
