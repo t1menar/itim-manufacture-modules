@@ -162,14 +162,16 @@ def code_card(
         if len(txt) > 60:
             txt = txt[:59] + "…"
         if n == highlight:
-            cv.d.rectangle((bx0, yy - 3, bx1, yy + 29), fill=mix(mix(pal.accent, pal.win, 0.25), WHITE, a))
+            cv.d.rectangle(
+                (bx0, yy - 3, bx1, yy + 29), fill=mix(mix(pal.win_accent, pal.win, 0.25), WHITE, a)
+            )
         num = str(n)
         cv.text(
             bx0 + 76 - code_w * len(num),
             yy,
             num,
             "code",
-            mix(pal.accent if n == highlight else pal.win_dim, WHITE, a),
+            mix(pal.win_accent if n == highlight else pal.win_dim, WHITE, a),
         )
         segs, in_com = highlight_c(txt, in_com, pal)
         cv.segments(bx0 + 96, yy, segs, "code_current" if n == highlight else "code", a, pal.win)

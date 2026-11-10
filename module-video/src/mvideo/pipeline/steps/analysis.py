@@ -100,7 +100,7 @@ class ScriptStep(AgentStep):
     name = "script"
     lo, hi = 20, 35
     produces = ("script.en.json",)
-    settings_keys = ("video", "text", "timing", "palette", "prompt_versions", "limits")
+    settings_keys = ("video", "text", "timing", "prompt_versions", "limits")
 
     async def inputs(self, ctx: RunContext) -> dict[str, bytes]:
         get = ctx.storage.get_bytes
@@ -134,7 +134,7 @@ class ReviseScriptStep(AgentStep):
     name = "script-revise"
     lo, hi = 0, 35
     produces = ("script.en.json", "changes.en.json")
-    settings_keys = ("video", "text", "timing", "palette", "prompt_versions", "limits", "revise")
+    settings_keys = ("video", "text", "timing", "prompt_versions", "limits", "revise")
 
     async def _previous_script(self, ctx: RunContext) -> bytes:
         return await ctx.storage.get_bytes(ctx.previous["script"]["script.en.json"].ref)

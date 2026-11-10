@@ -58,7 +58,7 @@ def highlight_cmd(text: str, pal: Palette) -> Segments:
         elif tok.startswith("$"):
             segs.append((tok, pal.c_type))
         elif tok in TOOLS:
-            segs.append((tok, pal.accent))
+            segs.append((tok, pal.win_accent))
         elif tok.startswith("-") or tok in ("|", "<("):
             segs.append((tok, pal.win_muted))
         else:
@@ -90,7 +90,7 @@ def output_row(text: str, highlights: list[str], pal: Palette, continuation: str
             continue
         if a > pos:
             segs.append((text[pos:a], OUT_FG))
-        segs.append((text[a:b], pal.accent))
+        segs.append((text[a:b], pal.win_accent))
         pos = b
     if pos < len(text):
         segs.append((text[pos:], OUT_FG))
