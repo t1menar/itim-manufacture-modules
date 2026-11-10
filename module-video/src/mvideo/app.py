@@ -141,7 +141,12 @@ def create_app(
         idea_runtime = IdeaRuntime(
             session_factory(engine),
             AmqpPublisher(config.amqp_url, config.amqp_prefix),
-            SchedulerParams(config.ideas_paused, config.ideas_max_dispatch, config.ideas_max_in_flight),
+            SchedulerParams(
+                config.ideas_paused,
+                config.ideas_max_dispatch,
+                config.ideas_max_in_flight,
+                config.ideas_interval_s,
+            ),
             tick_s=config.ideas_tick_s,
             amqp_url=config.amqp_url,
             prefix=config.amqp_prefix,

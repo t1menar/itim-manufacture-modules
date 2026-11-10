@@ -22,6 +22,7 @@ class SchedulerParams:
     paused: bool = False
     max_dispatch_per_tick: int = 5
     max_in_flight: int = 3  # dispatched + in_production
+    min_interval_s: float = 0.0  # spacing between two dispatched ideas; > 0 also means one idea per pass
 
 
 def ready_envelope(doc: dict, now: dt.datetime) -> dict:
@@ -59,6 +60,11 @@ async def tick(
         room = min(params.max_dispatch_per_tick, params.max_in_flight - in_flight)
         if room <= 0:
             return []
+        if params.min_interval_s > 0:
+            last = (await s.execute(select(func.max(Idea.dispatched_at)))).scalar_one()
+            if last is not None and (now - last).total_seconds() < params.min_interval_s:
+                return []  # ideas stay `queued` until the interval has passed
+            room = 1
         for idea, topic in await repo.queued_batch(s, room):
             doc = build_document(idea, topic)
             problems = schema_errors("idea", doc)

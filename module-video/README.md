@@ -60,7 +60,7 @@ The environment holds only bootstrap values; all other settings arrive with each
 | `DOCKER_HOST` | yes | Docker daemon for sandbox and agent containers |
 | `VIDEO_AGENT_NETWORK` | yes | network of the agent containers (the module must be on it) |
 | `MODULE_AMQP_URL`, `MODULE_AMQP_PREFIX` | no | RabbitMQ for ideas; without the URL the scheduler, relay and consumer are off |
-| `VIDEO_IDEAS_TICK_S`, `VIDEO_IDEAS_MAX_DISPATCH`, `VIDEO_IDEAS_MAX_IN_FLIGHT`, `VIDEO_IDEAS_PAUSED` | no | idea scheduler (defaults 5, 5, 3, off) |
+| `VIDEO_IDEAS_TICK_S`, `VIDEO_IDEAS_MAX_DISPATCH`, `VIDEO_IDEAS_MAX_IN_FLIGHT`, `VIDEO_IDEAS_PAUSED`, `VIDEO_IDEAS_INTERVAL_S` | no | idea scheduler (defaults 5, 5, 3, off, 0). With `VIDEO_IDEAS_INTERVAL_S` > 0 one queued idea is dispatched per interval, the rest wait in `queued` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | trace export (needs the OpenTelemetry SDK, declared in `pyproject.toml`) |
 | `MVIDEO_PIPELINE` | no | `real` for the Claude pipeline; anything else uses fake steps |
 | `MVIDEO_SELF_HOST`, `MVIDEO_GIT_IMAGE`, `MVIDEO_AGENT_NETWORK` | no | how agents reach the module, helper image for git checkouts, agent network name |

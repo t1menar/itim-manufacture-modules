@@ -32,6 +32,7 @@ OPTIONAL_VARS = (
     "VIDEO_IDEAS_MAX_DISPATCH",
     "VIDEO_IDEAS_MAX_IN_FLIGHT",
     "VIDEO_IDEAS_PAUSED",
+    "VIDEO_IDEAS_INTERVAL_S",  # at least this many seconds between two dispatched ideas (0 = no spacing)
 )
 
 
@@ -73,6 +74,7 @@ class BootstrapConfig:
     ideas_max_dispatch: int = 5
     ideas_max_in_flight: int = 3
     ideas_paused: bool = False
+    ideas_interval_s: float = 0.0
 
     @property
     def host(self) -> str:
@@ -115,5 +117,6 @@ class BootstrapConfig:
             ideas_tick_s=_number(source, "VIDEO_IDEAS_TICK_S", 5.0, float),
             ideas_max_dispatch=_number(source, "VIDEO_IDEAS_MAX_DISPATCH", 5, int),
             ideas_max_in_flight=_number(source, "VIDEO_IDEAS_MAX_IN_FLIGHT", 3, int),
+            ideas_interval_s=_number(source, "VIDEO_IDEAS_INTERVAL_S", 0.0, float),
             ideas_paused=(source.get("VIDEO_IDEAS_PAUSED") or "").strip().lower() in ("1", "true", "yes"),
         )

@@ -126,6 +126,17 @@ async def test_tick_dispatches_by_priority_then_queue_time_within_limits(factory
     assert (await row(factory, 4)).status == "queued"
 
 
+async def test_tick_spaces_dispatches_by_min_interval(factory: Any) -> None:
+    await queue(factory, 1, priority=0)
+    await queue(factory, 2, priority=0)
+    await queue(factory, 3, priority=0)
+    params = SchedulerParams(max_dispatch_per_tick=5, max_in_flight=10, min_interval_s=7200)
+    assert await scheduler.tick(factory, params, NOW) == ["idea:1:v1"]  # one idea per pass
+    assert await scheduler.tick(factory, params, NOW + dt.timedelta(seconds=7199)) == []
+    assert await scheduler.tick(factory, params, NOW + dt.timedelta(seconds=7200)) == ["idea:2:v1"]
+    assert (await row(factory, 3)).status == "queued"
+
+
 async def test_dispatch_writes_snapshot_and_a_valid_orchestration_only_outbox_row(factory: Any) -> None:
     await queue(factory, 5, priority=10, pipeline_id="video-only")
     assert await scheduler.tick(factory, SchedulerParams(), NOW) == ["idea:5:v1"]
