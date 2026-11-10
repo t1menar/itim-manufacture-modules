@@ -3,10 +3,11 @@
 Agent and maintainer context lives next to the code:
 
 - [`../AGENTS.md`](../AGENTS.md) — start here: map, flow, commands, rules, gotchas.
-- `<module>/CONTEXT.md` — per-module deep context (`core`, `module-video`, `module-review`, `module-publish`, `admin-api`, `admin-panel`, `deploy`, `contracts`).
-- [`STATUS.md`](STATUS.md) — accepted decisions (D18–D24), history of merged work.
-- [`REVIEW.md`](REVIEW.md) — code review findings and open items.
+- [`../README.md`](../README.md) — what this modules-only repository is.
+- `<module>/CONTEXT.md` — per-module deep context (`video-modules/module-video`, `video-modules/module-review`, `video-modules/module-publish`, `deploy`, `contracts`).
+- [`STATUS.md`](STATUS.md) — accepted decisions that still apply to the modules.
+- [`REVIEW.md`](REVIEW.md) — code review findings and open items in the modules.
 - [`CONTENT.md`](CONTENT.md) — content strategy and audience-test plan.
-- `video-modules/module-video/docs/IDEAS.md` — ideas backlog model (D21); `admin-api/docs/VIDEO_ADMIN_ROUTES.md` — video admin routes contract.
+- `video-modules/module-video/docs/IDEAS.md` — ideas backlog model (D21).
 
-The former Word specifications (`*.docx`, built by `tools/specgen`) were deleted; wire contracts are in `core/schemas/`, `contracts/` and `admin-api/api/openapi.yaml`.
+The former Word specifications (`*.docx`) were deleted earlier. Shared idea/topic/event schemas are in `contracts/` (vendored into module-video). Wire schemas of the legacy core (`core/schemas/`, `admin-api/api/openapi.yaml`) live on tag [`v1-legacy`](https://github.com/t1menar/itim-manufacture-modules/tree/v1-legacy). The new core is https://github.com/t1menar/manufacture-core.
