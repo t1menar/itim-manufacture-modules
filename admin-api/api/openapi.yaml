@@ -140,7 +140,80 @@ paths:
       responses: { "204": { description: deleted } }
   /api/v1/video/prompts:
     get:
-      responses: { "200": { description: list } }
+      responses:
+        "200":
+          description: list of prompt steps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    step: { type: string }
+                    versions: { type: array, items: { type: string } }
+                    default: { type: string }
+                    revision: { type: integer }
+  /api/v1/video/prompts/audit:
+    get:
+      parameters: [{ name: limit, in: query, schema: { type: integer } }]
+      responses:
+        "200":
+          description: prompt audit
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+  /api/v1/video/prompts/{step}/{version}:
+    get:
+      parameters:
+        - { name: step, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: prompt version with text
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  step: { type: string }
+                  version: { type: string }
+                  claude_md: { type: string }
+                  task_md: { type: string }
+                  created_by: { type: string }
+                  created_at: { type: string }
+  /api/v1/video/prompts/{step}:
+    post:
+      parameters: [{ name: step, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, claude_md]
+              properties:
+                version: { type: string }
+                claude_md: { type: string }
+                task_md: { type: string }
+                note: { type: string }
+      responses: { "201": { description: created } }
+  /api/v1/video/prompts/{step}/active:
+    put:
+      parameters: [{ name: step, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: string }
+      responses: { "200": { description: activated } }
   /api/v1/video/credentials:
     get:
       summary: Metadata only (no values)

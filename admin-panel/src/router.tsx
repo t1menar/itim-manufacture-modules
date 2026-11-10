@@ -7,6 +7,7 @@ import { ProductionDetailPage } from "./pages/ProductionDetailPage";
 import { ProductionsPage } from "./pages/ProductionsPage";
 import { ReviewPublishPage } from "./pages/ReviewPublishPage";
 import { AccountsPage } from "./pages/AccountsPage";
+import { PromptsPage } from "./pages/PromptsPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -53,7 +54,7 @@ const accountsRoute = createRoute({
 const promptsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/prompts",
-  component: () => <StubPage title="Промпты" hint="Редактор шагов module-video." />,
+  component: PromptsPage,
 });
 
 const auditRoute = createRoute({
