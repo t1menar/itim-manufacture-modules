@@ -71,7 +71,12 @@ if os.environ.get("KAFKA_IMAGE"):
         "version_expect": "4.4.0",
         "sessions": {"sh": {"kind": "sh", "start": "bash"}},
     }
-print(json.dumps({"agent": {"image": os.environ["AGENT_IMAGE"]}, "sandbox_images": images}))
+repos = [{"name": "postgres", "url": "https://github.com/postgres/postgres",
+          "refs": ["REL_17_STABLE", "REL_16_STABLE", "master"]}]
+if "kafka44" in images:
+    repos.append({"name": "kafka", "url": "https://github.com/apache/kafka", "refs": ["4.4.0", "4.4", "trunk"]})
+print(json.dumps({"agent": {"image": os.environ["AGENT_IMAGE"]}, "sandbox_images": images,
+                  "sources": {"allowed_repos": repos}}))
 PY
 )
 "${COMPOSE[@]}" exec -T postgres psql -U "$PGU" -d core -v ON_ERROR_STOP=1 -v mid="$MODULE_ID" -v vals="$VALUES" <<'SQL'
