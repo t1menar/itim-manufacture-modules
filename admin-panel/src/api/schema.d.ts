@@ -1545,21 +1545,48 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Admin action journal with filters */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    actor?: string;
+                    action?: string;
+                    outcome?: "ok" | "denied" | "error";
+                    from?: string;
+                    to?: string;
+                    cursor?: string;
+                    limit?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description audit log */
+                /** @description audit log page */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            items?: {
+                                id?: number;
+                                /** Format: date-time */
+                                at?: string;
+                                actor?: string;
+                                action?: string;
+                                resource_type?: string;
+                                resource_id?: string;
+                                outcome?: string;
+                                http_status?: number;
+                                problem_code?: string;
+                                request_id?: string;
+                                details?: Record<string, never>;
+                            }[];
+                            next_cursor?: string;
+                        };
+                    };
                 };
             };
         };

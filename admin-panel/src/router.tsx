@@ -8,6 +8,7 @@ import { ProductionsPage } from "./pages/ProductionsPage";
 import { ReviewPublishPage } from "./pages/ReviewPublishPage";
 import { AccountsPage } from "./pages/AccountsPage";
 import { PromptsPage } from "./pages/PromptsPage";
+import { AuditPage } from "./pages/AuditPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -60,7 +61,7 @@ const promptsRoute = createRoute({
 const auditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/audit",
-  component: () => <StubPage title="Журнал" hint="Журнал действий админа из базы admin-api." />,
+  component: AuditPage,
 });
 
 const notFoundRoute = createRoute({

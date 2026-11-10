@@ -3,6 +3,10 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -12,6 +16,8 @@ type Store struct {
 }
 
 type Row struct {
+	ID                                                                       int64
+	At                                                                       time.Time
 	Actor, Action, ResourceType, ResourceID, Outcome, ProblemCode, RequestID string
 	HTTPStatus                                                               int
 	Details                                                                  map[string]any
@@ -33,40 +39,77 @@ func (s *Store) Write(ctx context.Context, row Row) error {
 	return err
 }
 
-func (s *Store) List(ctx context.Context, limit int) ([]map[string]any, error) {
-	if limit < 1 || limit > 200 {
-		limit = 50
-	}
-	rows, err := s.Pool.Query(ctx, `SELECT id, at, actor, action, resource_type, resource_id, outcome,
+func (s *Store) List(ctx context.Context, f Filter) (Page, error) {
+	limit := clampLimit(f.Limit)
+	var b strings.Builder
+	b.WriteString(`SELECT id, at, actor, action, resource_type, resource_id, outcome,
 		http_status, problem_code, request_id, details
-		FROM audit_log ORDER BY id DESC LIMIT $1`, limit)
+		FROM audit_log WHERE 1=1`)
+	args := make([]any, 0, 8)
+	n := 1
+	add := func(clause string, v any) {
+		b.WriteString(" AND ")
+		b.WriteString(fmt.Sprintf(clause, n))
+		args = append(args, v)
+		n++
+	}
+	if f.Actor != "" {
+		add("actor = $%d", f.Actor)
+	}
+	if f.Action != "" {
+		add("action = $%d", f.Action)
+	}
+	if f.Outcome != "" {
+		add("outcome = $%d", f.Outcome)
+	}
+	if f.From != nil {
+		add("at >= $%d", *f.From)
+	}
+	if f.To != nil {
+		add("at <= $%d", *f.To)
+	}
+	if f.Cursor > 0 {
+		add("id < $%d", f.Cursor)
+	}
+	b.WriteString(fmt.Sprintf(" ORDER BY id DESC LIMIT $%d", n))
+	args = append(args, limit+1)
+
+	rows, err := s.Pool.Query(ctx, b.String(), args...)
 	if err != nil {
-		return nil, err
+		return Page{}, err
 	}
 	defer rows.Close()
 	var out []map[string]any
 	for rows.Next() {
 		var id int64
-		var at any
+		var at time.Time
 		var actor, action, outcome string
 		var rtype, rid, code, reqID *string
 		var status int
 		var details []byte
 		if err := rows.Scan(&id, &at, &actor, &action, &rtype, &rid, &outcome, &status, &code, &reqID, &details); err != nil {
-			return nil, err
+			return Page{}, err
 		}
 		var d any
 		_ = json.Unmarshal(details, &d)
 		out = append(out, map[string]any{
-			"id": id, "at": at, "actor": actor, "action": action,
+			"id": id, "at": at.UTC().Format(time.RFC3339Nano), "actor": actor, "action": action,
 			"resource_type": rtype, "resource_id": rid, "outcome": outcome,
-			"http_status": status, "problem_code": code, "request_id": reqID, "details": d,
+			"http_status": status, "problem_code": code, "request_id": reqID, "details": mask(d),
 		})
+	}
+	if err := rows.Err(); err != nil {
+		return Page{}, err
 	}
 	if out == nil {
 		out = []map[string]any{}
 	}
-	return out, rows.Err()
+	page := Page{Items: out}
+	if len(out) > limit {
+		page.Items = out[:limit]
+		page.NextCursor = strconv.FormatInt(out[limit-1]["id"].(int64), 10)
+	}
+	return page, nil
 }
 
 func nullEmpty(s string) any {
