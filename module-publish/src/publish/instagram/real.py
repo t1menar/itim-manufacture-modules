@@ -410,7 +410,9 @@ class RealInstagramClient:
                     delay = min(delay * 2, 30.0)
                     continue
                 if resp.status_code >= 400 or (isinstance(body, dict) and body.get("error") is not None):
-                    log.warning("instagram_graph_error", path=path, status=resp.status_code, body=str(body)[:400])
+                    log.warning(
+                        "instagram_graph_error", path=path, status=resp.status_code, body=str(body)[:400]
+                    )
                     classified = classify_graph_error(
                         status_code=resp.status_code, body=body if isinstance(body, dict) else None
                     )
