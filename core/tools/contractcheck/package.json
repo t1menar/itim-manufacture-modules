@@ -1,4 +1,0 @@
-{ "name": "manufacture-contractcheck", "private": true,
-  "description": "Validates core/schemas, examples and core/api/openapi.yaml",
-  "scripts": { "test": "node check.js" },
-  "dependencies": { "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "@readme/openapi-parser": "^4.1.0" } }

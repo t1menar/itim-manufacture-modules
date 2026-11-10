@@ -1,5 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "events/job.progress.json",
-  "$ref": "../progress.json"
-}
