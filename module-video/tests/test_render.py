@@ -271,3 +271,19 @@ def test_code_card_path_shares_the_row_with_the_ref_name(ctx: RenderContext) -> 
     code_card(cv, (60, 300, 1020, 700), path, rows, 79, "one line per partition", ref, 1.0)
     crumbs = [r.text for r in cv.records if r.role == "crumb" and r.text != ref]
     assert crumbs[0].startswith("...") and crumbs[0].endswith(ref)
+
+
+def test_long_counter_text_shrinks_or_wraps_inside_its_slot() -> None:
+    script = copy.deepcopy(refdata.load("script.en.json"))
+    scene = next(s for s in script["scenes"] if s["id"] == "s5-proof")
+    for e in scene["panel"]["elements"]:
+        if e["type"] == "counter":
+            e["text"] = "very_long_file_name.timeindex bytes in total"
+    c = make_context(resolved_reference(script), FONTS)
+    idx = [s["id"] for s in script["scenes"]].index("s5-proof")
+    start = c.timeline.starts[idx]
+    end = start + c.timeline.durations[idx] if hasattr(c.timeline, "durations") else start + 6.0
+    t = start + 0.25
+    while t < min(end, start + 8.0):
+        render_frame(c, t, strict=True)  # a counter wider than its slot would raise SafeZoneError
+        t += 0.5
