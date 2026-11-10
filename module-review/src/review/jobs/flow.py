@@ -81,17 +81,23 @@ class ReviewFlow:
                     # Link only as a fallback for files over the Bot API upload limit.
                     video_ref = storage.resolve_https(video_ref, ttl_s=3600, public=True)
             if chat_id == 0:
-                await repo.store_outcome(
-                    s,
-                    run.id,
-                    status="failed",
-                    error={
-                        "class": "fatal",
-                        "message": "no admin chat configured",
-                        "details": {"code": "no_admin"},
-                    },
-                )
-                return
+                no_admin = {
+                    "class": "blocked",
+                    "message": "no admin chat configured",
+                    "details": {"code": "no_admin"},
+                }
+                await repo.store_outcome(s, run.id, status="failed", error=no_admin)
+            else:
+                no_admin = None
+
+        if no_admin is not None:
+            # Tell core, otherwise the job stays live until the review deadline (7 days).
+            if callback:
+                try:
+                    await self._core.fail(callback, fence, no_admin)
+                except Exception:
+                    log.warning("fail_callback_failed", code="no_admin")
+            return
 
         # The file itself goes to Telegram from MinIO (internal endpoint): no public link needed.
         video_bytes = await _read_object(storage, s3_ref) if storage is not None and s3_ref else None

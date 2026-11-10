@@ -169,3 +169,46 @@ async def test_reject_revise_approve_notify_reply_chain() -> None:
     assert len(bot.sent) == n_before
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_no_admin_chat_fails_the_job_in_core() -> None:
+    """Without an admin chat the run fails locally and core gets a blocked fail (no silent 7-day wait)."""
+    url = os.environ["REVIEW_TEST_DATABASE_URL"]
+    upgrade_head(url)
+    engine = create_async_engine(url)
+    bot = FakeTelegramBot()
+    config = BootstrapConfig(
+        database_url=url,
+        listen_addr="127.0.0.1:8080",
+        core_url="http://core.test",
+        core_token="mft_review_test_token_xxxxxxxx",
+        admin_telegram_ids=(),
+    )
+    app = create_app(
+        config,
+        engine=engine,
+        migrate_on_start=False,
+        start_amqp=False,
+        start_worker=False,
+        bot=bot,
+    )
+    flow = app.state.flow
+    if flow._review_chat_id() != 0:  # a registered admin from another test run in the same DB
+        pytest.skip("review DB already has a registered admin")
+    job = uuid.uuid4()
+    cb = f"http://core.test/internal/v1/jobs/{job}"
+    fail_route = respx.post(f"{cb}/fail").mock(return_value=httpx.Response(200, json={}))
+    respx.post(url__regex=r".*/progress").mock(return_value=httpx.Response(200, json={}))
+    await app.state.job_service.accept(
+        validate_job(_review_job(job_id=job, variant=uuid.uuid4(), round_n=1, callback=cb))
+    )
+    await app.state.worker.run_once()
+    await app.state.worker.drain()
+    assert not [m for m in bot.sent if m.get("type") == "video"]
+    assert fail_route.called
+    body = fail_route.calls.last.request.content
+    assert b"no_admin" in body
+    assert fail_route.calls.last.request.headers["X-Fence"] == "1"
+    await engine.dispose()
