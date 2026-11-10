@@ -1,11 +1,10 @@
-"""D21: idea documents by ref, the scheduler and outbox, the status consumer, shared schemas."""
+"""D21: idea documents by ref, the scheduler and outbox, the status consumer."""
 
 from __future__ import annotations
 
 import datetime as dt
 import json
 import uuid
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -57,19 +56,6 @@ def test_refs_and_message_ids_follow_the_shared_rules() -> None:
     assert ids.status_message_id(42, 3, "done", PROD) == uuid.uuid5(
         ids.MANUFACTURE_NS, f"idea:42:v3:done:{PROD}"
     )
-
-
-def test_vendored_schemas_equal_the_shared_contracts() -> None:
-    contracts = Path(__file__).resolve().parents[3] / "contracts"
-    if not contracts.is_dir():
-        pytest.skip("contracts/ is not next to module-video")
-    for name, path in (
-        ("idea", "idea.json"), ("topic", "topic.json"),
-        ("idea.ready", "events/idea.ready.json"), ("idea.status", "events/idea.status.json"),
-    ):  # fmt: skip
-        assert json.loads((SCHEMA_DIR / f"{name}.json").read_text()) == json.loads(
-            (contracts / path).read_text()
-        )
 
 
 def test_document_matches_the_idea_schema_and_text_carries_the_guidance() -> None:

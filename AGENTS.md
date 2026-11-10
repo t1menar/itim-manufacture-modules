@@ -20,7 +20,6 @@ only the module(s) you touch. `docs/STATUS.md` holds decisions that still apply 
 | `modules/module-video/` | Python | Stage `video` (module id `video-claude`): ideas DB + scheduler, Claude agent steps, sandbox capture, ffmpeg render (`mvrender`). |
 | `modules/module-review/` | Python | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
 | `modules/module-publish/` | Python | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
-| `contracts/` | JSON Schema | Shared idea/topic/event schemas (vendored into module-video; a test fails on drift). Must stay at the repo root. |
 | `packages/mf-storage/` | Python | Shared S3/MinIO helpers (s3:// parsing, presign) for review and publish. |
 | `deploy/` | compose | Standalone MinIO for local module tests (`compose.minio.yml`, `scripts/mfinfra-minio.sh`). |
 | `docs/` | md | `STATUS.md` (module decisions), `CONTENT.md` (content strategy), `REVIEW.md` (open findings). |
@@ -50,8 +49,7 @@ The new core is not compatible with these modules until they are ported onto the
 an end-to-end video pipeline on `main` is not expected to run.
 
 `modules/module-video/tests/test_core_contract.py` looks for `core/schemas/` next to the
-module and **skips** when that tree is absent. The idea/topic drift test still requires
-`contracts/` at the repository root.
+module and **skips** when that tree is absent.
 
 ## Commands
 

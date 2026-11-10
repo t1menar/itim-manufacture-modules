@@ -64,7 +64,7 @@ def synthetic_source(script: dict[str, Any], research: dict[str, Any]) -> Memory
 
 
 def idea_document(**overrides: Any) -> dict[str, Any]:
-    """An idea document (contracts/idea.json) for the reference video."""
+    """An idea document (ideas/schemas/idea.json) for the reference video."""
     doc: dict[str, Any] = {
         "id": 42, "rev": 1, "idea_ref": "idea:42:v1",
         "title": "Detailed implementation of CREATE DATABASE in PostgreSQL",

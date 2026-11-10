@@ -1,4 +1,4 @@
-"""The idea document (contracts/idea.json): built from idea and topic rows, validated, rendered."""
+"""The idea document (ideas/schemas/idea.json): built from idea and topic rows, validated, rendered."""
 
 from __future__ import annotations
 

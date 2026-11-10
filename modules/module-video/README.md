@@ -117,8 +117,7 @@ with no active version, the newest is activated. Existing rows are never overwri
 ## Ideas (D21)
 
 Ideas and topics live in database `video` (`topics`, `ideas`, `idea_revisions`, `idea_outbox`, `amqp_inbox`);
-core keeps only the opaque `idea_ref` (`idea:<id>:v<rev>`). Spec: `docs/IDEAS.md`, schemas: `contracts/` (vendored
-in `src/mvideo/ideas/schemas/`, a test fails when they drift).
+core keeps only the opaque `idea_ref` (`idea:<id>:v<rev>`). Spec: `docs/IDEAS.md`, schemas: `src/mvideo/ideas/schemas/`.
 
 - **Job input** is `input.idea_ref {id, rev}`; `input.idea` is gone. Intake loads the document (from the
   snapshot written at dispatch, else the live row when its content is frozen) and answers 422 `input_invalid`
@@ -148,7 +147,7 @@ uv run pytest -m docker   # only the tests that need Docker (postgres:17 and rab
 ```
 
 - Tests use real PostgreSQL (testcontainers), MinIO/moto, and a recording fake core. Docker tests skip when no daemon or image is present.
-- CI: `.github/workflows/module-video.yml` runs ruff, mypy, import-linter, the contract tests and the full suite on every PR that touches `module-video/` or `contracts/`.
+- CI: `.github/workflows/module-video.yml` runs ruff, mypy, import-linter, the contract tests and the full suite on every PR that touches `module-video/`.
 - Layout: `src/mvideo` (service), `src/mvrender` (standalone renderer, imports nothing from `mvideo`), `prompts/` (packaged prompt versions, seeded into the database), `reference/create_database/` (the reference scenario), `agent/` (agent image), `fonts/` (Inter and JetBrains Mono, open fonts only).
 - Approved frames for the render tests are in `tests/approved/`; regenerate them with `UPDATE_APPROVED=1 uv run pytest tests/test_render.py` after an intended visual change.
 

@@ -1,10 +1,10 @@
 name: module-video
 on:
   pull_request:
-    paths: ["modules/module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
+    paths: ["modules/module-video/**", ".github/workflows/module-video.yml"]
   push:
     branches: [main]
-    paths: ["modules/module-video/**", "contracts/**", ".github/workflows/module-video.yml"]
+    paths: ["modules/module-video/**", ".github/workflows/module-video.yml"]
 permissions:
   contents: read
 concurrency:
@@ -30,8 +30,7 @@ jobs:
         run: uv run mypy
       - name: import-linter
         run: uv run lint-imports
-      # Contract drift: the vendored idea/topic/event/envelope schemas must equal contracts/ (tests/test_ideas.py),
-      # and the generated input/output schemas must match what core validates (tests/test_info.py).
+      # The generated input/output schemas must match what core validates (tests/test_info.py).
       - name: contract tests
         run: uv run pytest -q tests/test_ideas.py tests/test_info.py tests/test_intake.py
       # Postgres 17 is pulled for the testcontainers fixtures and the capture sandbox; RabbitMQ for the idea relay.

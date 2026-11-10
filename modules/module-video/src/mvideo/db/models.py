@@ -301,7 +301,7 @@ IDEA_STATUSES = (
 
 
 class Topic(Base):
-    """Topic catalog entry (D21, contracts/topic.json)."""
+    """Topic catalog entry (D21, ideas/schemas/topic.json)."""
 
     __tablename__ = "topics"
     __table_args__ = (

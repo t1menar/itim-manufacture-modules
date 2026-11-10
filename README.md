@@ -13,7 +13,6 @@ Start with [`AGENTS.md`](AGENTS.md) if you are working in this repo.
 | `modules/module-video/` | Stage `video` (module id `video-claude`): ideas DB and scheduler, Claude agent steps, sandbox capture, ffmpeg render. |
 | `modules/module-review/` | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
 | `modules/module-publish/` | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |
-| `contracts/` | Shared idea/topic/event JSON Schema. Vendored into module-video; a test fails on drift. Keep this directory at the repo root so that test still works. |
 | `packages/mf-storage/` | Shared S3/MinIO helpers used by module-review and module-publish. |
 | `deploy/` | Standalone MinIO for local module tests (`compose.minio.yml`). |
 | `docs/` | Maintainer notes: decisions, content strategy, review findings. |

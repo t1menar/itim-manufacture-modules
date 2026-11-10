@@ -12,8 +12,7 @@ The new core is https://github.com/t1menar/manufacture-core (with
 ## On main
 
 Domain (video) modules live in `modules/<module_name>/` (renamed from `video-modules/`): `module-video`, `module-review`, `module-publish`.
-Shared pieces kept at the top level: `contracts/` (idea/topic/event schemas; module-video drift
-test), `packages/mf-storage/` (S3 helpers for review and publish), `deploy/` (standalone MinIO).
+Shared pieces kept at the top level: `packages/mf-storage/` (S3 helpers for review and publish), `deploy/` (standalone MinIO).
 Module ids, image names and service names are unchanged. Each module is its own package under `modules/`.
 
 #7–#37 were merged in the former monorepo, including #35 (B6, no double posts), #36 (B5, idea
@@ -26,7 +25,7 @@ onto the new SDK.
 
 | # | Decision |
 |---|----------|
-| D21 | Ideas and topics live in module-video; core (legacy or new) keeps only an opaque `idea_ref`. Schemas: `contracts/`. See `modules/module-video/docs/IDEAS.md`. |
+| D21 | Ideas and topics live in module-video; core (legacy or new) keeps only an opaque `idea_ref`. Schemas: `modules/module-video/src/mvideo/ideas/schemas/`. See `modules/module-video/docs/IDEAS.md`. |
 | D22 | Opaque content revisions (`content_revisions`: blob + sha256) — a legacy-core concern; modules still emit opaque refs. |
 | D23 | Publish intents are owned by module-publish. |
 | B6 | `publish_ledger` in module-publish: one row per (intent, account). `published` → retry returns the stored post; `publishing`/`unknown` → only reconcile, never post again; `failed` → may be posted by the next attempt. `media_publish` is never retried on 5xx/transport errors. Fence right before `media_publish` (`ledger_arm`). |

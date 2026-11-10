@@ -150,11 +150,11 @@ done | failed | cancelled → archived
 
 ## 6. Контракты
 
-Схемы: `contracts/topic.json`, `contracts/idea.json` (документ в module-video), `contracts/events/idea.ready.json`, `contracts/events/idea.status.json`.
+Схемы: `src/mvideo/ideas/schemas/topic.json`, `src/mvideo/ideas/schemas/idea.json` (документ в module-video), `src/mvideo/ideas/schemas/idea.ready.json`, `src/mvideo/ideas/schemas/idea.status.json`.
 
 ### 6.1 Документ идеи (внутри module-video; core не хранит)
 
-См. `contracts/idea.json` — title, description, topic, tags, …
+См. `src/mvideo/ideas/schemas/idea.json` — title, description, topic, tags, …
 
 ### 6.2 Событие `idea.ready` (module-video → core)
 
@@ -186,7 +186,7 @@ Routing keys: `idea.in_production`, `idea.done`, `idea.failed` (тип envelope 
 | production `done` | `idea.done` | →`done` |
 | production `failed` / нет route/pipeline | `idea.failed` | →`failed` + `failure` |
 
-Payload (`contracts/events/idea.status.json`):
+Payload (`src/mvideo/ideas/schemas/idea.status.json`):
 
 ```json
 {
