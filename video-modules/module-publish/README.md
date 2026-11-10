@@ -2,7 +2,7 @@
 
 Stage `publish`: Instagram (and later platforms) publisher (Python 3.12). Module id `publish-instagram`.
 
-Specification: `../../docs/module-publish/`.
+Agent-oriented overview: [`CONTEXT.md`](CONTEXT.md).
 
 ## Status
 
@@ -68,7 +68,9 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 | `PUBLISH_INSTAGRAM_ACCESS_TOKEN` | Fallback if account + default secret empty |
 | `PUBLISH_INSTAGRAM_IG_USER_ID` | Fallback if `platform_accounts.external_id` empty |
 | `PUBLISH_INSTAGRAM_GRAPH_BASE` | Default `https://graph.instagram.com` |
-| `PUBLISH_INSTAGRAM_API_VERSION` | Default `v22.0` |
+| `PUBLISH_INSTAGRAM_API_VERSION` | Default `v27.0` |
+| `PUBLISH_INSTAGRAM_UPLOAD_MODE` | `url` (video copied to an SFTP video host, public HTTPS link; production path) or `direct` (resumable upload, only ≲1.7 MB works) |
+| `PUBLISH_VIDEO_HOST`, `_DIR`, `_URL`, `_KEY_B64` | SFTP host for `url` mode (`user@host`, remote folder, public base URL, base64 private key) |
 
 ### Setup (operator)
 
@@ -108,6 +110,6 @@ Real Instagram publish resolves `s3://` artifact refs to a **public** presigned 
 
 **module-video** must upload the object to the same bucket/key; this module does not change video upload.
 
-## Direct upload (default)
+## Direct upload (small files only)
 
 For an `s3://` video the module reads the file from MinIO (internal endpoint) and uploads it to Instagram with the resumable upload flow (`POST /{ig-user}/media?upload_type=resumable`, then the bytes to `{PUBLISH_INSTAGRAM_UPLOAD_BASE}/ig-api-upload/{version}/{container}` with `Authorization: OAuth`, `offset`, `file_size`). No public URL or tunnel is needed and the file stays in MinIO. `PUBLISH_INSTAGRAM_UPLOAD_MODE=url` switches back to a public presigned `video_url`. The cover is sent only when it is already an https URL.

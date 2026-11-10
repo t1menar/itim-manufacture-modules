@@ -74,18 +74,29 @@ func (e *Engine) CreateRepublishJob(ctx context.Context, tx pgx.Tx, variantID, i
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// The module resolves the video and caption from the content revision, so it must travel with the job.
+	upstream := map[string]any{}
+	var revBody json.RawMessage
+	if err := tx.QueryRow(ctx, `SELECT body FROM content_revisions WHERE id = $1`, revisionID).Scan(&revBody); err == nil && len(revBody) > 0 {
+		upstream["content_revision"] = revBody
+		upstream["content_revision_id"] = revisionID.String()
+	}
+	settings, err := loadModuleSettings(ctx, tx, *moduleID)
+	if err != nil {
+		return uuid.Nil, err
+	}
 	req := map[string]any{
 		"job_id": jobID, "attempt": attempt, "try": 1, "fence": 1, "production_id": production,
 		"stage": "publish", "mode": "republish", "round": 0,
 		"variant": map[string]any{"id": variantID.String(), "language": language},
 		"input": map[string]any{
 			"idea_ref": map[string]any{"id": ideaID, "rev": ideaRev},
-			"channels": channels, "upstream": map[string]any{},
+			"channels": channels, "upstream": upstream,
 			"intents": []map[string]any{{
 				"intent_id": intentID.String(), "content_revision_id": revisionID.String(), "generation": generation,
 			}},
 		},
-		"settings":    map[string]any{"version": 1, "values": map[string]any{}},
+		"settings":    settings,
 		"credentials": []string{},
 		"callback":    map[string]any{"base_url": fmt.Sprintf("%s/internal/v1/jobs/%s", e.CallbackBaseURL, jobID)},
 		"deadline":    time.Now().UTC().Add(time.Duration(stage.TimeoutS) * time.Second).Format(time.RFC3339),

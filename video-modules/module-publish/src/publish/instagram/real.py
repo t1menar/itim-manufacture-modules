@@ -23,8 +23,8 @@ log = get_logger(__name__)
 # Official content publishing docs (Meta): Reels via media_type=REELS + public video_url,
 # poll container status_code until FINISHED, then media_publish. Rolling publish quota via
 # content_publishing_limit (do not hardcode; read quota_total). Graph version configurable;
-# default v22.0 matches Meta IG User Media reference examples.
-DEFAULT_API_VERSION = "v22.0"
+# default v27.0 (the version the current Meta docs and a working manual upload used).
+DEFAULT_API_VERSION = "v27.0"
 DEFAULT_GRAPH_BASE = "https://graph.instagram.com"
 DEFAULT_UPLOAD_BASE = "https://rupload.facebook.com"  # resumable upload host (Meta docs)
 
@@ -63,10 +63,13 @@ class RealInstagramClient:
         video_url_resolver: Callable[[str], Awaitable[str]] | None = None,
         video_loader: Callable[[str], Awaitable[bytes]] | None = None,
         upload_base: str = DEFAULT_UPLOAD_BASE,
+        cover_resolver: Callable[[str], Awaitable[str]] | None = None,
     ) -> None:
         self._resolve = resolve_account
         self._base = graph_base.rstrip("/")
         self._version = api_version.lstrip("/")
+        self._upload_uris: dict[str, str] = {}
+        self._cover_resolver = cover_resolver
         self._timeout = timeout_s
         self._poll_interval = poll_interval_s
         self._poll_max = poll_max_attempts
@@ -95,6 +98,12 @@ class RealInstagramClient:
         before_publish: BeforePublish | None = None,
     ) -> PublishResult:
         _ = intent_id
+        if cover_ref and cover_ref.startswith("s3://") and self._cover_resolver is not None:
+            try:
+                cover_ref = await self._cover_resolver(cover_ref)
+            except Exception as exc:  # a missing cover must not stop the publication
+                log.warning("cover_resolve_failed", error=str(exc)[:200])
+                cover_ref = None
         video_bytes: bytes | None = None
         video_url: str | None = None
         if self._video_loader is not None and video_ref.startswith("s3://"):
@@ -225,11 +234,15 @@ class RealInstagramClient:
                 ClassifiedError("instagram_no_container", False, "missing container id"),
                 status_code=200,
             )
+        if isinstance(data.get("uri"), str) and data["uri"].startswith("https://"):
+            self._upload_uris[str(cid)] = data["uri"]  # Meta tells where this container's file goes
         return str(cid)
 
     async def _upload_video(self, auth: AccountAuth, container_id: str, data: bytes) -> None:
         """Send the file to the container (Meta resumable upload). Safe to repeat: offset 0 restarts it."""
-        url = f"{self._upload_base}/ig-api-upload/{self._version}/{container_id}"
+        url = self._upload_uris.get(container_id) or (
+            f"{self._upload_base}/ig-api-upload/{self._version}/{container_id}"
+        )
         headers = {
             "Authorization": f"OAuth {auth.access_token}",
             "offset": "0",
@@ -258,6 +271,14 @@ class RealInstagramClient:
                     delay *= 2
                     continue
                 if resp.status_code >= 400 or (isinstance(body, dict) and body.get("success") is False):
+                    log.warning(
+                        "instagram_upload_error",
+                        status=resp.status_code,
+                        body=str(body)[:400],
+                        url_host=url.split("/")[2],
+                        size=len(data),
+                        magic=data[4:8].hex(),
+                    )
                     classified = classify_graph_error(
                         status_code=resp.status_code, body=body if isinstance(body, dict) else None
                     )
@@ -409,6 +430,9 @@ class RealInstagramClient:
                     delay = min(delay * 2, 30.0)
                     continue
                 if resp.status_code >= 400 or (isinstance(body, dict) and body.get("error") is not None):
+                    log.warning(
+                        "instagram_graph_error", path=path, status=resp.status_code, body=str(body)[:400]
+                    )
                     classified = classify_graph_error(
                         status_code=resp.status_code, body=body if isinstance(body, dict) else None
                     )

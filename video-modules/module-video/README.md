@@ -2,7 +2,7 @@
 
 Stage `video` of Manufacture: takes an idea and produces a finished English short video (1080×1920, H.264, with sound effects, cover, caption and metadata) for Instagram. Python 3.12, FastAPI, PostgreSQL, S3 (MinIO), RabbitMQ.
 
-Specification: `../../docs/module-video/` (`module-video-01-description` … `-06-prompts`). Ideas backlog and scheduler: [`docs/IDEAS.md`](docs/IDEAS.md).
+Agent-oriented overview: [`CONTEXT.md`](CONTEXT.md). Ideas backlog and scheduler: [`docs/IDEAS.md`](docs/IDEAS.md).
 
 ## How it works
 
@@ -14,7 +14,7 @@ idea ─► analysis ─► research ─► script ─► capture ─► render 
 
 - **Claude steps** (analysis, research, script, capture plan, package hook) run the Claude Agent SDK inside the `video-agent` container. It has no network except an egress proxy (CONNECT 443, per-step allowlist), no secrets except the one Claude credential of the job, and files only in its own workspace volumes.
 - **Capture** executes the agent's plan in a throwaway sandbox container (database image pinned by digest, network none, read-only root, no binds) and records real output. Numbers on screen come from this record, never from the model.
-- **Render and package** are plain code (`mvrender`): frames are a pure function of time, chunks are encoded in parallel, sound effects are synthesised, loudness is leveled to -14 LUFS, then the video is muxed, a cover is extracted, and the checks run (format, loudness, size, glyphs, safe zone, post limits).
+- **Render and package** are plain code (`mvrender`): frames are a pure function of time, chunks are encoded in parallel, sound effects are synthesised, loudness is leveled to -16 LUFS, then the video is muxed, a cover is extracted, and the checks run (format, loudness, size, glyphs, safe zone, post limits).
 - **Revise** (`mode: revise`) re-writes only what review asked to change and reuses the capture and the post when nothing they depend on changed.
 - A step is cached by the hash of its inputs, settings and prompt versions, so a retry or a revise does not redo finished work. Runs survive a restart (leases, resume).
 - The result carries `variants[0]` with the video (`s3://` ref, sha256, size, duration), contact sheet, cover, post, metadata, checks, provenance and, for revise, a `changes` text. Cost and tokens go in `metrics`.
@@ -148,7 +148,7 @@ uv run pytest -m docker   # only the tests that need Docker (postgres:17 and rab
 ```
 
 - Tests use real PostgreSQL (testcontainers), MinIO/moto, and a recording fake core. Docker tests skip when no daemon or image is present.
-- CI: `.github/workflows/module-video.yml` runs ruff, mypy, import-linter, the contract tests and the full suite on every PR that touches `video-modules/module-video/` or `contracts/`.
+- CI: `.github/workflows/module-video.yml` runs ruff, mypy, import-linter, the contract tests and the full suite on every PR that touches `module-video/` or `contracts/`.
 - Layout: `src/mvideo` (service), `src/mvrender` (standalone renderer, imports nothing from `mvideo`), `prompts/` (packaged prompt versions, seeded into the database), `reference/create_database/` (the reference scenario), `agent/` (agent image), `fonts/` (Inter and JetBrains Mono, open fonts only).
 - Approved frames for the render tests are in `tests/approved/`; regenerate them with `UPDATE_APPROVED=1 uv run pytest tests/test_render.py` after an intended visual change.
 
@@ -171,7 +171,7 @@ Not verified yet:
 `MVIDEO_PIPELINE=real` replaces the fake pipeline with analysis, research, script (agent steps), capture
 (agent plan, then the sandbox runs it, with fix rounds), render and package (agent writes `post.en.json`,
 the module renders caption and hashtags, muxes, levels and checks). Prompts live in `prompts/<step>/<version>/`
-and are copied verbatim from the spec by `node scripts/extract_prompts.js`; do not edit them by hand.
+and are the seed for the `prompt_versions` table; versions are immutable (add a new version instead of editing).
 
 Not verified yet: a run with the real Claude (needs `CLAUDE_CODE_OAUTH_TOKEN`, see `mvideo agent-smoke`) and the
 full package step on a complete 160 s render. `capture_status` is not derived (the script schema has no

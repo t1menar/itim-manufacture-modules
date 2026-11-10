@@ -1,6 +1,6 @@
 """Runtime prompts: `prompts/<step>/<version>/{CLAUDE.md, task.md, meta.json}` (06 section 1).
 
-The files are copied verbatim from the reviewed spec by `scripts/extract_prompts.js`; code never
+The files are the packaged seed versions; code never
 edits their text. Task templates use `{name}` placeholders; an unknown or missing placeholder fails
 the step before any token is spent.
 """

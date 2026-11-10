@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -200,6 +201,7 @@ func (s *Server) mapCallbackErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, engine.ErrValidation):
 		problem(w, http.StatusUnprocessableEntity, "validation_failed", "request body is invalid")
 	default:
+		slog.Error("job callback failed", "err", err)
 		problem(w, http.StatusInternalServerError, "internal", "callback failed")
 	}
 }

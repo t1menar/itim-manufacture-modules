@@ -1,3 +1,0 @@
-{ "name": "manufacture-specgen", "private": true, "description": "Builds the Manufacture .docx specifications",
-  "scripts": { "build": "node build.js content/*.js content/[a-z]*/*.js" },
-  "dependencies": { "docx": "^9.5.1" } }

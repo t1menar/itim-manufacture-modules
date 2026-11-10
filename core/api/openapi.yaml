@@ -3,13 +3,11 @@ info:
   title: Manufacture core internal API (initial, module-facing subset)
   version: 0.1.0
   description: |
-    Machine-readable subset of docs/core/core-04-contracts.docx (source:
-    docs/tools/specgen/content/core/core-04-contracts.js). This file is NOT complete:
+    Machine-readable subset of the core contracts. This file is NOT complete:
     it covers the unauthenticated probes (section 1.1), module callbacks (section 3)
     and module reads and writes on core (section 4). Callbacks require header X-Fence
     (execution ownership, §15.5); a stale fence yields 409 job_not_current. The admin-api
     endpoints of section 2 are listed in core/api/README.md as a remaining checklist.
-    core-04 stays authoritative until this file covers it fully.
 servers:
   - url: http://core:8080
 security:
