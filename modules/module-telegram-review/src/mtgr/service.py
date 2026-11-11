@@ -92,6 +92,17 @@ class ReviewService:
             await self._send(row.id)
         return await self.get(req.step_key)  # type: ignore[return-value]
 
+    async def decision_for(self, step_key: str) -> Decision | None:
+        """The decision of a finished gate (None while it is still open): lets a restarted step pick it up."""
+        outcomes = {
+            "approved": "approved", "revision_requested": "rejected", "escalated": "escalated",
+            "expired": "expired", "cancelled": "cancelled",
+        }  # fmt: skip
+        row = await self.get(step_key)
+        if row is None or row.status not in outcomes:
+            return None
+        return Decision(row.step_key, row.idea_ref, row.gate, outcomes[row.status], row.round, row.comment)
+
     async def get(self, step_key: str) -> Session | None:
         async with transaction(self.sm) as s:
             return await _by_step(s, step_key)

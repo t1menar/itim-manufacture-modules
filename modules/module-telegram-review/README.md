@@ -25,8 +25,15 @@ revised card                      → replies to the previous card, "revision N"
   (`Revision` in module-scenario, `Previous` in module-video-generation).
 - `TelegramBot` (Bot API over httpx, video >50 MB goes as text with a note) and `FakeBot`; the token is never logged.
 
-Not done: platform/SDK adapter (`DecisionSink`, waiting step, `on_timeout`), S3 loader for the video, a runner that
-calls `poll_once`/`expire_due`/`redeliver`/`resend_unsent` on a schedule, owner registration (owners come from settings).
+Platform: `adapter.py` is the Manufacture SDK step (`mf-module run mtgr.adapter:app`), one module for both gates:
+the step `config` is `{gate: script|post}`, the input carries `idea_ref`, `round` (0 first visit), `scenario` or `variant`.
+The step opens the card and *waits* with heartbeats (no waiting state in contract 0.2.1, requirement R1); a restarted
+step finds the stored decision. Output `outcome` approved|rejected (+`comment`, `round`) for pipeline `when` routing;
+escalated/expired/cancelled → `attention`. Env: `MTGR_DATABASE_URL`, `MTGR_BOT_TOKEN`, `MTGR_OWNERS` (comma-separated
+Telegram ids), `MTGR_MAX_ROUNDS`, `MTGR_DEADLINE_H`. The background poller (updates, unsent cards, redelivery, deadlines) starts
+with the first step.
+
+Not done: S3 loader for the video (only `file://`), owner registration (owners come from settings).
 
 ```bash
 uv sync && make check
