@@ -1,6 +1,6 @@
 # Target pipeline (draft for owner approval)
 
-Status: **module-idea, module-scenario, module-video-generation and module-instagram-publisher are implemented behind Protocols; the rest is draft.** Replaces the single `module-video` with five stage modules plus
+Status: **module-idea, module-scenario, module-video-generation, module-instagram-publisher and module-telegram-review are implemented behind Protocols; the rest is draft.** Replaces the single `module-video` with five stage modules plus
 a review module. Modules are ported onto `manufacture-sdk-python`; the SDK interface is to be checked
 before coding. Existing code to reuse is named per module.
 
@@ -20,7 +20,7 @@ scenario or video-generation for gate 2) with the owner's comment, keeping the a
 | `module-idea` | `module-video/ideas/` (D21) | Idea backlog, playlists, rubrics, scheduler, outcome stats. |
 | `module-scenario` | steps `analysis`, `research`, `script`, `script-revise`, `post.py` | Two phases in one module: research (feasibility, verified facts, knowledge cache) and script (scene structure, script, caption and hashtags). One pinned source tree and one cache for both. |
 | `module-video-generation` | `capture`, `render`, `package`, `packages/mvrender` | Capture plan and sandbox recording (real output), render, loudness, cover. |
-| `module-review` | `module-review` | Telegram bot, two gates, comment-driven revisions. |
+| `module-telegram-review` | `module-review` | Telegram bot, two gates, comment-driven revisions (new core; `module-review` stays as reference). |
 | `module-instagram-publisher` | `module-publish` | Reels publishing, ledger (no double posts), permalink. |
 
 ## module-idea: data model

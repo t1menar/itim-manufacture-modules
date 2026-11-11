@@ -14,6 +14,7 @@ Start with [`AGENTS.md`](AGENTS.md) if you are working in this repo.
 | `modules/module-scenario/` | New pipeline, stage `scenario`: research (verified facts, knowledge cache) and the scenario in one module. See `docs/PIPELINE.md`. |
 | `modules/module-video-generation/` | New pipeline, stage `video`: capture, render, sound and packaging of the finished post; the look comes from the idea. See `docs/PIPELINE.md`. |
 | `modules/module-instagram-publisher/` | New pipeline, stage `publish`: Reels publishing with a ledger against double posts; successor of `module-publish`. See `docs/PIPELINE.md`. |
+| `modules/module-telegram-review/` | New pipeline, stage `review`: Telegram gates for the script and the finished post, comment-driven revisions. See `docs/PIPELINE.md`. |
 | `modules/module-video/` | Stage `video` (module id `video-claude`): ideas DB and scheduler, Claude agent steps, sandbox capture, ffmpeg render. |
 | `modules/module-review/` | Stage `review` (`review-telegram`): Telegram bot, approve/reject cards, publish notifications. |
 | `modules/module-publish/` | Stage `publish` (`publish-instagram`): Instagram Reels via Graph API, accounts, publish ledger. |

@@ -1,0 +1,44 @@
+name: module-telegram-review
+on:
+  pull_request:
+    paths:
+      - "modules/module-telegram-review/**"
+      - ".github/workflows/module-telegram-review.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/module-telegram-review/**"
+      - ".github/workflows/module-telegram-review.yml"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modules/module-telegram-review
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: review
+          POSTGRES_PASSWORD: review
+          POSTGRES_DB: review
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U review" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      MTGR_DATABASE_URL: postgresql+asyncpg://review:review@localhost:5432/review
+      MTGR_TEST_DATABASE_URL: postgresql+asyncpg://review:review@localhost:5432/review
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --python 3.12
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy (strict)
+        run: uv run mypy
+      - name: migrations up, drift check, down
+        run: uv run alembic upgrade head && uv run alembic check && uv run alembic downgrade base
+      - name: pytest (on Postgres)
+        run: uv run pytest -q
