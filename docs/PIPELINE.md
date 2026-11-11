@@ -1,8 +1,8 @@
 # Target pipeline (draft for owner approval)
 
-Status: **module-idea, module-scenario, module-video-generation, module-instagram-publisher and module-telegram-review are implemented behind Protocols; the rest is draft.** Replaces the single `module-video` with five stage modules plus
-a review module. Modules are ported onto `manufacture-sdk-python`; the SDK interface is to be checked
-before coding. Existing code to reuse is named per module.
+Status: **all five stage modules and the review module are implemented and have Manufacture SDK step adapters** (see
+"Implementation status" at the end). `docs/pipeline.example.yaml` is the draft pipeline. Replaces the single
+`module-video`; the old `module-video`, `module-review`, `module-publish` stay in the repo only as reference.
 
 ```
 module-idea → module-scenario (research, then script) → module-review (gate 1: script)
@@ -98,3 +98,28 @@ Numbers shown on screen come from `capture.json`, never from the model.
 - Whether capture stays an agent step (costly) or becomes a deterministic runner of `capture.plan.json`.
 - Whether `module-review` stays one module with two gate types (proposed) or becomes two.
 - SDK is still empty: module API names (`ctx.visit`, `ctx.step_key`, `usage`) are to be agreed with its author.
+
+## Implementation status
+
+| Module | Package | Platform entry (`mf-module run …`) | Real adapters in the module | Still missing |
+|---|---|---|---|---|
+| `module-idea` | `midea` | `midea.adapter:app` (source = scheduler, step `idea-status`) | REST API, Postgres | run lifecycle hooks (R6) instead of status steps |
+| `module-scenario` | `mscenario` | `mscenario.adapter:app` | Claude Agent SDK research/script agents, git source pinning, knowledge cache | URL quote check/TTL for URL facts |
+| `module-video-generation` | `mvgen` | `mvgen.adapter:app` | Claude capture planner, Docker sandbox runner (verified on postgres:17), git trees, `mvrender` | S3 artifact store (only local store) |
+| `module-telegram-review` | `mtgr` | `mtgr.adapter:app` (config `{gate: script\|post}`) | Telegram Bot API, poller, waiting step | S3 loader for the video, owner registration |
+| `module-instagram-publisher` | `mipub` | `mipub.adapter:app` | Graph API client, SFTP media host, ledger | S3 loader, account admin API; **no real Meta call has been made** |
+
+Workarounds for contract 0.2.1 (to be removed when the platform has them, see `PLATFORM_REQUIREMENTS.md`):
+- no waiting state (R1): the review step is a long step with heartbeats; a restarted step finds the stored decision;
+- no visit counter (R2): the revision round travels in the data (`revision.round`, `previous.round`, review `round`),
+  `step_key = <run_id>:<step>:<round>`;
+- no synchronous `confirm` (R4): the publisher accepts an injectable `confirm`; the ledger prevents double posts anyway;
+- no run lifecycle hooks (R6): `idea-status` steps at the start, the end and (to be added by the operator) the failure path;
+- usage is returned in the step output (`cost_usd`) and summed by the pipeline.
+
+Rejected gate 2 returns to `scenario`: a script change re-renders; module-video-generation reuses the recorded capture
+when the commands did not change, so a caption or wording fix costs no sandbox and no capture agent.
+
+Secrets and environment per module are listed in each module's README (`MF_*` from the SDK, `<PREFIX>_*` of the module,
+tokens via `secretRef`). Nothing was run against a real core, real Telegram, Meta or the Anthropic API: the code is
+covered by unit tests with fakes, SDK `call_step`/`call_source`, a real Docker capture and a real ffmpeg render.
