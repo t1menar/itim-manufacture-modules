@@ -1,0 +1,107 @@
+# DRAFT pipeline `video` for contract 0.3.0: idea -> scenario -> review(script) -> video -> review(post) -> publish.
+# Validated against the vendored contract schemas (structure only); the CEL expressions have NOT run on a real core.
+# Control stays in the core: review gates are `wait` steps (waiting_human), rejections go back with `routes` and
+# `max_visits`, `visit` is the revision round, run cost/budget/priority are the core's, the idea module follows the run
+# through `subscribe` (run.started / run.finished) and the publisher confirms before the irreversible call.
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: idea, labels: {project: itim}}
+spec:
+  image: registry.example/mf-idea:0.1.0
+  replicas: 1
+  subscribe:
+    - {event: run.started, pipelines: [video]}
+    - {event: run.finished, pipelines: [video]}
+---
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: scenario, labels: {project: itim}}
+spec: {image: registry.example/mf-scenario:0.1.0, replicas: 2, min_budget_usd: 0.5}
+---
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: video-generation, labels: {project: itim}}
+spec: {image: registry.example/mf-video-generation:0.1.0, replicas: 1}
+---
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: telegram-review, labels: {project: itim}}
+spec: {image: registry.example/mf-telegram-review:0.1.0, replicas: 1}
+---
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: instagram-publisher, labels: {project: itim}}
+spec: {image: registry.example/mf-instagram-publisher:0.1.0, replicas: 1}
+---
+apiVersion: manufacture.dev/v1
+kind: Pipeline
+metadata: {name: video, labels: {project: itim}}
+spec:
+  trigger: {source: idea}
+  concurrency: {max_runs: 3, count_waiting: false}
+  budget: {run_usd: 6, warn_usd: 4}
+  defaults: {timeout: 30m, retry: {max_attempts: 2}}
+  context:
+    schema:
+      type: object
+      properties:
+        idea: {type: object}
+      required: [idea]
+  stages:
+    - name: scenario
+      step:
+        id: scenario
+        module: scenario
+        timeout: 20m
+        input:
+          idea: "data.idea"
+          # visit > 1: a reviewer rejected; `data.comment` is the latest comment (review output is merged into data),
+          # `data.script` / `data.post` are still the previous version
+          revision: >-
+            visit > 1 && has(data.comment)
+            ? {'comment': data.comment, 'previous_script': data.script, 'previous_post': data.post}
+            : {}
+
+    - name: review-script
+      step:
+        id: review-script
+        module: telegram-review
+        timeout: 10m
+        wait: {timeout: 2d}
+        on_timeout: attention
+        on_cancel: attention
+        retry: {max_attempts: 2}
+        config: {gate: script}
+        input:
+          idea_ref: "data.idea.idea_ref"
+          scenario: "{'script': data.script, 'post': data.post}"
+      routes:
+        - {when: "steps['review-script'].output.outcome == 'rejected'", goto: scenario, max_visits: 3}
+
+    - name: video
+      step:
+        id: video
+        module: video-generation
+        timeout: 45m
+        retry: {max_attempts: 1}
+        input:
+          idea: "data.idea"
+          scenario: "{'research': data.research, 'script': data.script, 'post': data.post}"
+
+    - name: review-post
+      step:
+        id: review-post
+        module: telegram-review
+        timeout: 10m
+        wait: {timeout: 2d}
+        on_timeout: attention
+        on_cancel: attention
+        retry: {max_attempts: 2}
+        config: {gate: post}
+        input:
+          idea_ref: "data.idea.idea_ref"
+          variant: "data.variants[0]"
+          account: "'main'"
+      routes:
+        - {when: "steps['review-post'].output.outcome == 'rejected'", goto: scenario, max_visits: 3}
+

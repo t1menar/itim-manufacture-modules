@@ -66,7 +66,8 @@ services:
       <<: [*mf, *s3]
       MF_MODULE_NAME: scenario
       MSCENARIO_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/mscenario"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
       MSCENARIO_MODEL: "${MSCENARIO_MODEL}"
   video-generation:
     build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-video-generation, PKG: mvgen}}
@@ -77,7 +78,8 @@ services:
       <<: [*mf, *s3]
       MF_MODULE_NAME: video-generation
       MVGEN_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/mvgen"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
       MVGEN_MODEL: "${MVGEN_MODEL}"
       MVGEN_SANDBOX_CATALOG: "${MVGEN_SANDBOX_CATALOG}"
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "./sandbox-catalog.json:/etc/mvgen/sandbox-catalog.json:ro", "mvgen-work:/var/lib/mvgen"]

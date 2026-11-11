@@ -35,7 +35,9 @@ class StepIn(BaseModel):
     @field_validator("revision", mode="before")
     @classmethod
     def _empty_revision_is_none(cls, v: object) -> object:
-        return None if v == {} else v  # CEL ternaries need both branches typed: the pipeline sends {} on the first visit
+        return (
+            None if v == {} else v
+        )  # CEL needs typed branches: {} on the first visit
 
 
 class StepOut(BaseModel):

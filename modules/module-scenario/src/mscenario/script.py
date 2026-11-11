@@ -8,6 +8,7 @@ A reviewer's comment arrives as a `Revision` with the previous script: the agent
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -108,7 +109,7 @@ class ScriptService:
             return {k: blocked[k] for k in ("reason", "missing", "suggestion") if k in blocked}
         if set(out) - {"script", "post"} or "script" not in out or "post" not in out:
             return [Issue("schema", "/", 'write {"script": ..., "post": ...} or {"blocked": ...}')]
-        script, post = out["script"], out["post"]
+        script, post = _normalize(out["script"], str(research.get("idea_ref", ""))), out["post"]
         issues = [Issue("schema", f"/script{i.path}", i.message, "script") for i in schema_issues("scenario", script)]
         issues += [Issue("schema", f"/post{i.path}", i.message, "post") for i in schema_issues("post", post)]
         if issues:
@@ -125,6 +126,24 @@ class ScriptService:
             if script == revision.previous_script and post == revision.previous_post:
                 issues.append(Issue("revise", "/", "nothing changed, but the reviewer asked for changes"))
         return issues if issues else {"script": script, "post": post}
+
+
+def _normalize(script: Any, idea_ref: str) -> Any:  # noqa: ANN401
+    """Fill what the platform knows and agents keep getting wrong, instead of spending retries on it.
+
+    `meta.idea_id` is the integer of `idea:<id>:v<n>`; an empty `captures` list means no captures (`{}`);
+    `facts` defaults to none (a script without facts is valid when the research had none).
+    """
+    if not isinstance(script, dict):
+        return script
+    out = dict(script)
+    m = re.fullmatch(r"idea:([0-9]+):v[0-9]+", idea_ref)
+    if isinstance(out.get("meta"), dict) and m:
+        out["meta"] = {**out["meta"], "idea_id": int(m.group(1))}
+    if out.get("captures") in ([], None):
+        out["captures"] = {}
+    out.setdefault("facts", [])
+    return out
 
 
 def _check_post(post: dict[str, Any]) -> list[Issue]:
