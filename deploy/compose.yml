@@ -109,4 +109,5 @@ services:
       MIPUB_API_VERSION: "${MIPUB_API_VERSION}"
       MIPUB_GRAPH_BASE: "${MIPUB_GRAPH_BASE}"
       MF_MODULE_TOKEN: "${MF_MODULE_TOKEN_PUBLISHER:-}"
+      MIPUB_CONFIRM: "${MIPUB_CONFIRM:-on}"
 volumes: {pg: {}, mvgen-work: {}}

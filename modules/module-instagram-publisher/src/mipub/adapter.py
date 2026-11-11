@@ -10,6 +10,7 @@ An unknown outcome is `attention`: an operator decides, nothing is resent.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -62,6 +63,10 @@ def make_app(
         refused: list[ConfirmError] = []
 
         async def platform_confirm(container: str) -> bool:
+            if os.environ.get("MIPUB_CONFIRM", "on").lower() == "off":
+                # temporary: the core has no `confirm` endpoint yet; the ledger (step_key) still guards duplicates
+                logging.getLogger(__name__).warning("MIPUB_CONFIRM=off: publishing without platform confirm")
+                return True
             try:
                 await ctx.confirm(action="media_publish")
             except ConfirmError as exc:  # superseded / cancelled / deadline: do not publish
