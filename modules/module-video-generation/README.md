@@ -16,9 +16,13 @@ Everything about the look comes from the **idea**: `palette` (token → #RRGGBB)
 
 ## Boundaries
 
-- `CapturePlanner` (agent) and `CaptureRunner` (sandbox) are Protocols; `ArtifactStore` and `TreeProvider`
-  are Protocols too. Real adapters (Claude Agent SDK planner, docker sandbox runner from `module-video`,
-  S3 store, git tree from `module-scenario`) are separate work; tests use fakes and `LocalStore`.
+- Real adapters are included: `ClaudeCapturePlanner` (Claude Agent SDK, no tools, resumes its session on fix rounds),
+  `DockerCaptureRunner` (`sandbox/`: network-less, read-only, capability-dropped containers, images pinned by digest,
+  catalog in JSON, see `sandbox-catalog.example.json`), `GitTrees` (pinned commit, fetched once) and `LocalStore`.
+  `ArtifactStore` for S3 is not written yet.
+- Platform: `adapter.py` is the Manufacture SDK step (`mf-module run mvgen.adapter:app`); env `MVGEN_DATABASE_URL`,
+  `MVGEN_SANDBOX_CATALOG`, `MVGEN_STORE_DIR`, `MVGEN_MODEL`. Failed checks → `fatal`; unreproducible capture, version
+  mismatch, budget → `attention`; store problems → `transient`.
 - Numbers on screen come from the recorded capture, never from the model.
 - A failed check (resolve, duration, glyphs, safe zone, frames, cues, loudness, format, size, post limits)
   is final: the result is stored as `manufacture.video.failed/1`, not retried.
@@ -34,5 +38,5 @@ uv sync && make check            # ruff, mypy strict, pytest
 MVGEN_TEST_DATABASE_URL=postgresql+asyncpg://… make test   # on Postgres
 ```
 
-`test_full_run_on_the_reference` renders 120 frames of the reference scenario and needs ffmpeg
-(skipped when absent).
+`test_full_run_on_the_reference` renders 120 frames of the reference scenario and needs ffmpeg (skipped when absent).
+`pytest -m docker` with `MVGEN_DOCKER_IMAGE=<postgres@sha256:…>` records a real capture in a sandbox.

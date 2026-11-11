@@ -11,6 +11,9 @@ dependencies = [
     "alembic>=1.13",
     "jsonschema>=4.23",
     "mvrender[render]",
+    "docker>=7",
+    "manufacture-sdk",
+    "claude-agent-sdk>=0.2",
 ]
 
 [tool.uv.sources]
@@ -24,6 +27,7 @@ dev = [
     "aiosqlite>=0.20",
     "ruff>=0.8",
     "mypy>=1.13",
+    "types-docker",
 ]
 
 [build-system]
@@ -38,6 +42,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["src", "tests"]
+markers = ["docker: needs a Docker daemon and MVGEN_DOCKER_IMAGE (a digest-pinned image ref); skipped otherwise"]
 
 [tool.ruff]
 line-length = 120
@@ -48,7 +53,7 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["E501"]
+"tests/*" = ["E501", "ASYNC221", "ASYNC240"]
 
 [tool.mypy]
 python_version = "3.12"

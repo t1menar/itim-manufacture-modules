@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol
@@ -151,8 +152,10 @@ class CaptureService:
         runner: CaptureRunner,
         *,
         fix_rounds: int = 2,
+        describe: Callable[[str], dict[str, Any]] | None = None,
     ) -> None:
         self.sm, self.planner, self.runner, self.fix_rounds = sm, planner, runner, fix_rounds
+        self.describe = describe  # image key -> what the planner is told (sessions, expected version)
 
     async def run(
         self,
@@ -169,6 +172,8 @@ class CaptureService:
             plan, capture = previous
             if capture_key(plan, script, image["key"]) == capture.get("cache_key"):
                 return CaptureOutcome(plan, capture, "", Usage(), 0, cached=True)
+        if self.describe is not None and image.get("key"):
+            image = {**image, **self.describe(image["key"])}
         usage = Usage()
         problems: list[str] = []
         log, session_id = "", None

@@ -1,0 +1,20 @@
+{
+  "images": {
+    "postgres17": {
+      "image": "postgres@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f",
+      "description": "PostgreSQL 17 with psql and a shell",
+      "env": {"POSTGRES_HOST_AUTH_METHOD": "trust"},
+      "exec_user": "postgres",
+      "tmpfs": {"/var/lib/postgresql/data": "size=1g", "/var/run/postgresql": "size=16m", "/tmp": "size=256m"},
+      "cap_add": ["CHOWN", "SETUID", "SETGID", "FOWNER", "DAC_OVERRIDE"],
+      "ready_cmd": "pg_isready -h 127.0.0.1 -U postgres",
+      "version_cmd": "psql -U postgres -tAc 'SELECT version()'",
+      "version_expect": "PostgreSQL 17.",
+      "sessions": {
+        "psql": {"kind": "psql", "start": "psql -U postgres -d {database}"},
+        "sh": {"kind": "sh", "start": "bash --noprofile --norc"}
+      }
+    }
+  },
+  "limits": {"cpus": 2, "memory_mb": 2048, "pids": 512, "command_timeout_s": 60, "total_timeout_s": 900, "ready_timeout_s": 60}
+}
