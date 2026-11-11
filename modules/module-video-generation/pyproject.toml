@@ -13,10 +13,12 @@ dependencies = [
     "mvrender[render]",
     "docker>=7",
     "manufacture-sdk",
+    "mf-storage",
     "claude-agent-sdk>=0.2",
 ]
 
 [tool.uv.sources]
+mf-storage = { path = "../../packages/mf-storage", editable = true }
 mvrender = { path = "../../packages/mvrender" }
 
 [dependency-groups]

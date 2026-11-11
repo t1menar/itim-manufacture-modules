@@ -126,7 +126,20 @@ def make_app(provider: Provider, name: str = "telegram-review", version: str = "
 _state: tuple[ReviewService, Waiters] | None = None
 
 
+def _s3_client() -> Any | None:
+    if not os.environ.get("S3_ENDPOINT"):
+        return None
+    from mf_storage.client import StorageClient, StorageConfig  # noqa: PLC0415
+
+    return StorageClient(StorageConfig.from_mapping(dict(os.environ)))
+
+
 async def _file_loader(uri: str) -> bytes:
+    if uri.startswith("s3://"):
+        client = _s3_client()
+        if client is None:
+            raise Fatal("S3_ENDPOINT is not set", code="media_ref_unsupported")
+        return bytes(await asyncio.to_thread(client.get_bytes, uri))
     if not uri.startswith("file://"):
         raise Fatal(f"unsupported media ref {uri!r}", code="media_ref_unsupported")
     return await asyncio.to_thread(lambda: open(uri.removeprefix("file://"), "rb").read())  # noqa: SIM115

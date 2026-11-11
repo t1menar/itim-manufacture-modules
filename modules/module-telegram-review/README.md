@@ -38,3 +38,7 @@ Not done: S3 loader for the video (only `file://`), owner registration (owners c
 ```bash
 uv sync && make check
 ```
+
+## Storage
+
+Video refs `s3://…` are read from MinIO (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`) and uploaded to Telegram.

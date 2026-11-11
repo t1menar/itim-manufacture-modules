@@ -102,12 +102,12 @@ _service: PublishService | None = None
 
 
 async def _from_env() -> PublishService:
-    """Production wiring (`MIPUB_*`): Postgres, Graph API, SFTP web host."""
+    """Production wiring (`MIPUB_*`): Postgres, Graph API, MinIO presigned `video_url` (`S3_*`) or an SFTP web host."""
     global _service  # noqa: PLW0603
     if _service is None:
         from mipub.db import make_engine, make_sessionmaker  # noqa: PLC0415
         from mipub.graph import DEFAULT_API_VERSION, DEFAULT_GRAPH_BASE, GraphClient  # noqa: PLC0415
-        from mipub.host import SftpHost  # noqa: PLC0415
+        from mipub.host import MediaHost, MinioHost, SftpHost  # noqa: PLC0415
 
         env = os.environ
         sm = make_sessionmaker(make_engine(env["MIPUB_DATABASE_URL"]))
@@ -115,10 +115,16 @@ async def _from_env() -> PublishService:
             graph_base=env.get("MIPUB_GRAPH_BASE", DEFAULT_GRAPH_BASE),
             api_version=env.get("MIPUB_API_VERSION", DEFAULT_API_VERSION),
         )
-        host = SftpHost(
-            env["MIPUB_HOST_TARGET"], env["MIPUB_HOST_DIR"], env["MIPUB_HOST_URL"],
-            env["MIPUB_HOST_KEY_B64"], file_loader,
-        )  # fmt: skip
+        host: MediaHost
+        if env.get("S3_ENDPOINT"):
+            from mf_storage.client import StorageClient, StorageConfig  # noqa: PLC0415
+
+            host = MinioHost(StorageClient(StorageConfig.from_mapping(dict(env))))
+        else:
+            host = SftpHost(
+                env["MIPUB_HOST_TARGET"], env["MIPUB_HOST_DIR"], env["MIPUB_HOST_URL"],
+                env["MIPUB_HOST_KEY_B64"], file_loader,
+            )  # fmt: skip
         _service = PublishService(sm, graph, host, EnvTokens())
     return _service
 

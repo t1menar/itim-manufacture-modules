@@ -105,9 +105,9 @@ Numbers shown on screen come from `capture.json`, never from the model.
 |---|---|---|---|---|
 | `module-idea` | `midea` | `midea.adapter:app` (source = scheduler, step `idea-status`) | REST API, Postgres | run lifecycle hooks (R6) instead of status steps |
 | `module-scenario` | `mscenario` | `mscenario.adapter:app` | Claude Agent SDK research/script agents, git source pinning, knowledge cache | URL quote check/TTL for URL facts |
-| `module-video-generation` | `mvgen` | `mvgen.adapter:app` | Claude capture planner, Docker sandbox runner (verified on postgres:17), git trees, `mvrender` | S3 artifact store (only local store) |
-| `module-telegram-review` | `mtgr` | `mtgr.adapter:app` (config `{gate: script\|post}`) | Telegram Bot API, poller, waiting step | S3 loader for the video, owner registration |
-| `module-instagram-publisher` | `mipub` | `mipub.adapter:app` | Graph API client, SFTP media host, ledger | S3 loader, account admin API; **no real Meta call has been made** |
+| `module-video-generation` | `mvgen` | `mvgen.adapter:app` | Claude capture planner, Docker sandbox runner (verified on postgres:17), git trees, `mvrender` | — |
+| `module-telegram-review` | `mtgr` | `mtgr.adapter:app` (config `{gate: script\|post}`) | Telegram Bot API, poller, waiting step | owner registration |
+| `module-instagram-publisher` | `mipub` | `mipub.adapter:app` | Graph API client, SFTP media host, ledger | account admin API; **no real Meta call has been made** |
 
 Workarounds for contract 0.2.1 (to be removed when the platform has them, see `PLATFORM_REQUIREMENTS.md`):
 - no waiting state (R1): the review step is a long step with heartbeats; a restarted step finds the stored decision;

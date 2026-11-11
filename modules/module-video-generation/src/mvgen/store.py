@@ -6,7 +6,10 @@ import hashlib
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from mf_storage.client import StorageClient
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,3 +74,37 @@ class LocalStore:
         if not uri.startswith("file://"):
             raise ValueError(f"not a local ref: {uri!r}")
         shutil.copyfile(uri.removeprefix("file://"), dest)
+
+
+class S3Store:
+    """MinIO/S3 store on `mf_storage.StorageClient`; refs are `s3://<bucket>/<prefix><key>`."""
+
+    def __init__(self, client: StorageClient, prefix: str = "mvgen/") -> None:
+        self.client, self.prefix = client, prefix
+
+    def _ref(self, key: str) -> str:
+        if key.startswith("/") or ".." in key.split("/"):
+            raise ValueError(f"bad key: {key!r}")
+        return f"s3://{self.client.config.bucket}/{self.prefix}{key}"
+
+    def put_file(self, key: str, path: Path, content_type: str) -> Ref:
+        uri = self._ref(key)
+        try:
+            self.client.put_file(uri, str(path), content_type=content_type)
+        except Exception as exc:  # noqa: BLE001 - minio raises many types; all are transient here
+            raise StoreError(f"cannot store {key}: {exc}") from exc
+        return Ref(uri, sha256_file(path), path.stat().st_size, content_type)
+
+    def put_bytes(self, key: str, data: bytes, content_type: str) -> Ref:
+        uri = self._ref(key)
+        try:
+            self.client.put_bytes(uri, data, content_type=content_type)
+        except Exception as exc:  # noqa: BLE001
+            raise StoreError(f"cannot store {key}: {exc}") from exc
+        return Ref(uri, hashlib.sha256(data).hexdigest(), len(data), content_type)
+
+    def get_file(self, uri: str, dest: Path) -> None:
+        try:
+            dest.write_bytes(self.client.get_bytes(uri))
+        except Exception as exc:  # noqa: BLE001
+            raise StoreError(f"cannot read {uri}: {exc}") from exc

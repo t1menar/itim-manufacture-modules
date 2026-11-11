@@ -40,3 +40,7 @@ MVGEN_TEST_DATABASE_URL=postgresql+asyncpg://… make test   # on Postgres
 
 `test_full_run_on_the_reference` renders 120 frames of the reference scenario and needs ffmpeg (skipped when absent).
 `pytest -m docker` with `MVGEN_DOCKER_IMAGE=<postgres@sha256:…>` records a real capture in a sandbox.
+
+## Storage
+
+Artifacts go to MinIO when `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY`/`S3_BUCKET` are set (refs `s3://<bucket>/mvgen/<key>`), else to `MVGEN_STORE_DIR`.

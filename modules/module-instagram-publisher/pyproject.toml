@@ -11,9 +11,11 @@ dependencies = [
     "alembic>=1.13",
     "httpx>=0.27",
     "manufacture-sdk",
+    "mf-storage",
 ]
 
 [tool.uv.sources]
+mf-storage = { path = "../../packages/mf-storage", editable = true }
 manufacture-sdk = { git = "https://github.com/t1menar/manufacture-sdk-python.git", rev = "9faf5b342e99e4ad50f8342ef12f84b6a56d3233" }
 
 [dependency-groups]

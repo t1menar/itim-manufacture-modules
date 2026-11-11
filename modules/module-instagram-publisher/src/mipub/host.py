@@ -9,7 +9,10 @@ import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from mf_storage.client import StorageClient
 
 
 class VideoHostError(Exception):
@@ -55,3 +58,22 @@ class SftpHost:
         if proc.returncode != 0:
             raise VideoHostError(f"sftp failed ({proc.returncode}): {err.decode(errors='replace')[-200:]}")
         return f"{self.base_url.rstrip('/')}/{name}"
+
+
+@dataclass(frozen=True, slots=True)
+class MinioHost:
+    """`video_url`/`cover_url` are presigned GET URLs of the MinIO object, signed for the public endpoint.
+
+    Meta downloads the file after `media` is created, so the URL must outlive container processing.
+    """
+
+    client: StorageClient
+    ttl_s: int = 3 * 3600
+
+    async def public_url(self, uri: str, ext: str) -> str:  # noqa: ARG002 - the object keeps its own name
+        if uri.startswith("https://"):
+            return uri
+        try:
+            return await asyncio.to_thread(self.client.resolve_https, uri, ttl_s=self.ttl_s, public=True)
+        except Exception as exc:  # noqa: BLE001
+            raise VideoHostError(f"cannot presign {uri}: {exc}") from exc

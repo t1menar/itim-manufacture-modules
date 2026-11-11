@@ -71,7 +71,7 @@ _service: GenerationService | None = None
 
 
 async def _from_env() -> GenerationService:
-    """Production wiring (`MVGEN_*`): Postgres, Claude planner, Docker runner, local artifact store."""
+    """Production wiring (`MVGEN_*`): Postgres, Claude planner, Docker runner, MinIO (`S3_*`) or local store."""
     global _service  # noqa: PLW0603
     if _service is None:
         from pathlib import Path  # noqa: PLC0415
@@ -81,7 +81,7 @@ async def _from_env() -> GenerationService:
         from mvgen.db import make_engine, make_sessionmaker  # noqa: PLC0415
         from mvgen.sandbox.config import SandboxCatalog  # noqa: PLC0415
         from mvgen.sandbox.runner import DockerCaptureRunner  # noqa: PLC0415
-        from mvgen.store import LocalStore  # noqa: PLC0415
+        from mvgen.store import ArtifactStore, LocalStore, S3Store  # noqa: PLC0415
         from mvgen.trees import GitTrees  # noqa: PLC0415
 
         sm = make_sessionmaker(make_engine(os.environ["MVGEN_DATABASE_URL"]))
@@ -92,7 +92,15 @@ async def _from_env() -> GenerationService:
             DockerCaptureRunner(catalog),
             describe=catalog.describe,
         )
-        store = LocalStore(Path(os.environ.get("MVGEN_STORE_DIR", "/var/lib/mvgen/store")))
+        store: ArtifactStore
+        if os.environ.get("S3_ENDPOINT"):
+            from mf_storage.client import StorageClient, StorageConfig  # noqa: PLC0415
+
+            client = StorageClient(StorageConfig.from_mapping(dict(os.environ)))
+            client.ensure_bucket()
+            store = S3Store(client)
+        else:
+            store = LocalStore(Path(os.environ.get("MVGEN_STORE_DIR", "/var/lib/mvgen/store")))
         _service = GenerationService(sm, captures, GitTrees(), store)
     return _service
 
