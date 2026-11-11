@@ -25,7 +25,9 @@ PublishService.publish(PublishRequest, confirm)
 Meta can fetch), `TokenProvider`. Graph base `https://graph.facebook.com` for system-user tokens (`EAA…`),
 API `v27.0`; Meta's resumable upload accepts ≈1.7 MB per request, so direct upload is not offered.
 
-Not done: platform/SDK adapter (`step_key`, lease `confirm`, `attention`), S3 loader for `SftpHost`, account admin API.
+Platform: `adapter.py` is the Manufacture SDK step (`mf-module run mipub.adapter:app`; env `MIPUB_DATABASE_URL`, `MIPUB_HOST_*`, `MIPUB_TOKEN_<ACCOUNT>`, optional `MIPUB_GRAPH_BASE`/`MIPUB_API_VERSION`). Unknown outcome → `attention`, rate limit/5xx → `transient`, auth/invalid → `fatal`; the lease-based `confirm` hook is injectable (`make_app(provider, confirm=...)`) until the contract has `confirm` (R4).
+
+Not done: S3 loader for `SftpHost` (only `file://` refs), account admin API.
 
 ## Develop
 
