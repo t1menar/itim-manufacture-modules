@@ -1,0 +1,110 @@
+# Local Manufacture stack for the iTim pipeline: Postgres, RabbitMQ, the core and the five modules.
+# Run from deploy/:  docker compose --env-file .env up -d --build   (needs ../../manufacture-core next to this repo)
+name: itim
+x-s3: &s3
+  S3_ENDPOINT: ${S3_ENDPOINT}
+  S3_SECURE: ${S3_SECURE}
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT}
+  S3_PUBLIC_SECURE: ${S3_PUBLIC_SECURE}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_BUCKET: ${S3_BUCKET}
+x-mf: &mf
+  MF_AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+  MF_CORE_URL: http://core:8080
+  MF_LOG_FORMAT: text
+services:
+  postgres:
+    image: postgres:17
+    environment: {POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"}
+    volumes: [pg:/var/lib/postgresql/data, ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U postgres"], interval: 3s, retries: 20}
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 86400000"
+    healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 5s, retries: 30}
+  core:
+    build: {context: ../../manufacture-core, dockerfile: Dockerfile}
+    image: manufacture-core:local
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    environment:
+      MF_LISTEN_ADDR: "0.0.0.0:8080"
+      MF_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable
+      MF_AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      MF_S3_ENDPOINT: ${S3_ENDPOINT}
+      MF_S3_TLS: ${S3_SECURE}
+      MF_S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      MF_S3_SECRET_KEY: ${S3_SECRET_KEY}
+      MF_S3_BUCKET: ${MF_S3_BUCKET}
+      MF_ADMIN_TOKEN: ${MF_ADMIN_TOKEN}
+      MF_RUNTIME: external
+      MF_LOG_FORMAT: text
+    ports: ["127.0.0.1:8080:8080"]
+  idea:
+    build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-idea, PKG: midea}}
+    image: itim-idea:local
+    depends_on: {core: {condition: service_started}, postgres: {condition: service_healthy}}
+    restart: unless-stopped
+    environment:
+      <<: [*mf, *s3]
+      MF_MODULE_NAME: idea
+      MIDEA_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/midea"
+      MIDEA_PIPELINE: "${MIDEA_PIPELINE}"
+      MIDEA_MAX_IN_FLIGHT: "${MIDEA_MAX_IN_FLIGHT}"
+      MIDEA_MIN_INTERVAL_S: "${MIDEA_MIN_INTERVAL_S}"
+  scenario:
+    build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-scenario, PKG: mscenario}}
+    image: itim-scenario:local
+    depends_on: {core: {condition: service_started}, postgres: {condition: service_healthy}}
+    restart: unless-stopped
+    environment:
+      <<: [*mf, *s3]
+      MF_MODULE_NAME: scenario
+      MSCENARIO_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/mscenario"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      MSCENARIO_MODEL: "${MSCENARIO_MODEL}"
+  video-generation:
+    build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-video-generation, PKG: mvgen}}
+    image: itim-video-generation:local
+    depends_on: {core: {condition: service_started}, postgres: {condition: service_healthy}}
+    restart: unless-stopped
+    environment:
+      <<: [*mf, *s3]
+      MF_MODULE_NAME: video-generation
+      MVGEN_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/mvgen"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      MVGEN_MODEL: "${MVGEN_MODEL}"
+      MVGEN_SANDBOX_CATALOG: "${MVGEN_SANDBOX_CATALOG}"
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "./sandbox-catalog.json:/etc/mvgen/sandbox-catalog.json:ro", "mvgen-work:/var/lib/mvgen"]
+  telegram-review:
+    build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-telegram-review, PKG: mtgr}}
+    image: itim-telegram-review:local
+    depends_on: {core: {condition: service_started}, postgres: {condition: service_healthy}}
+    restart: unless-stopped
+    environment:
+      <<: [*mf, *s3]
+      MF_MODULE_NAME: telegram-review
+      MTGR_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/mtgr"
+      MTGR_BOT_TOKEN: "${MTGR_BOT_TOKEN}"
+      MTGR_OWNERS: "${MTGR_OWNERS}"
+      MTGR_MAX_ROUNDS: "${MTGR_MAX_ROUNDS}"
+      MTGR_DEADLINE_H: "${MTGR_DEADLINE_H}"
+  instagram-publisher:
+    build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-instagram-publisher, PKG: mipub}}
+    image: itim-instagram-publisher:local
+    depends_on: {core: {condition: service_started}, postgres: {condition: service_healthy}}
+    restart: unless-stopped
+    environment:
+      <<: [*mf, *s3]
+      MF_MODULE_NAME: instagram-publisher
+      MIPUB_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/mipub"
+      MIPUB_TOKEN_MAIN: "${MIPUB_TOKEN_MAIN}"
+      MIPUB_API_VERSION: "${MIPUB_API_VERSION}"
+      MIPUB_GRAPH_BASE: "${MIPUB_GRAPH_BASE}"
+      MF_MODULE_TOKEN: "${MF_MODULE_TOKEN_PUBLISHER:-}"
+volumes: {pg: {}, mvgen-work: {}}

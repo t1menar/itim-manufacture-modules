@@ -60,7 +60,7 @@ spec:
           revision: >-
             visit > 1 && has(data.comment)
             ? {'comment': data.comment, 'previous_script': data.script, 'previous_post': data.post}
-            : null
+            : {}
 
     - name: review-script
       step:

@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from manufacture import Context, Fatal, Module, NeedsAttention, Transient
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from mscenario import agent as ag
 from mscenario.pipeline import ScenarioService
@@ -31,6 +31,11 @@ class RevisionIn(BaseModel):
 class StepIn(BaseModel):
     idea: dict[str, Any]  # the idea document of module-idea (`idea_ref`, briefs, constraints, palette, ...)
     revision: RevisionIn | None = None
+
+    @field_validator("revision", mode="before")
+    @classmethod
+    def _empty_revision_is_none(cls, v: object) -> object:
+        return None if v == {} else v  # CEL ternaries need both branches typed: the pipeline sends {} on the first visit
 
 
 class StepOut(BaseModel):
