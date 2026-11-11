@@ -101,7 +101,7 @@ spec:
         input:
           idea_ref: "data.idea.idea_ref"
           variant: "data.variants[0]"
-          account: "data.idea.account"
+          account: "'main'"
       routes:
         - {when: "steps['review-post'].output.outcome == 'rejected'", goto: scenario, max_visits: 3}
 
@@ -114,7 +114,7 @@ spec:
         retry: {max_attempts: 3, on_errors: [transient]}
         input:
           idea_ref: "data.idea.idea_ref"
-          account: "data.idea.account"
+          account: "'main'"
           video: "data.variants[0].video"
           cover: "data.variants[0].cover"
           post: "data.variants[0].post"
