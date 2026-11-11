@@ -11,10 +11,13 @@ dependencies = [
     "alembic>=1.13",
     "jsonschema>=4.23",
     "mvrender",
+    "manufacture-sdk",
+    "claude-agent-sdk>=0.2",
 ]
 
 [tool.uv.sources]
 mvrender = { path = "../../packages/mvrender" }
+manufacture-sdk = { git = "https://github.com/t1menar/manufacture-sdk-python.git", rev = "9faf5b342e99e4ad50f8342ef12f84b6a56d3233" }
 
 [dependency-groups]
 dev = [
