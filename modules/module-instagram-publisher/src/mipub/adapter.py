@@ -1,8 +1,10 @@
 """Manufacture platform adapter: the `publish` step as an SDK module (`mf-module run mipub.adapter:app`).
 
-Input is the approved variant of module-video-generation plus the account code. `step_key = <run_id>:<step>`; the
-ledger (account + content hash) is what really prevents double posts, also across runs. An unknown outcome is
-`attention`: an operator decides, nothing is resent.
+Input is the approved variant of module-video-generation plus the account code. `step_key = ctx.step_key` (one per
+visit); the ledger (account + content hash) is what really prevents double posts, also across runs. Right before the
+irreversible `media_publish` the step calls `ctx.confirm` (contract 0.3.0): a superseded or cancelled attempt does not
+publish and reports nothing; after a confirmed attempt is lost, the core itself parks the run (`outcome_unknown`).
+An unknown outcome is `attention`: an operator decides, nothing is resent.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from manufacture import Context, Fatal, Module, NeedsAttention, Transient
+from manufacture.errors import ConfirmError
 from pydantic import BaseModel, Field
 
 from mipub.service import Confirm, PublishRequest, PublishService
@@ -56,13 +59,25 @@ def make_app(
     @app.step(input=StepIn, output=StepOut)
     async def handle(ctx: Context[Any], inp: StepIn) -> StepOut:
         svc = await provider()
+        refused: list[ConfirmError] = []
+
+        async def platform_confirm(container: str) -> bool:
+            try:
+                await ctx.confirm(action="media_publish")
+            except ConfirmError as exc:  # superseded / cancelled / deadline: do not publish
+                refused.append(exc)
+                return False
+            return True
+
         req = PublishRequest(
-            idea_ref=inp.idea_ref, step_key=f"{ctx.run_id}:{ctx.step}", account=inp.account,
+            idea_ref=inp.idea_ref, step_key=ctx.step_key, account=inp.account,
             video_uri=inp.video.ref, video_sha256=inp.video.sha256, caption=inp.post.caption,
             hashtags=inp.post.hashtags, cover_uri=inp.cover.ref if inp.cover else None,
         )  # fmt: skip
         await ctx.progress(0.1, "publishing")
-        out = await svc.publish(req, confirm(ctx) if confirm else None)
+        out = await svc.publish(req, (confirm(ctx) if confirm else None) or platform_confirm)
+        if refused:
+            raise refused[0]  # the runtime reports nothing for superseded/cancelled, transient for the deadline
         doc = out.document
         if out.status == "published":
             return StepOut(

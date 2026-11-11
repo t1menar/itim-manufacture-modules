@@ -31,6 +31,7 @@ class Decision:
     outcome: str  # approved | rejected | escalated | expired | cancelled
     round: int
     comment: str | None = None
+    handle: str | None = None  # `str(ctx.attempt_handle)` of the attempt that waits for this gate
 
 
 class DecisionSink(Protocol):
@@ -53,6 +54,7 @@ class OpenRequest:
     gate: str  # script | post
     payload: dict[str, Any]
     chat_id: int | None = None  # default: the first owner
+    handle: str | None = None  # attempt handle; a retried attempt of the same visit replaces it
 
 
 class ReviewService:
@@ -80,12 +82,14 @@ class ReviewService:
                 row = Session(
                     step_key=req.step_key, idea_ref=req.idea_ref, gate=req.gate, round=revisions + 1,
                     status="escalated" if escalate else "pending", payload=req.payload,
-                    chat_id=req.chat_id or min(self.cfg.owners),
+                    chat_id=req.chat_id or min(self.cfg.owners), attempt_handle=req.handle,
                     deadline=now + timedelta(hours=self.cfg.deadline_h),
                 )  # fmt: skip
                 s.add(row)
                 await s.flush()
                 s.add(Event(session_id=row.id, kind="opened", text=f"round {row.round}"))
+            if req.handle and row.attempt_handle != req.handle:
+                row.attempt_handle = req.handle  # the live attempt is the one the platform will accept
         if escalate:
             await self._deliver(row.id, "escalated")
         elif row.message_id is None and row.status == "pending":
@@ -101,7 +105,9 @@ class ReviewService:
         row = await self.get(step_key)
         if row is None or row.status not in outcomes:
             return None
-        return Decision(row.step_key, row.idea_ref, row.gate, outcomes[row.status], row.round, row.comment)
+        return Decision(
+            row.step_key, row.idea_ref, row.gate, outcomes[row.status], row.round, row.comment, row.attempt_handle
+        )
 
     async def get(self, step_key: str) -> Session | None:
         async with transaction(self.sm) as s:
@@ -208,7 +214,7 @@ class ReviewService:
         async with transaction(self.sm) as s:
             row = await s.get(Session, session_id)
             assert row is not None  # noqa: S101
-            d = Decision(row.step_key, row.idea_ref, row.gate, outcome, row.round, row.comment)
+            d = Decision(row.step_key, row.idea_ref, row.gate, outcome, row.round, row.comment, row.attempt_handle)
         try:
             await self.sink.decide(d)
         except Exception:  # noqa: BLE001 - redelivered by `redeliver`

@@ -25,7 +25,7 @@ PublishService.publish(PublishRequest, confirm)
 Meta can fetch), `TokenProvider`. Graph base `https://graph.facebook.com` for system-user tokens (`EAA…`),
 API `v27.0`; Meta's resumable upload accepts ≈1.7 MB per request, so direct upload is not offered.
 
-Platform: `adapter.py` is the Manufacture SDK step (`mf-module run mipub.adapter:app`; env `MIPUB_DATABASE_URL`, `S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET/S3_PUBLIC_ENDPOINT` (MinIO: `video_url` is a presigned GET URL signed for the public endpoint; without `S3_ENDPOINT` falls back to SFTP `MIPUB_HOST_*`), `MIPUB_TOKEN_<ACCOUNT>`, optional `MIPUB_GRAPH_BASE`/`MIPUB_API_VERSION`). Unknown outcome → `attention`, rate limit/5xx → `transient`, auth/invalid → `fatal`; the lease-based `confirm` hook is injectable (`make_app(provider, confirm=...)`) until the contract has `confirm` (R4).
+Platform: `adapter.py` is the Manufacture SDK step (`mf-module run mipub.adapter:app`; env `MIPUB_DATABASE_URL`, `S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET/S3_PUBLIC_ENDPOINT` (MinIO: `video_url` is a presigned GET URL signed for the public endpoint; without `S3_ENDPOINT` falls back to SFTP `MIPUB_HOST_*`), `MIPUB_TOKEN_<ACCOUNT>`, optional `MIPUB_GRAPH_BASE`/`MIPUB_API_VERSION`). Unknown outcome → `attention`, rate limit/5xx → `transient`, auth/invalid → `fatal`; `ctx.confirm` (contract 0.3.0) is asked right before `media_publish`.
 
 Not done: S3 loader for `SftpHost` (only `file://` refs), account admin API.
 

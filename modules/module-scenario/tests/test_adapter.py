@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 from manufacture.testing import call_step
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -32,6 +33,7 @@ async def test_step_succeeds_with_research_script_and_post(sm: Sm, ref_repo: str
     out = res.payload["output"]
     assert out["research"]["commit"] == commit and out["post"]["format"] == "manufacture.post/1"
     assert float(out["cost_usd"]) > 0 and out["attempts"] >= 2
+    assert res.payload["usage"]["cost_usd"] == pytest.approx(float(out["cost_usd"]), rel=1e-3)  # reported to the core
 
 
 async def test_blocked_idea_needs_attention(sm: Sm, ref_repo: str, tmp_path: Path) -> None:  # noqa: F811
@@ -55,7 +57,5 @@ async def test_disallowed_source_is_fatal(sm: Sm, ref_repo: str, tmp_path: Path)
 
 async def test_invalid_input_is_fatal_input_invalid(sm: Sm, ref_repo: str, tmp_path: Path) -> None:  # noqa: F811
     app, _ = await app_for(sm, ref_repo, tmp_path, [], [])
-    res = await call_step(
-        app, {"idea": idea(ref_repo), "revision": {"round": 0, "comment": "x", "previous_script": {}}}
-    )
+    res = await call_step(app, {"idea": idea(ref_repo), "revision": {"previous_script": {}}})
     assert res.type == "step.failed" and res.payload["code"] == "input_invalid"

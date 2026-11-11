@@ -16,7 +16,7 @@ dependencies = [
 
 [tool.uv.sources]
 mf-storage = { path = "../../packages/mf-storage", editable = true }
-manufacture-sdk = { git = "https://github.com/t1menar/manufacture-sdk-python.git", rev = "9faf5b342e99e4ad50f8342ef12f84b6a56d3233" }
+manufacture-sdk = { git = "https://github.com/t1menar/manufacture-sdk-python.git", rev = "3e136838b80ed380562e9b563908af9b73186b26" }
 
 [dependency-groups]
 dev = [

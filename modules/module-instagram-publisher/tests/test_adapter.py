@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+import httpx
 import pytest
-from manufacture.testing import call_step
+from manufacture.testing import call_step as _call_step
 
 from helpers import FakeInstagram, Host, Tokens
 from mipub.adapter import EnvTokens, make_app
 from mipub.models import Account
 from mipub.service import PublishService
+
+CONFIRMS: list[httpx.Request] = []
+
+
+def core_says(result: str = "ok"):  # type: ignore[no-untyped-def]
+    def handler(req: httpx.Request) -> httpx.Response:
+        CONFIRMS.append(req)
+        return httpx.Response(200, json={"result": result, "attempt_id": "a"})
+
+    return handler
+
+
+async def call_step(app, data, **kw):  # type: ignore[no-untyped-def]
+    return await _call_step(app, data, core=kw.pop("core", core_says()), **kw)
+
 
 INPUT = {
     "idea_ref": "idea:1:v1", "account": "main", "video": {"ref": "s3://b/final.mp4", "sha256": "a" * 64},
@@ -58,3 +74,26 @@ async def test_missing_token_is_fatal(monkeypatch: pytest.MonkeyPatch) -> None:
         await EnvTokens().token("main")
     monkeypatch.setenv("MIPUB_TOKEN_MY_ACC", "t")
     assert await EnvTokens().token("my-acc") == "t"
+
+
+async def test_confirm_is_asked_right_before_media_publish_with_the_step_key(sm) -> None:  # type: ignore[no-untyped-def]
+    CONFIRMS.clear()
+    ig = FakeInstagram()
+    res = await call_step(await app_for(sm, ig), INPUT)
+    assert res.succeeded and len(CONFIRMS) == 1 and len(ig.posts) == 1
+    assert CONFIRMS[0].url.path.endswith("/confirm") and b"media_publish" in CONFIRMS[0].content
+
+
+@pytest.mark.parametrize("verdict", ["superseded", "cancelled"])
+async def test_refused_confirm_publishes_nothing_and_reports_nothing(sm, verdict: str) -> None:  # type: ignore[no-untyped-def]
+    ig = FakeInstagram()
+    app = await app_for(sm, ig)
+    with pytest.raises(TimeoutError):  # no result is reported for an attempt the core has dropped
+        await call_step(app, INPUT, core=core_says(verdict), timeout_s=1)
+    assert ig.posts == []
+
+
+async def test_deadline_too_close_is_transient(sm) -> None:  # type: ignore[no-untyped-def]
+    ig = FakeInstagram()
+    res = await call_step(await app_for(sm, ig), INPUT, core=core_says("deadline"))
+    assert res.payload["class"] == "transient" and res.payload["code"] == "deadline_too_close" and ig.posts == []

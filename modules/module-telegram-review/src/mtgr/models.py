@@ -39,6 +39,7 @@ class Session(Base):
     message_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     comment: Mapped[str | None] = mapped_column(Text, default=None)
     decided_by: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    attempt_handle: Mapped[str | None] = mapped_column(String(300), default=None)  # SDK handle of the waiting attempt
     delivered: Mapped[bool] = mapped_column(default=False)  # the decision reached the platform
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

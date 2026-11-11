@@ -1,13 +1,13 @@
-"""Manufacture platform adapter: the idea scheduler as a source and the run status as a step.
+"""Manufacture platform adapter: the idea scheduler as a source, run lifecycle as notifications (contract 0.3.0).
 
 `mf-module run midea.adapter:app` (needs `manufacture-sdk`; env `MF_*`, `MIDEA_DATABASE_URL`, optional
-`MIDEA_PIPELINE`, `MIDEA_MAX_IN_FLIGHT`, `MIDEA_MIN_INTERVAL_S`).
+`MIDEA_PIPELINE`, `MIDEA_MAX_IN_FLIGHT`, `MIDEA_MIN_INTERVAL_S`). The Module resource must `subscribe` to
+`run.started` and `run.finished` of the pipeline.
 
-- source (`source.trigger`, e.g. a platform schedule): picks queued ideas under the scheduler policy, binds each to a
-  stable run id `src:<idea_ref>` and starts one run per idea (`dedup_key = idea_ref`, so a repeated trigger starts
-  nothing twice). The run data is `{"idea": <idea document>}`: briefs, constraints, palette, instructions, environment.
-- step `idea-status`: put it first (`running`) and last (`succeeded`) in the pipeline, and on the failure path
-  (`failed`), until the platform has run lifecycle hooks (requirement R6). It reports status and the run cost.
+- source (`source.trigger`, the pipeline schedule): picks queued ideas under the scheduler policy and starts one run per
+  idea (`dedup_key = idea_ref`, label `idea_ref`). The run data is `{"idea": <idea document>}`.
+- `run.started` -> idea `in_production`; `run.finished` -> `done` / `failed` / `cancelled` with the run cost
+  (`usage.cost_usd`, summed by the core). The idea is found by the `idea_ref` label; replays never move it back.
 """
 
 from __future__ import annotations
@@ -16,28 +16,15 @@ import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any
 
-from manufacture import Context, Fatal, Module, RunRequest, SourceContext
-from pydantic import BaseModel, Field
+from manufacture import Module, RunRequest, SourceContext
+from manufacture import _wire as wire
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from midea import schemas
 from midea.db import transaction
 from midea.service import IdeaService, SchedulerPolicy
-
-
-class StatusIn(BaseModel):
-    idea_ref: str
-    status: Literal["running", "succeeded", "failed", "cancelled"]
-    cost_usd: Decimal | None = Field(default=None, ge=0)
-    error: str | None = None
-
-
-class StatusOut(BaseModel):
-    idea_ref: str
-    idea_status: str | None  # None: a run this module did not start
-
 
 Transaction = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
@@ -64,19 +51,27 @@ def make_app(
         for (
             doc
         ) in docs:  # published after the commit: a crash between leaves ideas `dispatched`, `release_stale` frees them
-            yield RunRequest(data={"idea": doc}, dedup_key=doc["idea_ref"])
+            yield RunRequest(data={"idea": doc}, dedup_key=doc["idea_ref"], labels={"idea_ref": doc["idea_ref"]})
 
-    @app.step(input=StatusIn, output=StatusOut)
-    async def status(ctx: Context[Any], inp: StatusIn) -> StatusOut:
-        if not inp.idea_ref.startswith("idea:"):
-            raise Fatal(f"not an idea reference: {inp.idea_ref!r}", code="input_invalid")
+    async def apply(
+        ev: wire.RunStarted | wire.RunFinished, status: str, cost: Decimal | None, error: str | None
+    ) -> None:
+        ref = ev.labels.get("idea_ref")
+        if not ref or not ref.startswith("idea:"):
+            return  # a run this module did not start
         async with tx() as s:
-            idea = await IdeaService(s).apply_run_event(
-                schemas.RunEvent(
-                    run_id=run_id_for(inp.idea_ref), status=inp.status, cost_usd=inp.cost_usd, error=inp.error
-                )
+            await IdeaService(s).apply_run_event(
+                schemas.RunEvent(run_id=run_id_for(ref), status=status, cost_usd=cost, error=error)
             )
-            return StatusOut(idea_ref=inp.idea_ref, idea_status=idea.status if idea else None)
+
+    @app.on_run_started
+    async def started(run_id: str, ev: wire.RunStarted) -> None:
+        await apply(ev, "running", None, None)
+
+    @app.on_run_finished
+    async def finished(run_id: str, ev: wire.RunFinished) -> None:
+        cost = Decimal(str(ev.usage.get("cost_usd", 0)))
+        await apply(ev, ev.status, cost, ev.error.message if ev.error else None)
 
     return app
 
@@ -97,4 +92,4 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(name)
 
 
-__all__ = ["StatusIn", "StatusOut", "make_app", "run_id_for"]
+__all__ = ["make_app", "run_id_for"]

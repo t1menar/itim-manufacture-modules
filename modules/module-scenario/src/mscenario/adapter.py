@@ -1,9 +1,10 @@
 """Manufacture platform adapter: the `scenario` step as an SDK module.
 
 Run with `mf-module run mscenario.adapter:app` (needs `manufacture-sdk`, env `MF_*` and `MSCENARIO_*`).
-`step_key = <run_id>:<step>:<round>`: the platform does not give a visit counter yet (requirement R2), so a
-revision round travels in the step input (`revision.round`); round 0 is the first visit. The research is keyed by
-the idea revision inside the service, so rounds only rewrite the script.
+`step_key = ctx.step_key` and the revision round is `ctx.visit` (contract 0.3.0: the core counts the visits of the
+stage and builds `revision` with CEL from `steps.scenario.visits[visit - 1].output` and the reviewer's comment; the
+review-gate pattern). The research is keyed by the idea revision inside the service, so rounds only rewrite the
+script. The cost of the attempt goes to the platform as `usage` (`ctx.add_usage`).
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from mscenario.sources import SourceError
 
 
 class RevisionIn(BaseModel):
-    round: int = Field(ge=1)
     comment: str = Field(min_length=1)
     previous_script: dict[str, Any]
     previous_post: dict[str, Any] | None = None
@@ -44,8 +44,14 @@ class StepOut(BaseModel):
 Provider = Callable[[], Awaitable[ScenarioService]]
 
 
-def step_key(ctx: Context[Any], inp: StepIn) -> str:
-    return f"{ctx.run_id}:{ctx.step}:{inp.revision.round if inp.revision else 0}"
+def report_usage(ctx: Context[Any], usage: ag.Usage) -> None:
+    """Hand the attempt's cost and tokens (priced by the agents) to the platform."""
+    models: dict[str | None, dict[str, int]] = dict(usage.tokens.items()) if usage.tokens else {None: {}}
+    for i, (model, t) in enumerate(models.items()):
+        ctx.add_usage(
+            float(usage.cost_usd) if i == 0 else 0.0, model=model, input_tokens=t.get("input", 0),
+            output_tokens=t.get("output", 0), cache_read=t.get("cache_read", 0), cache_write=t.get("cache_write", 0),
+        )  # fmt: skip
 
 
 def make_app(provider: Provider, name: str = "scenario", version: str = "0.1.0") -> Module[Any]:
@@ -55,11 +61,12 @@ def make_app(provider: Provider, name: str = "scenario", version: str = "0.1.0")
     async def handle(ctx: Context[Any], inp: StepIn) -> StepOut:
         svc = await provider()
         rev = inp.revision
-        revision = ag.Revision(rev.round, rev.previous_script, rev.previous_post, rev.comment) if rev else None
+        revision = ag.Revision(ctx.visit, rev.previous_script, rev.previous_post, rev.comment) if rev else None
         await ctx.progress(0.05, "research" if revision is None else "rewriting the script")
         try:
-            out = await svc.run(inp.idea, step_key(ctx, inp), revision)
+            out = await svc.run(inp.idea, ctx.step_key, revision)
         except BudgetExceeded as e:
+            ctx.add_usage(float(e.spent))
             raise NeedsAttention(str(e), code="budget_exceeded") from e
         except ResearchInvalid as e:
             raise NeedsAttention(str(e), code="output_invalid_after_retries") from e
@@ -71,6 +78,7 @@ def make_app(provider: Provider, name: str = "scenario", version: str = "0.1.0")
             reason = out.document.get("reason", "the idea cannot be shown honestly")
             raise NeedsAttention(f"{out.document.get('phase')}: {reason}", code="scenario_blocked")
         doc = out.document
+        report_usage(ctx, out.usage)
         return StepOut(
             research=doc["research"], script=doc["script"], post=doc["post"],
             cost_usd=str(out.usage.cost_usd), attempts=out.attempts,
@@ -105,4 +113,4 @@ async def _from_env() -> ScenarioService:
 
 app = make_app(_from_env)
 
-__all__ = ["RevisionIn", "StepIn", "StepOut", "app", "make_app", "step_key"]
+__all__ = ["RevisionIn", "StepIn", "StepOut", "app", "make_app", "report_usage"]

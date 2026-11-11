@@ -109,15 +109,15 @@ Numbers shown on screen come from `capture.json`, never from the model.
 | `module-telegram-review` | `mtgr` | `mtgr.adapter:app` (config `{gate: script\|post}`) | Telegram Bot API, poller, waiting step | owner registration |
 | `module-instagram-publisher` | `mipub` | `mipub.adapter:app` | Graph API client, SFTP media host, ledger | account admin API; **no real Meta call has been made** |
 
-Workarounds for contract 0.2.1 (to be removed when the platform has them, see `PLATFORM_REQUIREMENTS.md`):
-- no waiting state (R1): the review step is a long step with heartbeats; a restarted step finds the stored decision;
-- no visit counter (R2): the revision round travels in the data (`revision.round`, `previous.round`, review `round`),
-  `step_key = <run_id>:<step>:<round>`;
-- no synchronous `confirm` (R4): the publisher accepts an injectable `confirm`; the ledger prevents double posts anyway;
-- no run lifecycle hooks (R6): `idea-status` steps at the start, the end and (to be added by the operator) the failure path;
-- usage is returned in the step output (`cost_usd`) and summed by the pipeline.
+Contract 0.3.0 (core `contract-v0.3.0`, SDK branch `s4/contract-0.3.0`) replaced the old workarounds:
+- review gates park the attempt with `ctx.wait` (`step.waiting`, `waiting_human`) and finish it with `app.complete`; the
+  core owns `wait.timeout`, `on_timeout: attention`, `routes` with `max_visits`;
+- the revision round is `visit`; the idempotency key is `ctx.step_key` (review card, publish ledger, scenario/video results);
+- the publisher calls `ctx.confirm` before `media_publish`;
+- cost is reported with `ctx.add_usage` (the core sums it, `budget` is enforced by the core);
+- `module-idea` follows runs through `run.started` / `run.finished` notifications (label `idea_ref`), no status steps.
 
-Rejected gate 2 returns to `scenario`: a script change re-renders; module-video-generation reuses the recorded capture
+Storage is MinIO (`S3_*` env): artifacts `s3://…`; the publisher gives Meta a presigned `video_url` of the public MinIO endpoint (SFTP host stays as a fallback). Rejected gate 2 returns to `scenario`: a script change re-renders; module-video-generation reuses the recorded capture
 when the commands did not change, so a caption or wording fix costs no sandbox and no capture agent.
 
 Secrets and environment per module are listed in each module's README (`MF_*` from the SDK, `<PREFIX>_*` of the module,

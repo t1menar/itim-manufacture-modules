@@ -1,8 +1,9 @@
 """Manufacture platform adapter: the `video` step as an SDK module (`mf-module run mvgen.adapter:app`).
 
-Input: the idea document and the approved scenario (`research`, `script`, `post`); for a revision also the
-previous plan and capture, which are reused when the script commands did not change. Output: the finished variant
-with refs to video, cover and contact sheet. `step_key = <run_id>:<step>:<round>` (see module-scenario's adapter).
+Input: the idea document and the approved scenario (`research`, `script`, `post`); optionally the previous plan and
+capture. Output: the finished variant with refs to video, cover and contact sheet. `step_key = ctx.step_key` (one per
+visit, contract 0.3.0). The capture cache already reuses a recorded session when the commands did not change, so a
+pipeline normally passes no `previous`. The cost of the attempt goes to the platform as `usage`.
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ from mvgen.store import StoreError
 
 
 class PreviousIn(BaseModel):
-    round: int = Field(ge=1)
     plan: dict[str, Any]
     capture: dict[str, Any]
 
@@ -48,7 +48,7 @@ def make_app(provider: Provider, name: str = "video-generation", version: str = 
     @app.step(input=StepIn, output=StepOut)
     async def handle(ctx: Context[Any], inp: StepIn) -> StepOut:
         svc = await provider()
-        key = f"{ctx.run_id}:{ctx.step}:{inp.previous.round if inp.previous else 0}"
+        key = ctx.step_key
         prev = Previous(inp.previous.plan, inp.previous.capture) if inp.previous else None
         await ctx.progress(0.05, "capture")
         try:
@@ -62,6 +62,14 @@ def make_app(provider: Provider, name: str = "video-generation", version: str = 
                 raise NeedsAttention(msg, code=doc["code"])
             raise Fatal(msg, code=doc["code"])
         d = out.document
+        usage = out.usage
+        models: dict[str | None, dict[str, int]] = dict(usage.tokens.items()) if usage.tokens else {None: {}}
+        for i, (model, t) in enumerate(models.items()):
+            ctx.add_usage(
+                float(usage.cost_usd) if i == 0 else 0.0, model=model,
+                input_tokens=t.get("input", 0), output_tokens=t.get("output", 0),
+                cache_read=t.get("cache_read", 0), cache_write=t.get("cache_write", 0),
+            )  # fmt: skip
         return StepOut(variants=d["variants"], capture=d["capture"], cost_usd=str(out.usage.cost_usd))
 
     return app

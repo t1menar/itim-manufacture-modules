@@ -110,6 +110,6 @@ review 58082, publish 58083; MinIO in this repo is 59000/59001.
 
 ## Where things are not finished
 
-- `module-video`, `module-review`, `module-publish` still speak the legacy core protocol and stay as reference. The new pipeline modules (`module-idea`, `module-scenario`, `module-video-generation`, `module-telegram-review`, `module-instagram-publisher`) have Manufacture SDK adapters (`<package>.adapter:app`); see `docs/PIPELINE.md` (implementation status) and `docs/pipeline.example.yaml`. Nothing has run against a real core, Telegram, Meta or the Anthropic API yet.
+- `module-video`, `module-review`, `module-publish` still speak the legacy core protocol and stay as reference. The new pipeline modules (`module-idea`, `module-scenario`, `module-video-generation`, `module-telegram-review`, `module-instagram-publisher`) have Manufacture SDK adapters (`<package>.adapter:app`); see `docs/PIPELINE.md` (implementation status) and `docs/pipeline.example.yaml`. They target contract 0.3.0 (SDK branch `s4/contract-0.3.0`, waiting/confirm/visits/usage/run notifications); storage is MinIO. Nothing has run against a real core, Telegram, Meta or the Anthropic API yet.
 - `modules/module-video/uv.lock` predates the OpenTelemetry deps; `agent/prices.json` has placeholder prices.
 - Not implemented in module-video: `/admin/v1/runs`, `/admin/v1/golden`, janitor for old artifacts.

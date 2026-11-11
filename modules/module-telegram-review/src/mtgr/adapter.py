@@ -1,10 +1,12 @@
 """Manufacture platform adapter: the `review` step as an SDK module (`mf-module run mtgr.adapter:app`).
 
 One module, two gates: the pipeline picks the gate in the step `config` (`{gate: script|post}`). The step opens the
-card and then *waits* (heartbeats keep the lease) until the owner decides; a restarted step finds the stored decision.
-Output `outcome` is `approved` or `rejected` (+ `comment`, `round`); the pipeline routes `rejected` back to the stage
-that owns the fix with `max_visits`. Escalated, expired or cancelled gates are `attention`.
-`step_key = <run_id>:<step>:<round>`; the round travels in the input because the contract has no visit counter yet (R2).
+card and parks the attempt with `ctx.wait` (contract 0.3.0: no lease, no execution timeout, the core's `wait.timeout`
+and `on_timeout: attention` apply). When the owner decides, the poller finishes the attempt from whichever replica
+runs it with `app.complete` (`AppSink`), at-least-once. `step_key = ctx.step_key` (one card per visit of the stage; a
+retried attempt finds its session and takes over the new attempt handle). Output `outcome` is `approved` or
+`rejected` (+ `comment`, `round`); the pipeline routes `rejected` back with `max_visits`. Escalated, expired or
+cancelled gates fail the attempt as `attention`.
 """
 
 from __future__ import annotations
@@ -15,11 +17,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from manufacture import Context, Fatal, Module, NeedsAttention
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from mtgr.service import Decision, OpenRequest, ReviewService
-
-HEARTBEAT_S = 30.0
 
 
 class Config(BaseModel):
@@ -28,7 +28,6 @@ class Config(BaseModel):
 
 class StepIn(BaseModel):
     idea_ref: str
-    round: int = Field(default=0, ge=0)  # 0 first visit; the pipeline counts revisions
     title: str = ""
     scenario: dict[str, Any] | None = None  # gate script: {script, post}
     variant: dict[str, Any] | None = None  # gate post: a variant of module-video-generation
@@ -42,26 +41,29 @@ class StepOut(BaseModel):
     round: int
 
 
-class Waiters:
-    """`DecisionSink` that wakes the step waiting for its gate."""
+class AppSink:
+    """`DecisionSink`: finishes the waiting platform attempt through the module (`Module.complete` / `fail`)."""
 
-    def __init__(self) -> None:
-        self._futures: dict[str, asyncio.Future[Decision]] = {}
-
-    def future(self, step_key: str) -> asyncio.Future[Decision]:
-        fut = self._futures.get(step_key)
-        if fut is None or fut.done():
-            fut = asyncio.get_running_loop().create_future()
-            self._futures[step_key] = fut
-        return fut
+    def __init__(self, app: Callable[[], Module[Any]]) -> None:
+        self._app = app
 
     async def decide(self, decision: Decision) -> None:
-        fut = self._futures.get(decision.step_key)
-        if fut is not None and not fut.done():
-            fut.set_result(decision)
+        if not decision.handle:
+            raise RuntimeError("decision without an attempt handle")  # redelivered once the step re-opens it
+        app = self._app()
+        if decision.outcome in {"approved", "rejected"}:
+            out = StepOut(outcome=decision.outcome, comment=decision.comment, round=decision.round)
+            await app.complete(decision.handle, out)
+        else:
+            await app.fail(decision.handle, _attention(decision))
 
-    def forget(self, step_key: str) -> None:
-        self._futures.pop(step_key, None)
+
+def _attention(decision: Decision) -> NeedsAttention:
+    return NeedsAttention(
+        f"review gate {decision.gate} {decision.outcome} (round {decision.round})",
+        code=f"gate_{decision.outcome}",
+        recommendation="Retry the step to reopen the card, skip it with a manual output, or cancel the run.",
+    )
 
 
 def script_payload(inp: StepIn) -> dict[str, Any]:
@@ -88,7 +90,7 @@ def post_payload(inp: StepIn) -> dict[str, Any]:
     }  # fmt: skip
 
 
-Provider = Callable[[], Awaitable[tuple[ReviewService, Waiters]]]
+Provider = Callable[[], Awaitable[ReviewService]]
 
 
 def make_app(provider: Provider, name: str = "telegram-review", version: str = "0.1.0") -> Module[Any]:
@@ -100,30 +102,20 @@ def make_app(provider: Provider, name: str = "telegram-review", version: str = "
         payload = script_payload(inp) if gate == "script" else post_payload(inp)
         if gate == "script" and not inp.scenario or gate == "post" and not inp.variant:
             raise Fatal(f"gate {gate} needs its content in the input", code="input_incomplete")
-        svc, waiters = await provider()
-        key = f"{ctx.run_id}:{ctx.step}:{inp.round}"
-        fut = waiters.future(key)  # registered before the card is out: no lost wake-up
-        try:
-            await svc.open(OpenRequest(key, inp.idea_ref, gate, payload))
-            decision = await svc.decision_for(key)
-            while decision is None:
-                try:
-                    decision = await asyncio.wait_for(asyncio.shield(fut), HEARTBEAT_S)
-                except TimeoutError:
-                    await ctx.progress(None, "waiting for the review")
-                    decision = await svc.decision_for(key)  # also covers a decision made by another replica
-        finally:
-            waiters.forget(key)
-        if decision.outcome in {"approved", "rejected"}:
-            return StepOut(outcome=decision.outcome, comment=decision.comment, round=decision.round)
-        raise NeedsAttention(
-            f"review gate {gate} {decision.outcome} (round {decision.round})", code=f"gate_{decision.outcome}"
-        )
+        svc = await provider()
+        key = ctx.step_key
+        await svc.open(OpenRequest(key, inp.idea_ref, gate, payload, handle=str(ctx.attempt_handle)))
+        decision = await svc.decision_for(key)  # a retried attempt may find the decision already made
+        if decision is not None:
+            if decision.outcome in {"approved", "rejected"}:
+                return StepOut(outcome=decision.outcome, comment=decision.comment, round=decision.round)
+            raise _attention(decision)
+        await ctx.wait(reason="human", message=f"review gate {gate} in Telegram")
 
     return app
 
 
-_state: tuple[ReviewService, Waiters] | None = None
+_state: ReviewService | None = None
 
 
 def _s3_client() -> Any | None:
@@ -163,7 +155,7 @@ async def background(svc: ReviewService, every_s: float = 5.0) -> None:
             await asyncio.sleep(every_s)
 
 
-async def _from_env() -> tuple[ReviewService, Waiters]:
+async def _from_env() -> ReviewService:
     """Production wiring (`MTGR_*`): Postgres, Telegram Bot API, owner ids; starts the poller once."""
     global _state  # noqa: PLW0603
     if _state is None:
@@ -172,16 +164,15 @@ async def _from_env() -> tuple[ReviewService, Waiters]:
         from mtgr.service import ReviewSettings  # noqa: PLC0415
 
         env = os.environ
-        waiters = Waiters()
         owners = frozenset(int(x) for x in env["MTGR_OWNERS"].split(",") if x.strip())
         cfg = ReviewSettings(owners, int(env.get("MTGR_MAX_ROUNDS", "3")), float(env.get("MTGR_DEADLINE_H", "48")))
         sm = make_sessionmaker(make_engine(env["MTGR_DATABASE_URL"]))
-        svc = ReviewService(sm, TelegramBot(env["MTGR_BOT_TOKEN"], _file_loader), waiters, cfg)
+        svc = ReviewService(sm, TelegramBot(env["MTGR_BOT_TOKEN"], _file_loader), AppSink(lambda: app), cfg)
         asyncio.get_running_loop().create_task(background(svc), name="mtgr-poller")
-        _state = (svc, waiters)
+        _state = svc
     return _state
 
 
 app = make_app(_from_env)
 
-__all__ = ["Config", "StepIn", "StepOut", "Waiters", "app", "background", "make_app"]
+__all__ = ["AppSink", "Config", "StepIn", "StepOut", "app", "background", "make_app"]
