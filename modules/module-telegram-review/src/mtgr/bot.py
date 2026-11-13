@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import struct
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -41,6 +42,49 @@ class Bot(Protocol):
 
 def _image_type(ref: str) -> str:
     return "image/jpeg" if ref.lower().rsplit(".", 1)[-1] in {"jpg", "jpeg"} else "image/png"
+
+
+def _boxes(data: bytes, start: int, end: int) -> list[tuple[bytes, int, int]]:
+    """(type, body start, body end) of the ISO-BMFF boxes in data[start:end]."""
+    out, i = [], start
+    while i + 8 <= end:
+        size, kind = struct.unpack(">I4s", data[i : i + 8])
+        head = 8
+        if size == 1 and i + 16 <= end:
+            size, head = struct.unpack(">Q", data[i + 8 : i + 16])[0], 16
+        elif size == 0:
+            size = end - i
+        if size < head or i + size > end:
+            break
+        out.append((kind, i + head, i + size))
+        i += size
+    return out
+
+
+def mp4_meta(data: bytes) -> dict[str, int]:
+    """width, height and duration of an MP4, for the Bot API: without them Telegram shows a vertical video square."""
+    meta: dict[str, int] = {}
+    try:
+        moov = next((b for b in _boxes(data, 0, len(data)) if b[0] == b"moov"), None)
+        if not moov:
+            return meta
+        for kind, a, b in _boxes(data, moov[1], moov[2]):
+            if kind == b"mvhd":
+                v1 = data[a] == 1
+                at = a + (20 if v1 else 12)
+                scale, dur = struct.unpack(">IQ" if v1 else ">II", data[at : at + (12 if v1 else 8)])
+                if scale:
+                    meta["duration"] = round(dur / scale)
+            elif kind == b"trak" and "width" not in meta:
+                tkhd = next((x for x in _boxes(data, a, b) if x[0] == b"tkhd"), None)
+                if tkhd:
+                    off = tkhd[1] + (88 if data[tkhd[1]] == 1 else 76)
+                    w, h = struct.unpack(">II", data[off : off + 8])
+                    if w >> 16 and h >> 16:
+                        meta["width"], meta["height"] = w >> 16, h >> 16
+    except (struct.error, IndexError):
+        pass
+    return meta
 
 
 class TelegramError(Exception):
@@ -103,7 +147,7 @@ class TelegramBot:
             if len(video) <= VIDEO_MAX_BYTES:  # an album (cover + video), then the card text with the buttons
                 media = [
                     {"type": "photo", "media": "attach://cover"},
-                    {"type": "video", "media": "attach://video", "supports_streaming": True},
+                    {"type": "video", "media": "attach://video", "supports_streaming": True, **mp4_meta(video)},
                 ]
                 album = await self._call(
                     "sendMediaGroup", {"chat_id": chat_id, "media": json.dumps(media),
@@ -122,7 +166,8 @@ class TelegramBot:
             if len(video) <= VIDEO_MAX_BYTES:
                 caption = card.text if len(card.text) <= 1000 else card.text[:999] + "…"
                 sent = await self._call(
-                    "sendVideo", {**base, "caption": caption, "parse_mode": "HTML", "supports_streaming": "true"},
+                    "sendVideo", {**base, "caption": caption, "parse_mode": "HTML", "supports_streaming": "true",
+                                  **{k: str(v) for k, v in mp4_meta(video).items()}},
                     files={"video": ("post.mp4", video, "video/mp4")}, timeout_s=300.0,
                 )  # fmt: skip
                 if len(card.text) > 1000:  # the full card as a reply with the buttons

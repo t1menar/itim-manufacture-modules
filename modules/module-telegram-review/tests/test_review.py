@@ -247,3 +247,18 @@ async def test_real_bot_parses_updates_and_raises_on_errors() -> None:
     with pytest.raises(TelegramError, match="chat not found"):
         await bad.send_text(1, "x")
     _ = json
+
+
+def test_mp4_meta_reads_vertical_size_and_duration() -> None:
+    import struct
+
+    from mtgr.bot import mp4_meta
+
+    def box(kind: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", 8 + len(body)) + kind + body
+
+    mvhd = box(b"mvhd", b"\0" * 12 + struct.pack(">II", 1000, 87270) + b"\0" * 80)
+    tkhd = box(b"tkhd", b"\0" * 76 + struct.pack(">II", 1080 << 16, 1920 << 16))
+    mp4 = box(b"ftyp", b"isom") + box(b"moov", mvhd + box(b"trak", tkhd))
+    assert mp4_meta(mp4) == {"duration": 87, "width": 1080, "height": 1920}
+    assert mp4_meta(b"not a video") == {}
