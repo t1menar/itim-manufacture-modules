@@ -1,4 +1,5 @@
-# Local Manufacture stack for the iTim pipeline: Postgres, RabbitMQ, the core and the five modules.
+# Local Manufacture stack for the iTim pipeline: Postgres, RabbitMQ, the core and the modules.
+# reels-studio is not here: it runs natively on the Mac (modules/module-reels-studio, launchd).
 # Run from deploy/:  docker compose --env-file .env up -d --build   (needs ../../manufacture-core next to this repo)
 name: itim
 x-s3: &s3
@@ -25,6 +26,7 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
       RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 86400000"
+    ports: ["127.0.0.1:5672:5672"]  # for reels-studio, which runs natively on the Mac (localhost only)
     healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 5s, retries: 30}
   core:
     build: {context: ../../manufacture-core, dockerfile: Dockerfile}
@@ -54,9 +56,18 @@ services:
       <<: [*mf, *s3]
       MF_MODULE_NAME: idea
       MIDEA_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/midea"
-      MIDEA_PIPELINE: "${MIDEA_PIPELINE}"
-      MIDEA_MAX_IN_FLIGHT: "${MIDEA_MAX_IN_FLIGHT}"
+      MIDEA_PIPELINE: reels  # the autonomous conveyor (docs/pipeline.reels.yaml)
+      MIDEA_MAX_IN_FLIGHT: "1"  # one video at a time: the next idea starts after the run finishes
       MIDEA_MIN_INTERVAL_S: "${MIDEA_MIN_INTERVAL_S}"
+  idea-api:  # the idea backlog REST (/v1/ideas, /v1/playlists): Telegram /idea and ~/itim/Reels/IDEAS.md
+    image: itim-idea:local
+    depends_on: {idea: {condition: service_started}}
+    restart: unless-stopped
+    command: ["uvicorn", "midea.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      MIDEA_DATABASE_URL: "postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/midea"
+      MIDEA_API_TOKEN: "${MIDEA_API_TOKEN:-}"
+    ports: ["127.0.0.1:8090:8090"]
   scenario:
     build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-scenario, PKG: mscenario}}
     image: itim-scenario:local
@@ -96,6 +107,8 @@ services:
       MTGR_OWNERS: "${MTGR_OWNERS}"
       MTGR_MAX_ROUNDS: "${MTGR_MAX_ROUNDS}"
       MTGR_DEADLINE_H: "${MTGR_DEADLINE_H}"
+      MTGR_IDEA_URL: http://idea-api:8090
+      MIDEA_API_TOKEN: "${MIDEA_API_TOKEN:-}"
   instagram-publisher:
     build: {context: .., dockerfile: modules/Dockerfile.module, args: {MODULE: module-instagram-publisher, PKG: mipub}}
     image: itim-instagram-publisher:local

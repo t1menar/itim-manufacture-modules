@@ -4,6 +4,7 @@ Agent and maintainer context lives next to the code:
 
 - [`../AGENTS.md`](../AGENTS.md) — start here: map, flow, commands, rules, gotchas.
 - [`../README.md`](../README.md) — what this modules-only repository is.
+- [`pipeline.reels.yaml`](pipeline.reels.yaml) — the autonomous Reels conveyor: idea → Claude Code studio on the Mac (`modules/module-reels-studio`) → Telegram gates → Instagram.
 - `<module>/CONTEXT.md` — per-module deep context (`modules/module-video`, `modules/module-review`, `modules/module-publish`, `deploy`).
 - [`STATUS.md`](STATUS.md) — accepted decisions that still apply to the modules.
 - [`REVIEW.md`](REVIEW.md) — code review findings and open items in the modules.

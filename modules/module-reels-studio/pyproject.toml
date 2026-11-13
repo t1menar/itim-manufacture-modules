@@ -1,0 +1,54 @@
+[project]
+name = "module-reels-studio"
+version = "0.1.0"
+description = "Manufacture stages `studio-script` and `studio-video`: Reels made by Claude Code on the Mac (Blender, real data), runs natively"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9",
+    "httpx>=0.27",
+    "manufacture-sdk",
+    "mf-storage",
+]
+
+[tool.uv.sources]
+mf-storage = { path = "../../packages/mf-storage", editable = true }
+manufacture-sdk = { git = "https://github.com/t1menar/manufacture-sdk-python.git", rev = "04daa2578581d10870d8fec25e215972c9b498cb" }
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.8", "mypy>=1.13"]
+
+[project.scripts]
+mstudio = "mstudio.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mstudio"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src", "tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["ASYNC240"]  # small local files (ideas, results)
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/fake_claude.py" = ["E401", "E501", "E701"]
+"tests/*" = ["E501"]

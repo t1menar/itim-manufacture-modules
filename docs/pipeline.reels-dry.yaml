@@ -1,0 +1,48 @@
+# Dry run of `reels`: only the two studio stages (no Telegram gates, no publish), started by hand with an idea:
+#   mfctl run reels-dry --data '{"idea": {...}}'  with the studio pointed at a fake claude (tests/fake_claude.py).
+apiVersion: manufacture.dev/v1
+kind: Pipeline
+metadata: {name: reels-dry, labels: {project: itim, test: dry}}
+spec:
+  concurrency: {max_runs: 1, count_waiting: true}
+  defaults: {timeout: 30m, retry: {max_attempts: 2}}
+  context:
+    schema:
+      type: object
+      properties:
+        idea: {type: object}
+      required: [idea]
+  stages:
+    - name: studio-script
+      step:
+        id: studio-script
+        module: reels-studio
+        timeout: 30m
+        wait: {timeout: 4d}
+        on_timeout: attention
+        on_cancel: attention
+        config: {mode: script}
+        input:
+          idea: "data.idea"
+          revision: >-
+            visit > 1 && 'review-script' in steps
+            ? {'comment': steps['review-script'].output.comment, 'round': visit}
+            : {}
+
+    - name: studio-video
+      step:
+        id: studio-video
+        module: reels-studio
+        timeout: 30m
+        wait: {timeout: 7d}
+        on_timeout: attention
+        on_cancel: attention
+        config: {mode: video}
+        input:
+          idea: "data.idea"
+          scenario: "data.scenario"
+          episode: "data.episode"
+          revision: >-
+            visit > 1 && 'review-post' in steps
+            ? {'comment': steps['review-post'].output.comment, 'round': visit}
+            : {}

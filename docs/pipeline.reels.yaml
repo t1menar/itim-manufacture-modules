@@ -1,0 +1,123 @@
+# Pipeline `reels`: the autonomous Reels conveyor.
+#   idea (backlog) -> studio-script (Claude Code on the Mac) -> review-script (Telegram) -> studio-video (Claude Code:
+#   real data, Blender, music, cover) -> review-post (Telegram album + caption) -> publish (Instagram).
+# One video at a time: `max_runs: 1` counting waiting runs, and the idea module keeps one idea in flight
+# (MIDEA_MAX_IN_FLIGHT=1), so the next idea starts only after the run finishes (published, or failed/cancelled).
+# A rejection goes back to its studio stage with the comment; the studio resumes the same Claude Code session and
+# redoes only what the comment needs. The studio parks its attempt (`wait`, reason external) while it works, so
+# usage-limit pauses of many hours do not time out; only `wait.timeout` applies.
+# Apply: docker compose exec -T core mfctl apply -f - < docs/pipeline.reels.yaml
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: idea, labels: {project: itim}}
+spec:
+  image: registry.example/mf-idea:0.1.0
+  replicas: 1
+  subscribe:
+    - {event: run.started, pipelines: [video, reels]}
+    - {event: run.finished, pipelines: [video, reels]}
+---
+apiVersion: manufacture.dev/v1
+kind: Module
+metadata: {name: reels-studio, labels: {project: itim}}
+spec:
+  image: registry.example/mf-reels-studio:0.1.0  # runs natively on the Mac (launchd), not in a container
+  replicas: 1
+  concurrency: 4
+---
+apiVersion: manufacture.dev/v1
+kind: Pipeline
+metadata: {name: reels, labels: {project: itim}}
+spec:
+  trigger: {source: idea}
+  concurrency: {max_runs: 1, count_waiting: true}
+  defaults: {timeout: 30m, retry: {max_attempts: 2}}
+  context:
+    schema:
+      type: object
+      properties:
+        idea: {type: object}
+      required: [idea]
+  stages:
+    - name: studio-script
+      step:
+        id: studio-script
+        module: reels-studio
+        timeout: 30m
+        wait: {timeout: 4d}
+        on_timeout: attention
+        on_cancel: attention
+        config: {mode: script}
+        input:
+          idea: "data.idea"
+          revision: >-
+            visit > 1 && 'review-script' in steps
+            ? {'comment': steps['review-script'].output.comment, 'round': visit}
+            : {}
+
+    - name: review-script
+      step:
+        id: review-script
+        module: telegram-review
+        timeout: 10m
+        wait: {timeout: 7d}
+        on_timeout: attention
+        on_cancel: attention
+        merge: none
+        config: {gate: script}
+        input:
+          idea_ref: "data.idea.idea_ref"
+          title: "data.title"
+          scenario: "data.scenario"
+      routes:
+        - {when: "steps['review-script'].output.outcome == 'rejected'", goto: studio-script, max_visits: 6}
+
+    - name: studio-video
+      step:
+        id: studio-video
+        module: reels-studio
+        timeout: 30m
+        wait: {timeout: 7d}
+        on_timeout: attention
+        on_cancel: attention
+        config: {mode: video}
+        input:
+          idea: "data.idea"
+          scenario: "data.scenario"
+          episode: "data.episode"
+          revision: >-
+            visit > 1 && 'review-post' in steps
+            ? {'comment': steps['review-post'].output.comment, 'round': visit}
+            : {}
+
+    - name: review-post
+      step:
+        id: review-post
+        module: telegram-review
+        timeout: 10m
+        wait: {timeout: 7d}
+        on_timeout: attention
+        on_cancel: attention
+        merge: none
+        config: {gate: post}
+        input:
+          idea_ref: "data.idea.idea_ref"
+          title: "data.title"
+          variant: "data.variant"
+          account: "'main'"
+      routes:
+        - {when: "steps['review-post'].output.outcome == 'rejected'", goto: studio-video, max_visits: 6}
+
+    - name: publish
+      step:
+        id: publish
+        module: instagram-publisher
+        timeout: 20m
+        on_timeout: attention
+        retry: {max_attempts: 3, on_errors: [transient]}
+        input:
+          idea_ref: "data.idea.idea_ref"
+          account: "'main'"
+          video: "data.variant.video"
+          cover: "data.variant.cover"
+          post: "data.variant.post"
