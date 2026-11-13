@@ -107,6 +107,19 @@ async def test_limit_mid_run_sleeps_and_resumes(env: dict[str, Any]) -> None:
     assert any("Usage limit" in m for m in env["note"].sent)
 
 
+async def test_restart_continues_the_interrupted_session(env: dict[str, Any]) -> None:
+    env["plan"].write_text(json.dumps(["ok"]))
+    store = env["store"]
+    store.put(job("video"))
+    store.set_state("k1", "running")
+    store.set_session("run-1", "video", "11111111-1111-1111-1111-111111111111")
+    await env["w"].process(store.next_job())
+    c = [x for x in calls(env["plan"]) if x["args"][1] != "Reply with OK."]
+    assert "--resume" in c[0]["args"] and "11111111-1111-1111-1111-111111111111" in c[0]["args"]
+    assert "Do not start over" in c[0]["args"][1]
+    assert any("resuming" in m for m in env["note"].sent)
+
+
 async def test_low_usage_window_pauses_before_running(env: dict[str, Any]) -> None:
     w = env["w"]
     w.claude.usage.windows.update(

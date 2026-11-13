@@ -87,17 +87,21 @@ class Worker:
                 await self._fail(job, f"worker crashed: {e!r}", "worker_crashed")
 
     async def process(self, job: Job) -> None:
+        # a job still `running` was cut off by a restart (shutdown, crash): continue its session, do not start over
+        interrupted = job.state == "running" and self.store.session(job.run_id, job.mode) is not None
         self.store.set_state(job.step_key, "running")
         ep = self._episode(job)
         title = str((job.inp.get("idea") or {}).get("title") or ep.name)
         rev = job.inp.get("revision") or {}
-        if job.attempts == 0:
+        if interrupted:
+            await self.notify.send(f"▶️ resuming {job.mode} for “{title}” after a restart")
+        elif job.attempts == 0:
             what = "revising" if rev.get("comment") else "starting"
             await self.notify.send(f"🎬 {what} {job.mode} for “{title}” ({ep.parent.name}/{ep.name})")
         rounds = 0
         attempts = job.attempts
         cost = 0.0
-        fix: str | None = None
+        fix: str | None = "continue" if interrupted else None
         while True:
             await self._usage_gate(ep)
             started = time.time()
