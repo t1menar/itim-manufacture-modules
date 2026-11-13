@@ -106,6 +106,9 @@ def main() -> None:
     load_env_file(Path(os.environ.get("MSTUDIO_ENV_FILE", Path(__file__).parents[4] / "deploy" / ".env")))
     rs = RuntimeSettings()
     configure_logging(rs.log_format, rs.log_level)
+    # httpx logs full request URLs at INFO, and Telegram URLs carry the bot token
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     asyncio.run(amain())
 
 
