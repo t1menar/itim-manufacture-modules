@@ -10,6 +10,7 @@ Agent context is not kept here: the owning stage (scenario or video) resumes its
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -57,11 +58,20 @@ class OpenRequest:
     handle: str | None = None  # attempt handle; a retried attempt of the same visit replaces it
 
 
+IdeaAdder = Callable[[str, str, str], Awaitable[int]]  # (series, title, vision) -> idea id, queued
+
+IDEA_HELP = (
+    "Send: /idea Series | Title | your vision\nExample: /idea Postgres | MVCC | two versions of one row, xmin/xmax"
+)
+
+
 class ReviewService:
     def __init__(
-        self, sm: async_sessionmaker[AsyncSession], bot: Bot, sink: DecisionSink, settings: ReviewSettings
-    ) -> None:
+        self, sm: async_sessionmaker[AsyncSession], bot: Bot, sink: DecisionSink, settings: ReviewSettings,
+        ideas: IdeaAdder | None = None,
+    ) -> None:  # fmt: skip
         self.sm, self.bot, self.sink, self.cfg = sm, bot, sink, settings
+        self.ideas = ideas
 
     async def open(self, req: OpenRequest, now: datetime | None = None) -> Session:
         """Create the gate session and send its card. Safe to call again for the same `step_key`."""
@@ -156,6 +166,8 @@ class ReviewService:
             return
         if u.kind == "callback":
             await self._on_tap(u)
+        elif u.kind == "text" and u.text.strip().split(" ")[0].split("@")[0] == "/idea":
+            await self._on_idea(u)
         elif u.kind == "text":
             await self._on_text(u)
 
@@ -189,6 +201,23 @@ class ReviewService:
             await self._safe(self.bot.send_text(chat, "What should be fixed? Reply with one message.", mid))
         if outcome:
             await self._deliver(sid, outcome)
+
+    async def _on_idea(self, u: Update) -> None:
+        """`/idea Series | Title | vision`: the idea goes to the backlog, queued; the conveyor takes it in turn."""
+        rest = u.text.strip().partition(" ")[2]
+        parts = [p.strip() for p in rest.split("|")]
+        if self.ideas is None:
+            await self._safe(self.bot.send_text(u.chat_id, "The idea backlog is not connected.", u.message_id))
+            return
+        if len(parts) < 2 or not parts[0] or not parts[1]:
+            await self._safe(self.bot.send_text(u.chat_id, IDEA_HELP, u.message_id))
+            return
+        try:
+            idea_id = await self.ideas(parts[0], parts[1], " | ".join(p for p in parts[2:] if p))
+        except Exception as e:  # noqa: BLE001
+            await self._safe(self.bot.send_text(u.chat_id, f"Could not add the idea: {type(e).__name__}", u.message_id))
+            return
+        await self._safe(self.bot.send_text(u.chat_id, f"💡 Queued idea #{idea_id}: {parts[1]}", u.message_id))
 
     async def _on_text(self, u: Update) -> None:
         async with transaction(self.sm) as s:

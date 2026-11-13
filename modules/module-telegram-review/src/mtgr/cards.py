@@ -61,7 +61,13 @@ def post_card(p: dict[str, Any], round_: int, session_id: int) -> Card:
         meta.append(f"{int(video['size']) / 1e6:.1f} MB")
     if p.get("account"):
         meta.append(f"account {_e(p['account'])}")
-    body = [head, " · ".join(meta), "", _e(post.get("caption", "")), " ".join(_e(t) for t in post.get("hashtags", []))]
+    body = [
+        head,
+        " · ".join(meta),
+        "",
+        _e(post.get("caption", "")),
+        " ".join("#" + _e(str(t).lstrip("#")) for t in post.get("hashtags", [])),
+    ]
     body.append(_footer(p))
     return Card(
         _clip("\n".join(x for x in body if x is not None)), video.get("ref"), p.get("cover"), _buttons(session_id)

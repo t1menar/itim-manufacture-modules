@@ -166,23 +166,48 @@ async def test_poll_once_advances_the_offset(sm) -> None:  # type: ignore[no-unt
     assert await svc.poll_once(0) == 12 and sink.got[0].outcome == "approved"
 
 
-async def test_real_bot_sends_video_with_buttons_and_hides_the_token() -> None:
+async def test_real_bot_sends_album_then_buttons_and_hides_the_token() -> None:
     seen: list[httpx.Request] = []
 
     def handler(r: httpx.Request) -> httpx.Response:
         seen.append(r)
-        return httpx.Response(200, json={"ok": True, "result": {"message_id": 5}})
+        if r.url.path.endswith("/sendMediaGroup"):
+            return httpx.Response(200, json={"ok": True, "result": [{"message_id": 4}, {"message_id": 5}]})
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 6}})
 
     async def load(uri: str) -> bytes:
         return b"x" * 1000
 
     bot = TelegramBot("SECRET", load, client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     mid = await bot.send_card(OWNER, build_card("post", POST, 1, 9), reply_to=3)
-    assert mid == 5 and seen[0].url.path.endswith("/sendVideo") and b"reply_to_message_id" in seen[0].content
-    assert b"inline_keyboard" in seen[0].content and "SECRET" not in repr(bot)
+    assert mid == 6 and seen[0].url.path.endswith("/sendMediaGroup") and b"attach://cover" in seen[0].content
+    assert b"image/jpeg" in seen[0].content and b"reply_to_message_id" in seen[0].content
+    assert seen[1].url.path.endswith("/sendMessage") and b"inline_keyboard" in seen[1].content
+    assert b"reply_to_message_id=4" in seen[1].content and b"%23sql" in seen[1].content
+    assert "SECRET" not in repr(bot)
+    nocover = TelegramBot("S", load, client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    await nocover.send_card(OWNER, build_card("post", {**POST, "cover": None}, 1, 9))
+    assert seen[-1].url.path.endswith("/sendVideo") and b"inline_keyboard" in seen[-1].content
     big = TelegramBot("S", lambda _: _big(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     await big.send_card(OWNER, build_card("post", POST, 1, 9))
     assert seen[-1].url.path.endswith("/sendMessage") and b"not+attached" in seen[-1].content
+
+
+async def test_idea_command_queues_an_idea(sm) -> None:  # type: ignore[no-untyped-def]
+    got: list[tuple[str, str, str]] = []
+
+    async def add(series: str, title: str, vision: str) -> int:
+        got.append((series, title, vision))
+        return 12
+
+    svc, bot, _ = make(sm)
+    svc.ideas = add
+    await svc.handle(text(1, "/idea Postgres | MVCC | two versions of a row"))
+    await svc.handle(text(2, "/idea just words"))
+    await svc.handle(text(3, "/idea AI | Attention", chat=999))  # a stranger
+    assert got == [("Postgres", "MVCC", "two versions of a row")]
+    assert "Queued idea #12: MVCC" in bot.texts[0][1] and "/idea Series | Title" in bot.texts[1][1]
+    assert len(bot.texts) == 2
 
 
 async def _big() -> bytes:

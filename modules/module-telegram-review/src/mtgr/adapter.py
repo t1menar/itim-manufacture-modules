@@ -155,6 +155,45 @@ async def background(svc: ReviewService, every_s: float = 5.0) -> None:
             await asyncio.sleep(every_s)
 
 
+def _idea_adder(base: str, token: str) -> Callable[[str, str, str], Awaitable[int]]:
+    """`/idea` → the idea service REST: ensure the series playlist, create the idea, queue it."""
+    import re  # noqa: PLC0415
+
+    import httpx  # noqa: PLC0415
+
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    async def add(series: str, title: str, vision: str) -> int:
+        code = re.sub(r"[^a-z0-9]+", "_", series.lower()).strip("_")[:60] or "general"  # ^[a-z][a-z0-9_]{1,63}$
+        code = code if code[0].isalpha() and len(code) > 1 else f"s_{code}"
+        description = f"{title}. {vision}".strip(" .") + "."
+        if len(description.split()) < 8:
+            description += f" A {series} explainer Reel for everyday backend developers."
+        async with httpx.AsyncClient(base_url=base.rstrip("/"), headers=headers, timeout=30) as c:
+            setup = [  # what an idea needs before it may be queued (idempotent; same as module-reels-studio's feeder)
+                ("PUT", "/v1/environments", {"code": "mac_reels_studio", "title": "Mac: Claude Code, Blender, Docker"}),
+                ("PUT", "/v1/rubrics", {"code": "reels", "title": "Technical explainer Reel (~/itim/Reels/CLAUDE.md)"}),
+                ("POST", "/v1/playlists", {"code": code, "title": series}),
+            ]  # fmt: skip
+            for method, path, body in setup:
+                r = await c.request(method, path, json=body)
+                if r.status_code not in (200, 201, 409):  # 409: the playlist exists
+                    r.raise_for_status()
+            r = await c.post("/v1/ideas", json={
+                "title": title[:200], "description": description, "playlist_codes": [code], "tags": [code],
+                "rubric_code": "reels", "environment_code": "mac_reels_studio", "language": "en", "author": "owner",
+                "key_takeaway": "Chosen by the studio from the author's vision.", "notes": f"series: {series}",
+            })  # fmt: skip
+            r.raise_for_status()
+            idea_id = int(r.json()["id"])
+            (
+                await c.post(f"/v1/ideas/{idea_id}/status", json={"status": "queued", "note": "from Telegram"})
+            ).raise_for_status()
+            return idea_id
+
+    return add
+
+
 async def _from_env() -> ReviewService:
     """Production wiring (`MTGR_*`): Postgres, Telegram Bot API, owner ids; starts the poller once."""
     global _state  # noqa: PLW0603
@@ -167,7 +206,9 @@ async def _from_env() -> ReviewService:
         owners = frozenset(int(x) for x in env["MTGR_OWNERS"].split(",") if x.strip())
         cfg = ReviewSettings(owners, int(env.get("MTGR_MAX_ROUNDS", "3")), float(env.get("MTGR_DEADLINE_H", "48")))
         sm = make_sessionmaker(make_engine(env["MTGR_DATABASE_URL"]))
-        svc = ReviewService(sm, TelegramBot(env["MTGR_BOT_TOKEN"], _file_loader), AppSink(lambda: app), cfg)
+        ideas = _idea_adder(env["MTGR_IDEA_URL"], env.get("MIDEA_API_TOKEN", "")) if env.get("MTGR_IDEA_URL") else None
+        bot = TelegramBot(env["MTGR_BOT_TOKEN"], _file_loader)
+        svc = ReviewService(sm, bot, AppSink(lambda: app), cfg, ideas=ideas)
         asyncio.get_running_loop().create_task(background(svc), name="mtgr-poller")
         _state = svc
     return _state

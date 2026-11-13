@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -36,6 +37,10 @@ class Bot(Protocol):
     async def clear_buttons(self, chat_id: int, message_id: int) -> None: ...
 
     async def get_updates(self, offset: int, timeout_s: int = 25) -> list[Update]: ...
+
+
+def _image_type(ref: str) -> str:
+    return "image/jpeg" if ref.lower().rsplit(".", 1)[-1] in {"jpg", "jpeg"} else "image/png"
 
 
 class TelegramError(Exception):
@@ -93,6 +98,25 @@ class TelegramBot:
         base: dict[str, Any] = {"chat_id": chat_id, "reply_markup": self._markup(card)}
         if reply_to:
             base["reply_to_message_id"] = reply_to
+        if card.video and card.cover:
+            video, cover = await self._load(card.video), await self._load(card.cover)
+            if len(video) <= VIDEO_MAX_BYTES:  # an album (cover + video), then the card text with the buttons
+                media = [
+                    {"type": "photo", "media": "attach://cover"},
+                    {"type": "video", "media": "attach://video", "supports_streaming": True},
+                ]
+                album = await self._call(
+                    "sendMediaGroup", {"chat_id": chat_id, "media": json.dumps(media),
+                                       **({"reply_to_message_id": reply_to} if reply_to else {})},
+                    files={"cover": ("cover.png", cover, _image_type(card.cover)),
+                           "video": ("post.mp4", video, "video/mp4")},
+                    timeout_s=300.0,
+                )  # fmt: skip
+                first = int(album[0]["message_id"]) if album else None
+                data = {**base, "text": card.text, "parse_mode": "HTML"}
+                if first:
+                    data["reply_to_message_id"] = first
+                return int((await self._call("sendMessage", data))["message_id"])
         if card.video:
             video = await self._load(card.video)
             if len(video) <= VIDEO_MAX_BYTES:
