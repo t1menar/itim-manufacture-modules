@@ -2,6 +2,9 @@ AUTONOMOUS RUN (reels studio): the author rejected the finished video (round {{r
 
 > {{comment}}
 
+First re-read `{{reels}}/CLAUDE.md` and the series `_series/STYLE.md`: the author's rules may have changed since
+your last turn (new lessons are added after each review). Apply them together with the comment.
+
 Redo only what the comment needs:
 - only the caption, hashtags or title → edit `description.md` and the result file; do not touch the video or cover;
 - the cover → re-render only the cover;
