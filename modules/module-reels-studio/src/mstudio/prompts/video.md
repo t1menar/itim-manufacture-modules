@@ -10,11 +10,13 @@ The idea:
 
 The author approved `script/script.md` in this folder (with `research/facts.md`). Now:
 1. Re-read `{{reels}}/CLAUDE.md`, the series STYLE.md, WORKFLOW.md Parts 5-15 and the latest episode's `source/` of this series.
-   Reuse that source as the starting point (copy it into this episode's `source/` and adapt), so the design stays the series' current one.
-2. Build the stage, the 2D overlay, the timeline, the music (the series bass line, an SFX for every animation) and the cover.
+   Reuse that source as the starting point (copy it into this episode's `source/` and adapt). The lessons in CLAUDE.md
+   (pace, clean design, cover, quality, music) win over the look of older episodes.
+2. Build the stage, the 2D overlay, the timeline, a new music track for this video (CLAUDE.md: same patterns, new tempo,
+   key, groove and sounds; an SFX for every animation) and a cover that shows the topic itself.
 3. Render all frames in the background (resumable ranges), assemble, mux with the loudness chain from TOOLS.md.
 4. Verify (WORKFLOW Part 12): frame count, duration <= 90 s, a contact sheet you actually look at (overlaps, legibility,
-   the safe band), crops of small text, every on-screen number against the facts, loudness about -14 LUFS, peak about -1 dBFS.
+   the safe band), 100% crops of small text in the final encoded file (x264 crf 14), every on-screen number against the facts, loudness about -14 LUFS, peak about -1 dBFS.
    Fix what fails and re-render only the affected frames.
 5. Finish `description.md` (caption with at most 5 hashtags, alt text), the episode `README.md` (build steps, honesty
    notes) and add the episode's row to the series README.

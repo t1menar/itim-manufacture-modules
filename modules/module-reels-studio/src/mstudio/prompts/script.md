@@ -15,7 +15,8 @@ Do this:
    the simplest framing for everyday backend developers.
 3. Capture the real data yourself in a sandbox (Docker or a venv inside `research/`): scripts in `research/`, raw output
    and a `research/facts.md` summary. Every number you plan to show must be in the facts.
-4. Write the script (`script/script.md`) as the workflow's scene table: at most 90 s, overview first, every term explained,
+4. Write the script (`script/script.md`) as the workflow's scene table: at most 90 s and 6-8 scenes (CLAUDE.md lessons:
+   slow pace, one running concrete example, a practical use at the end), overview first, every term explained,
    legends for tables/colours, the hook, the payoff. Run the script checklist (WORKFLOW 4.9) and fix what fails.
 5. Draft the publishing copy in `description.md` (WORKFLOW Part 14 and the series STYLE: at most 5 hashtags).
 6. Start `README.md` for the episode (what it is, the framing decisions you made and why).
